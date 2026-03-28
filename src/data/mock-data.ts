@@ -1,228 +1,340 @@
 import type {
-  Investor,
+  Partner,
+  PartnerDetail,
   OptionTrade,
+  StockPosition,
   PortfolioSummary,
-  ProfitDistribution,
-  PerformanceDataPoint,
+  MonthlySummary,
+  ProfitDataPoint,
+  PortfolioDistribution,
 } from "@/types";
-
-// ============================================================
-// Mock Investors
-// ============================================================
-
-export const investors: Investor[] = [
-  {
-    id: "inv-001",
-    name: "Sarah Mitchell",
-    email: "sarah@example.com",
-    initialCapital: 50000,
-    currentBalance: 54250,
-    totalProfit: 4250,
-    equityPercentage: 41.67,
-    joinedAt: "2025-01-15",
-  },
-  {
-    id: "inv-002",
-    name: "James Chen",
-    email: "james@example.com",
-    initialCapital: 35000,
-    currentBalance: 37975,
-    totalProfit: 2975,
-    equityPercentage: 29.17,
-    joinedAt: "2025-01-15",
-  },
-  {
-    id: "inv-003",
-    name: "Maria Rodriguez",
-    email: "maria@example.com",
-    initialCapital: 25000,
-    currentBalance: 27125,
-    totalProfit: 2125,
-    equityPercentage: 20.83,
-    joinedAt: "2025-02-01",
-  },
-  {
-    id: "inv-004",
-    name: "David Park",
-    email: "david@example.com",
-    initialCapital: 10000,
-    currentBalance: 10850,
-    totalProfit: 850,
-    equityPercentage: 8.33,
-    joinedAt: "2025-03-01",
-  },
-];
-
-// ============================================================
-// Mock Trades
-// ============================================================
-
-export const trades: OptionTrade[] = [
-  {
-    id: "trade-001",
-    ticker: "AAPL",
-    optionType: "CALL",
-    strategy: "COVERED_CALL",
-    strikePrice: 195,
-    contracts: 3,
-    premiumReceived: 840,
-    openDate: "2025-11-04",
-    expirationDate: "2025-11-29",
-    status: "OPEN",
-    underlyingPriceAtOpen: 189.5,
-    notes: "Covered call on existing AAPL position",
-  },
-  {
-    id: "trade-002",
-    ticker: "MSFT",
-    optionType: "PUT",
-    strategy: "CASH_SECURED_PUT",
-    strikePrice: 410,
-    contracts: 2,
-    premiumReceived: 1120,
-    openDate: "2025-10-28",
-    expirationDate: "2025-11-22",
-    status: "OPEN",
-    underlyingPriceAtOpen: 422.3,
-    notes: "CSP - willing to own at $410",
-  },
-  {
-    id: "trade-003",
-    ticker: "NVDA",
-    optionType: "PUT",
-    strategy: "WHEEL",
-    strikePrice: 480,
-    contracts: 1,
-    premiumReceived: 2350,
-    openDate: "2025-10-14",
-    expirationDate: "2025-11-08",
-    closeDate: "2025-11-08",
-    status: "EXPIRED",
-    underlyingPriceAtOpen: 510.2,
-    underlyingPriceAtClose: 495.8,
-    realizedPnL: 2350,
-    notes: "Wheel strategy - put expired worthless, kept full premium",
-  },
-  {
-    id: "trade-004",
-    ticker: "AMD",
-    optionType: "PUT",
-    strategy: "CASH_SECURED_PUT",
-    strikePrice: 145,
-    contracts: 4,
-    premiumReceived: 1680,
-    openDate: "2025-10-07",
-    expirationDate: "2025-11-01",
-    closeDate: "2025-11-01",
-    status: "ASSIGNED",
-    underlyingPriceAtOpen: 152.4,
-    underlyingPriceAtClose: 141.2,
-    realizedPnL: -1520,
-    notes: "Assigned - now holding 400 shares of AMD at effective cost basis $141.80",
-  },
-  {
-    id: "trade-005",
-    ticker: "TSLA",
-    optionType: "CALL",
-    strategy: "COVERED_CALL",
-    strikePrice: 260,
-    contracts: 2,
-    premiumReceived: 1540,
-    openDate: "2025-10-21",
-    expirationDate: "2025-11-15",
-    closeDate: "2025-11-15",
-    status: "EXPIRED",
-    underlyingPriceAtOpen: 248.7,
-    underlyingPriceAtClose: 253.1,
-    realizedPnL: 1540,
-    notes: "CC expired OTM - premium kept",
-  },
-  {
-    id: "trade-006",
-    ticker: "SPY",
-    optionType: "PUT",
-    strategy: "CASH_SECURED_PUT",
-    strikePrice: 570,
-    contracts: 1,
-    premiumReceived: 890,
-    openDate: "2025-11-01",
-    expirationDate: "2025-12-06",
-    status: "OPEN",
-    underlyingPriceAtOpen: 582.4,
-    notes: "Monthly SPY put for income",
-  },
-  {
-    id: "trade-007",
-    ticker: "QQQ",
-    optionType: "CALL",
-    strategy: "COVERED_CALL",
-    strikePrice: 500,
-    contracts: 2,
-    premiumReceived: 960,
-    openDate: "2025-09-22",
-    expirationDate: "2025-10-18",
-    closeDate: "2025-10-18",
-    status: "EXPIRED",
-    underlyingPriceAtOpen: 488.5,
-    underlyingPriceAtClose: 492.1,
-    realizedPnL: 960,
-    notes: "QQQ covered call - expired worthless",
-  },
-  {
-    id: "trade-008",
-    ticker: "AMZN",
-    optionType: "PUT",
-    strategy: "WHEEL",
-    strikePrice: 185,
-    contracts: 3,
-    premiumReceived: 1350,
-    openDate: "2025-11-06",
-    expirationDate: "2025-12-13",
-    status: "OPEN",
-    underlyingPriceAtOpen: 194.2,
-    notes: "Wheel entry - CSP on AMZN",
-  },
-];
 
 // ============================================================
 // Portfolio Summary
 // ============================================================
 
 export const portfolioSummary: PortfolioSummary = {
-  totalPortfolioValue: 130200,
-  totalCashAvailable: 68400,
-  totalInvested: 61800,
-  totalPremiumCollected: 10730,
-  totalRealizedPnL: 3330,
-  openPositionsCount: trades.filter((t) => t.status === "OPEN").length,
-  closedTradesCount: trades.filter((t) => t.status !== "OPEN").length,
-  winRate: 75,
-  monthlyReturn: 2.78,
+  totalAUM: 2450000,
+  totalAUMChange: 12,
+  totalProfits: 412850,
+  totalPartners: 128,
+  newPartners: 4,
+  managementFeesCollected: 48200,
+  pendingRequests: 4,
 };
 
 // ============================================================
-// Profit Distribution
+// Partners
 // ============================================================
 
-export const profitDistributions: ProfitDistribution[] = investors.map(
-  (inv) => ({
-    investorId: inv.id,
-    investorName: inv.name,
-    equityPercentage: inv.equityPercentage,
-    allocatedProfit: inv.totalProfit,
-    totalDistributed: inv.totalProfit,
-  })
-);
-
-// ============================================================
-// Historical Performance (last 6 months)
-// ============================================================
-
-export const performanceData: PerformanceDataPoint[] = [
-  { date: "Jun 2025", portfolioValue: 120000, cashBalance: 85000, totalPremium: 0 },
-  { date: "Jul 2025", portfolioValue: 121800, cashBalance: 80200, totalPremium: 1800 },
-  { date: "Aug 2025", portfolioValue: 123500, cashBalance: 76500, totalPremium: 3700 },
-  { date: "Sep 2025", portfolioValue: 125900, cashBalance: 72400, totalPremium: 5900 },
-  { date: "Oct 2025", portfolioValue: 127400, cashBalance: 70100, totalPremium: 8380 },
-  { date: "Nov 2025", portfolioValue: 130200, cashBalance: 68400, totalPremium: 10730 },
+export const partners: Partner[] = [
+  {
+    id: "K-89204",
+    name: "أحمد الهواري",
+    code: "K-89204",
+    initials: "AH",
+    totalBalance: 4120000,
+    ownershipPercentage: 29.0,
+    managementFeeRate: 1.25,
+    performance24h: 0.42,
+    performanceTrend: "up",
+    joinedAt: "2023-01-15",
+  },
+  {
+    id: "K-77312",
+    name: "سارة منصور",
+    code: "K-77312",
+    initials: "SM",
+    totalBalance: 2850500,
+    ownershipPercentage: 20.1,
+    managementFeeRate: 1.5,
+    performance24h: -0.15,
+    performanceTrend: "down",
+    joinedAt: "2023-03-22",
+  },
+  {
+    id: "K-91283",
+    name: "فهد الكواري",
+    code: "K-91283",
+    initials: "FK",
+    totalBalance: 1240000,
+    ownershipPercentage: 8.7,
+    managementFeeRate: 1.1,
+    performance24h: 1.82,
+    performanceTrend: "up",
+    joinedAt: "2023-06-10",
+  },
+  {
+    id: "K-44521",
+    name: "سالم العامري",
+    code: "K-44521",
+    initials: "SA",
+    totalBalance: 1780000,
+    ownershipPercentage: 12.5,
+    managementFeeRate: 1.25,
+    performance24h: 2.4,
+    performanceTrend: "up",
+    joinedAt: "2023-02-01",
+  },
+  {
+    id: "K-55192",
+    name: "نورة الحربي",
+    code: "K-55192",
+    initials: "NH",
+    totalBalance: 2100000,
+    ownershipPercentage: 14.8,
+    managementFeeRate: 1.3,
+    performance24h: -0.32,
+    performanceTrend: "down",
+    joinedAt: "2023-04-18",
+  },
+  {
+    id: "K-62847",
+    name: "خالد المطيري",
+    code: "K-62847",
+    initials: "KM",
+    totalBalance: 2118450,
+    ownershipPercentage: 14.9,
+    managementFeeRate: 1.25,
+    performance24h: 0.88,
+    performanceTrend: "up",
+    joinedAt: "2023-05-30",
+  },
 ];
+
+// ============================================================
+// Partner Detail (سالم العامري)
+// ============================================================
+
+export const partnerDetail: PartnerDetail = {
+  id: "K-44521",
+  name: "سالم العامري",
+  code: "K-44521",
+  initials: "SA",
+  totalBalance: 1780000,
+  ownershipPercentage: 12.5,
+  managementFeeRate: 1.25,
+  performance24h: 2.4,
+  performanceTrend: "up",
+  joinedAt: "2023-02-01",
+  totalEquity: 428190.42,
+  netPnL: 54201.18,
+  dailyChangePercent: 2.4,
+  totalFeesPaid: 12450,
+  availableLiquidity: 89200.5,
+  assets: [
+    {
+      symbol: "TSLA",
+      type: "stock",
+      totalQuantity: 1200,
+      partnerShare: 150,
+      marketValue: 36450,
+      changePercent: 4.22,
+    },
+    {
+      symbol: "AAPL 250C 10/24",
+      type: "option",
+      totalQuantity: 40,
+      partnerShare: 5,
+      marketValue: 12800,
+      changePercent: -1.15,
+    },
+    {
+      symbol: "NVDA",
+      type: "stock",
+      totalQuantity: 800,
+      partnerShare: 100,
+      marketValue: 122300,
+      changePercent: 12.8,
+    },
+    {
+      symbol: "SPY 540P 12/24",
+      type: "option",
+      totalQuantity: 100,
+      partnerShare: 12.5,
+      marketValue: 4200,
+      changePercent: -0.45,
+    },
+  ],
+  activities: [
+    {
+      id: "act-1",
+      description: "تسييل جزء من NVDA",
+      timestamp: "منذ ساعتين",
+      amount: -12400,
+      type: "loss",
+    },
+    {
+      id: "act-2",
+      description: "توزيع أرباح ربع سنوية",
+      timestamp: "أمس",
+      amount: 1120.5,
+      type: "profit",
+    },
+  ],
+  greeks: {
+    delta: 0.642,
+    theta: -12.4,
+    gamma: 0.021,
+    vega: 42.8,
+  },
+};
+
+// ============================================================
+// Option Trades
+// ============================================================
+
+export const optionTrades: OptionTrade[] = [
+  {
+    id: "opt-1",
+    symbol: "NVDA",
+    type: "Sell Put",
+    quantity: 12,
+    premium: 4.2,
+    strikePrice: 890,
+    expirationDate: "Jun 21, 2024",
+    entryDate: "May 01, 2024",
+    unrealizedPnL: 1240.5,
+    totalProfit: 5040,
+    returnPercent: 24.6,
+  },
+  {
+    id: "opt-2",
+    symbol: "TSLA",
+    type: "Covered Call",
+    quantity: 5,
+    premium: 2.15,
+    strikePrice: 185,
+    expirationDate: "May 17, 2024",
+    entryDate: "Apr 22, 2024",
+    unrealizedPnL: -312.2,
+    totalProfit: -1075,
+    returnPercent: -12.4,
+  },
+  {
+    id: "opt-3",
+    symbol: "AAPL",
+    type: "Sell Put",
+    quantity: 25,
+    premium: 1.85,
+    strikePrice: 170,
+    expirationDate: "Jul 19, 2024",
+    entryDate: "May 05, 2024",
+    unrealizedPnL: 450,
+    totalProfit: 4625,
+    returnPercent: 9.8,
+  },
+];
+
+// ============================================================
+// Stock Positions
+// ============================================================
+
+export const stockPositions: StockPosition[] = [
+  {
+    id: "stk-1",
+    symbol: "MSFT",
+    quantity: 150,
+    buyPrice: 395.4,
+    currentPrice: 412.3,
+    targetPrice: 450,
+    priceDirection: "up",
+  },
+  {
+    id: "stk-2",
+    symbol: "AMD",
+    quantity: 400,
+    buyPrice: 172.1,
+    currentPrice: 164.5,
+    targetPrice: 210,
+    priceDirection: "down",
+  },
+  {
+    id: "stk-3",
+    symbol: "GOOGL",
+    quantity: 80,
+    buyPrice: 145.2,
+    currentPrice: 168.45,
+    targetPrice: 180,
+    priceDirection: "up",
+  },
+];
+
+// ============================================================
+// Monthly Summary
+// ============================================================
+
+export const monthlySummaries: MonthlySummary[] = [
+  {
+    id: "ms-1",
+    month: "October 2023",
+    monthAr: "أكتوبر 2023",
+    quarter: "Q4 Fiscal",
+    totalCapital: 2450000,
+    totalProfits: 85420,
+    managementFees: 12400,
+    status: "Settled",
+  },
+  {
+    id: "ms-2",
+    month: "September 2023",
+    monthAr: "سبتمبر 2023",
+    quarter: "Q3 Fiscal",
+    totalCapital: 2364580,
+    totalProfits: 62110,
+    managementFees: 9850,
+    status: "Settled",
+  },
+  {
+    id: "ms-3",
+    month: "August 2023",
+    monthAr: "أغسطس 2023",
+    quarter: "Q3 Fiscal",
+    totalCapital: 2302470,
+    totalProfits: 45900,
+    managementFees: 8200,
+    status: "Settled",
+  },
+  {
+    id: "ms-4",
+    month: "July 2023",
+    monthAr: "يوليو 2023",
+    quarter: "Q3 Fiscal",
+    totalCapital: 2256570,
+    totalProfits: 72300,
+    managementFees: 10450,
+    status: "Settled",
+  },
+];
+
+// ============================================================
+// Chart Data
+// ============================================================
+
+export const profitData: ProfitDataPoint[] = [
+  { month: "Jan", profit: 20000 },
+  { month: "Feb", profit: 25000 },
+  { month: "Mar", profit: 40000 },
+  { month: "Apr", profit: 35000 },
+  { month: "May", profit: 55000 },
+  { month: "Jun", profit: 60000 },
+  { month: "Jul", profit: 72300 },
+  { month: "Aug", profit: 45900 },
+  { month: "Sep", profit: 62110 },
+  { month: "Oct", profit: 85420 },
+  { month: "Nov", profit: 78000 },
+  { month: "Dec", profit: 92000 },
+];
+
+export const portfolioDistribution: PortfolioDistribution[] = [
+  { label: "Options", labelAr: "الخيارات", percentage: 65, color: "primary-container" },
+  { label: "Stocks", labelAr: "الأسهم", percentage: 25, color: "tertiary-dim" },
+  { label: "Cash", labelAr: "النقد", percentage: 10, color: "secondary" },
+];
+
+// ============================================================
+// Partners Total Assets (for partners page header)
+// ============================================================
+
+export const partnersTotalAssets = 14208450;
+export const partnersCount = 24;

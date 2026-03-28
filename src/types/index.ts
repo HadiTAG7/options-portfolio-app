@@ -1,45 +1,92 @@
 // ============================================================
-// Investor Management Types
+// Partner (Investor) Types
 // ============================================================
 
-export interface Investor {
+export interface Partner {
   id: string;
   name: string;
-  email: string;
+  code: string; // e.g. "K-89204"
   avatarUrl?: string;
-  initialCapital: number;
-  currentBalance: number;
-  totalProfit: number;
-  equityPercentage: number; // Dynamically calculated based on capital contribution
-  joinedAt: string; // ISO date string
+  initials: string;
+  totalBalance: number;
+  ownershipPercentage: number;
+  managementFeeRate: number; // percentage
+  performance24h: number; // percentage change
+  performanceTrend: "up" | "down";
+  joinedAt: string;
+}
+
+// ============================================================
+// Partner Detail Types
+// ============================================================
+
+export interface PartnerDetail extends Partner {
+  totalEquity: number;
+  netPnL: number;
+  dailyChangePercent: number;
+  totalFeesPaid: number;
+  availableLiquidity: number;
+  assets: PartnerAsset[];
+  activities: PartnerActivity[];
+  greeks: Greeks;
+}
+
+export interface PartnerAsset {
+  symbol: string;
+  type: "stock" | "option";
+  totalQuantity: number;
+  partnerShare: number;
+  marketValue: number;
+  changePercent: number;
+}
+
+export interface PartnerActivity {
+  id: string;
+  description: string;
+  timestamp: string;
+  amount: number;
+  type: "profit" | "loss";
+}
+
+export interface Greeks {
+  delta: number;
+  theta: number;
+  gamma: number;
+  vega: number;
 }
 
 // ============================================================
 // Options Trade Types
 // ============================================================
 
-export type OptionType = "CALL" | "PUT";
-
-export type TradeStrategy = "COVERED_CALL" | "CASH_SECURED_PUT" | "WHEEL";
-
-export type TradeStatus = "OPEN" | "ASSIGNED" | "EXPIRED" | "CLOSED";
+export type OptionTradeType = "Sell Put" | "Covered Call" | "Buy Call" | "Buy Put";
 
 export interface OptionTrade {
   id: string;
-  ticker: string;
-  optionType: OptionType;
-  strategy: TradeStrategy;
+  symbol: string;
+  type: OptionTradeType;
+  quantity: number;
+  premium: number;
   strikePrice: number;
-  contracts: number; // Each contract = 100 shares
-  premiumReceived: number; // Total premium collected
-  openDate: string; // ISO date string
-  expirationDate: string; // ISO date string
-  closeDate?: string; // ISO date string, set when trade is closed/assigned/expired
-  status: TradeStatus;
-  underlyingPriceAtOpen: number;
-  underlyingPriceAtClose?: number;
-  realizedPnL?: number; // P&L from closed trades
-  notes?: string;
+  expirationDate: string;
+  entryDate: string;
+  unrealizedPnL: number;
+  totalProfit: number;
+  returnPercent: number;
+}
+
+// ============================================================
+// Stock Position Types
+// ============================================================
+
+export interface StockPosition {
+  id: string;
+  symbol: string;
+  quantity: number;
+  buyPrice: number;
+  currentPrice: number;
+  targetPrice: number;
+  priceDirection: "up" | "down";
 }
 
 // ============================================================
@@ -47,36 +94,42 @@ export interface OptionTrade {
 // ============================================================
 
 export interface PortfolioSummary {
-  totalPortfolioValue: number;
-  totalCashAvailable: number;
-  totalInvested: number;
-  totalPremiumCollected: number;
-  totalRealizedPnL: number;
-  openPositionsCount: number;
-  closedTradesCount: number;
-  winRate: number; // percentage
-  monthlyReturn: number; // percentage
+  totalAUM: number;
+  totalAUMChange: number;
+  totalProfits: number;
+  totalPartners: number;
+  newPartners: number;
+  managementFeesCollected: number;
+  pendingRequests: number;
 }
 
 // ============================================================
-// P&L Distribution Types
+// Monthly Summary Types
 // ============================================================
 
-export interface ProfitDistribution {
-  investorId: string;
-  investorName: string;
-  equityPercentage: number;
-  allocatedProfit: number;
-  totalDistributed: number;
+export interface MonthlySummary {
+  id: string;
+  month: string;
+  monthAr: string;
+  quarter: string;
+  totalCapital: number;
+  totalProfits: number;
+  managementFees: number;
+  status: "Settled" | "Pending" | "Processing";
 }
 
 // ============================================================
-// Chart / Performance Types
+// Chart Data Types
 // ============================================================
 
-export interface PerformanceDataPoint {
-  date: string;
-  portfolioValue: number;
-  cashBalance: number;
-  totalPremium: number;
+export interface ProfitDataPoint {
+  month: string;
+  profit: number;
+}
+
+export interface PortfolioDistribution {
+  label: string;
+  labelAr: string;
+  percentage: number;
+  color: string;
 }
