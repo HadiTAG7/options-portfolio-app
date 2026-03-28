@@ -2,84 +2,107 @@
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
-import { formatWholeNumber } from "@/lib/utils";
+import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
+import { formatWholeNumber, formatCompactCurrency } from "@/lib/utils";
+import { usePartners } from "@/hooks/use-partners";
+import { useTrades } from "@/hooks/use-trades";
 import {
-  portfolioSummary,
   monthlySummaries,
   portfolioDistribution,
 } from "@/data/mock-data";
 
 export default function DashboardPage() {
+  const { partners, totalAssets, loading: partnersLoading } = usePartners();
+  const { totalProfit, openCount, loading: tradesLoading } = useTrades();
+
+  const loading = partnersLoading || tradesLoading;
+
   return (
     <AppShell>
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        {/* Total AUM */}
-        <div className="bg-surface-container p-6 rounded-sm border-r-2 border-primary glow-primary flex flex-col justify-between h-32 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 opacity-5">
-            <Icon name="account_balance" className="!text-8xl" />
-          </div>
-          <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-            إجمالي الأصول (Total AUM)
-          </span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
-              {formatWholeNumber(portfolioSummary.totalAUM)}
-            </span>
-            <span className="text-[10px] text-primary font-bold">
-              +{portfolioSummary.totalAUMChange}%
-            </span>
-          </div>
-        </div>
+        {loading ? (
+          <>
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </>
+        ) : (
+          <>
+            {/* Total AUM */}
+            <div className="bg-surface-container p-6 rounded-sm border-r-2 border-primary glow-primary flex flex-col justify-between h-32 relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 opacity-5">
+                <Icon name="account_balance" className="!text-8xl" />
+              </div>
+              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
+                إجمالي الأصول (Total AUM)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
+                  {formatWholeNumber(totalAssets)}
+                </span>
+                <span className="text-[10px] text-primary font-bold">
+                  +12%
+                </span>
+              </div>
+            </div>
 
-        {/* Total Profits */}
-        <div className="bg-surface-container p-6 rounded-sm border-r-2 border-primary flex flex-col justify-between h-32 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 opacity-10 text-primary">
-            <Icon name="trending_up" className="!text-8xl" />
-          </div>
-          <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-            مجموع الأرباح (Total Profits)
-          </span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-headline font-bold tracking-tighter text-primary">
-              {formatWholeNumber(portfolioSummary.totalProfits)}
-            </span>
-            <span className="text-[10px] text-primary font-bold">▲</span>
-          </div>
-        </div>
+            {/* Total Profits */}
+            <div className="bg-surface-container p-6 rounded-sm border-r-2 border-primary flex flex-col justify-between h-32 relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 opacity-10 text-primary">
+                <Icon name="trending_up" className="!text-8xl" />
+              </div>
+              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
+                مجموع الأرباح (Total Profits)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-headline font-bold tracking-tighter text-primary">
+                  {formatWholeNumber(totalProfit)}
+                </span>
+                <span className="text-[10px] text-primary font-bold">▲</span>
+              </div>
+            </div>
 
-        {/* Partners */}
-        <div className="bg-surface-container p-6 rounded-sm border-r-2 border-tertiary flex flex-col justify-between h-32 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 opacity-5 text-tertiary">
-            <Icon name="group" className="!text-8xl" />
-          </div>
-          <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-            إجمالي الشركاء (Total Partners)
-          </span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
-              {portfolioSummary.totalPartners}
-            </span>
-            <span className="text-[10px] text-tertiary font-bold">
-              +{portfolioSummary.newPartners} NEW
-            </span>
-          </div>
-        </div>
+            {/* Partners */}
+            <div className="bg-surface-container p-6 rounded-sm border-r-2 border-tertiary flex flex-col justify-between h-32 relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 opacity-5 text-tertiary">
+                <Icon name="group" className="!text-8xl" />
+              </div>
+              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
+                إجمالي الشركاء (Total Partners)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
+                  {partners.length}
+                </span>
+                <span className="text-[10px] text-tertiary font-bold">
+                  {openCount} صفقة نشطة
+                </span>
+              </div>
+            </div>
 
-        {/* Management Fees */}
-        <div className="bg-surface-container p-6 rounded-sm border-r-2 border-outline-variant flex flex-col justify-between h-32 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 opacity-5">
-            <Icon name="receipt_long" className="!text-8xl" />
-          </div>
-          <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-            رسوم الإدارة المحصلة (Fees)
-          </span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
-              {formatWholeNumber(portfolioSummary.managementFeesCollected)}
-            </span>
-          </div>
-        </div>
+            {/* Management Fees (estimated from partner fee rates) */}
+            <div className="bg-surface-container p-6 rounded-sm border-r-2 border-outline-variant flex flex-col justify-between h-32 relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 opacity-5">
+                <Icon name="receipt_long" className="!text-8xl" />
+              </div>
+              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
+                رسوم الإدارة المقدّرة (Fees)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
+                  {formatWholeNumber(
+                    partners.reduce(
+                      (sum, p) => sum + p.totalBalance * (p.managementFeeRate / 100),
+                      0
+                    )
+                  )}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Charts Section */}
@@ -101,11 +124,9 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex-1 flex items-end gap-1 px-2 relative">
-            {/* Grid background */}
             <div className="absolute inset-0 opacity-10">
               <div className="w-full h-full border-b border-l border-white/10" />
             </div>
-            {/* SVG Chart */}
             <svg
               className="w-full h-full absolute inset-0 p-8"
               viewBox="0 0 100 100"
@@ -128,7 +149,6 @@ export default function DashboardPage() {
                 strokeWidth="2"
               />
             </svg>
-            {/* Month labels */}
             <div className="w-full flex justify-between absolute bottom-4 px-8 text-[9px] text-on-surface-variant font-label uppercase">
               {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m) => (
                 <span key={m}>{m}</span>
@@ -147,7 +167,6 @@ export default function DashboardPage() {
               Portfolio Distribution
             </p>
           </div>
-          {/* Donut Chart Mock */}
           <div className="relative flex items-center justify-center py-12">
             <div className="w-48 h-48 rounded-full border-[12px] border-primary-container relative flex items-center justify-center">
               <div
@@ -159,12 +178,13 @@ export default function DashboardPage() {
                 style={{ clipPath: "polygon(50% 50%, 100% 30%, 100% 60%)" }}
               />
               <div className="text-center">
-                <span className="block text-3xl font-headline font-black text-white">$2.4M</span>
+                <span className="block text-3xl font-headline font-black text-white">
+                  {loading ? "..." : formatCompactCurrency(totalAssets)}
+                </span>
                 <span className="text-[10px] text-on-surface-variant uppercase">Total Equity</span>
               </div>
             </div>
           </div>
-          {/* Legend */}
           <div className="space-y-3">
             {portfolioDistribution.map((item) => (
               <div key={item.label} className="flex items-center justify-between text-xs">
