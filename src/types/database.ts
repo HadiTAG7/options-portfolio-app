@@ -36,6 +36,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
+        Relationships: [];
       };
       trades: {
         Row: {
@@ -71,8 +72,18 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
+    Functions: {
+      recalculate_ownership: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+    };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }
 

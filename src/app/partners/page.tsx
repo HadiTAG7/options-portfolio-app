@@ -5,15 +5,17 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { usePartners } from "@/hooks/use-partners";
 import type { Partner } from "@/types";
 
 export default function PartnersPage() {
-  const { partners, loading, error, totalAssets, deletePartner } = usePartners();
+  const { partners, loading, error, totalAssets, deletePartner, addPartner } = usePartners();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -25,6 +27,13 @@ export default function PartnersPage() {
 
   return (
     <AppShell>
+      {/* Add Partner Dialog */}
+      <AddPartnerDialog
+        open={showAddDialog}
+        onClose={() => setShowAddDialog(false)}
+        onSubmit={addPartner}
+      />
+
       {/* Confirmation Dialog */}
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -109,13 +118,13 @@ export default function PartnersPage() {
             <button className="p-2 rounded-sm hover:bg-white/5 transition-colors text-on-surface-variant">
               <Icon name="filter_list" className="!text-lg" />
             </button>
-            <Link
-              href="/partners/new"
+            <button
+              onClick={() => setShowAddDialog(true)}
               className="text-[10px] px-4 py-2 bg-primary text-on-primary rounded-sm font-bold uppercase tracking-widest hover:brightness-110 transition-all flex items-center gap-1.5"
             >
               <Icon name="add" className="!text-sm" />
               إضافة شريك جديد
-            </Link>
+            </button>
           </div>
         </div>
 

@@ -77,7 +77,50 @@ export function usePartners() {
     [fetchPartners]
   );
 
+  const addPartner = useCallback(
+    async (name: string, initialCapital: number) => {
+      setError(null);
+
+      // Generate initials from name (first letter of each word, max 2)
+      const initials = name
+        .trim()
+        .split(/\s+/)
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+
+      // Generate a unique partner code
+      const code = `K-${Math.floor(10000 + Math.random() * 90000)}`;
+
+      const { error: insertError } = await supabase.from("partners").insert({
+        name: name.trim(),
+        code,
+        initials,
+        total_balance: initialCapital,
+        ownership_percentage: 0, // will be recalculated
+        management_fee_rate: 1.25,
+        performance_24h: 0,
+        performance_trend: "up" as const,
+      });
+
+      if (insertError) {
+        setError(insertError.message);
+        throw insertError;
+      }
+
+      // Recalculate ownership percentages for all partners
+      const { error: rpcError } = await supabase.rpc("recalculate_ownership");
+      if (rpcError) {
+        setError(rpcError.message);
+      }
+
+      await fetchPartners();
+    },
+    [fetchPartners]
+  );
+
   const totalAssets = partners.reduce((sum, p) => sum + p.totalBalance, 0);
 
-  return { partners, loading, error, totalAssets, deletePartner, refetch: fetchPartners };
+  return { partners, loading, error, totalAssets, deletePartner, addPartner, refetch: fetchPartners };
 }
