@@ -69,7 +69,38 @@ export interface Greeks {
 }
 
 // ============================================================
-// Options Trade Types
+// Trade Types (unified: options + stocks)
+// ============================================================
+
+export type TradeType = "Sell Call" | "Sell Put" | "Stock Sell";
+
+export interface Trade {
+  id: string;
+  ticker: string;
+  type: string; // kept wide — DB may hold more categories than the canonical three
+  quantity: number;
+  premium: number;
+  strike: number;
+  result: number;
+  expiration: string; // empty string for Stock Sell rows
+  date: string;
+}
+
+// ============================================================
+// Active Stock Holding (derived from open option positions)
+// ============================================================
+
+export interface ActiveStock {
+  ticker: string;
+  quantity: number; // shares
+  purchasePrice: number; // Sell Put strike = assignment price
+  targetSellPrice: number | null; // Sell Call strike, if a covered call exists
+  costBasis: number; // quantity * purchasePrice
+  premiumCollected: number; // sum of option premium credited against this ticker
+}
+
+// ============================================================
+// Legacy Option Trade Types (kept for mock data / compatibility)
 // ============================================================
 
 export type OptionTradeType = "Sell Put" | "Covered Call" | "Buy Call" | "Buy Put";
@@ -87,10 +118,6 @@ export interface OptionTrade {
   totalProfit: number;
   returnPercent: number;
 }
-
-// ============================================================
-// Stock Position Types
-// ============================================================
 
 export interface StockPosition {
   id: string;

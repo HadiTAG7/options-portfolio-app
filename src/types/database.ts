@@ -64,35 +64,25 @@ export interface Database {
       trades: {
         Row: {
           id: string;
-          symbol: string;
-          trade_type: "Sell Put" | "Covered Call" | "Buy Call" | "Buy Put";
+          ticker: string;
+          type: string;
           quantity: number;
           premium: number;
-          strike_price: number;
-          expiration_date: string;
-          entry_date: string;
-          unrealized_pnl: number;
-          total_profit: number;
-          return_percent: number;
-          status: "open" | "closed" | "expired" | "assigned";
-          created_at: string;
-          updated_at: string;
+          strike: number;
+          result: number;
+          expiration: string;
+          date: string;
         };
         Insert: {
           id?: string;
-          symbol: string;
-          trade_type: "Sell Put" | "Covered Call" | "Buy Call" | "Buy Put";
+          ticker: string;
+          type: string;
           quantity: number;
-          premium: number;
-          strike_price: number;
-          expiration_date: string;
-          entry_date: string;
-          unrealized_pnl?: number;
-          total_profit?: number;
-          return_percent?: number;
-          status?: "open" | "closed" | "expired" | "assigned";
-          created_at?: string;
-          updated_at?: string;
+          premium?: number;
+          strike?: number;
+          result?: number;
+          expiration?: string;
+          date: string;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];
