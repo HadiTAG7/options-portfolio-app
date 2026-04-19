@@ -60,7 +60,11 @@ interface PartnersState {
   notification: Notification | null;
 
   fetchPartners: () => Promise<void>;
-  handleWithdrawal: (partnerId: string, amount: number) => Promise<void>;
+  handleWithdrawal: (
+    partner: Partner,
+    amount: number,
+    onDone?: () => Promise<void>
+  ) => Promise<void>;
   clearNotification: () => void;
 }
 
@@ -79,6 +83,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       .order("total_balance", { ascending: false });
 
     if (error) {
+      console.error("[fetchPartners] Supabase error:", error);
       set({ error: error.message, partners: [], loading: false });
     } else {
       set({
@@ -88,88 +93,128 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     }
   },
 
-  handleWithdrawal: async (partnerId: string, amount: number) => {
+  handleWithdrawal: async (
+    partner: Partner,
+    amount: number,
+    onDone?: () => Promise<void>
+  ) => {
     set({ error: null, notification: null });
 
-    const partner = get().partners.find((p) => p.id === partnerId);
-    if (!partner) {
-      set({ error: "الشريك غير موجود" });
-      throw new Error("Partner not found");
-    }
+    // --- Client-side validation ---
+    const balance = safeNumber(partner.currentBalance);
 
-    if (amount > partner.currentBalance) {
-      const msg = `المبلغ المطلوب ($${amount.toLocaleString()}) يتجاوز الرصيد المتاح ($${partner.currentBalance.toLocaleString()})`;
+    if (amount <= 0) {
+      const msg = "مبلغ السحب يجب أن يكون أكبر من صفر";
       set({ error: msg });
-      throw new Error("Insufficient balance");
+      throw new Error(msg);
     }
 
-    const newCurrentBalance = partner.currentBalance - amount;
-    const newTotalBalance = partner.totalBalance - amount;
-    const newTotalWithdrawals = partner.totalWithdrawals + amount;
+    if (amount > balance) {
+      const msg = `المبلغ المطلوب ($${amount.toLocaleString()}) يتجاوز الرصيد المتاح ($${balance.toLocaleString()})`;
+      set({ error: msg });
+      throw new Error(msg);
+    }
+
+    const newCurrentBalance = balance - amount;
+    const newTotalBalance = safeNumber(partner.totalBalance) - amount;
+    const newTotalWithdrawals = safeNumber(partner.totalWithdrawals) + amount;
     const today = new Date().toISOString().split("T")[0];
 
     const newHistoryEntry: BalanceHistoryEntry = {
       date: today,
       balance: newCurrentBalance,
     };
-    const updatedHistory = [...partner.balanceHistory, newHistoryEntry];
+    const existingHistory = Array.isArray(partner.balanceHistory)
+      ? partner.balanceHistory
+      : [];
+    const updatedHistory = [...existingHistory, newHistoryEntry];
 
-    // 1. Update the partner row
+    // --- 1. Update the partner row ---
     const { error: updateError } = await supabase
       .from("partners")
       .update({
-        currentBalance: newCurrentBalance,
+        "currentBalance": newCurrentBalance,
         total_balance: newTotalBalance,
-        totalWithdrawals: newTotalWithdrawals,
-        balanceHistory: updatedHistory,
+        "totalWithdrawals": newTotalWithdrawals,
+        "balanceHistory": updatedHistory as unknown as BalanceHistoryEntry[],
       })
-      .eq("id", partnerId);
+      .eq("id", partner.id);
 
     if (updateError) {
-      set({ error: updateError.message });
+      console.error("[handleWithdrawal] Partner update failed:", updateError);
+
+      let userMsg = `فشل تحديث رصيد الشريك: ${updateError.message}`;
+      if (updateError.message.includes("permission")) {
+        userMsg =
+          "ليس لديك صلاحية لتحديث بيانات الشريك. تحقق من سياسات RLS في Supabase.";
+      }
+      set({
+        notification: { type: "error", message: userMsg },
+      });
       throw updateError;
     }
 
-    // 2. Insert transaction record
-    const { error: txError } = await supabase.from("transactions").insert({
-      investorId: partnerId,
-      amount,
-      type: "Withdrawal" as const,
-    });
+    // --- 2. Insert transaction record (non-blocking) ---
+    try {
+      const { error: txError } = await supabase.from("transactions").insert({
+        investorId: partner.id,
+        amount,
+        type: "Withdrawal" as const,
+        date: today,
+      });
 
-    if (txError) {
-      set({ error: txError.message });
-      throw txError;
+      if (txError) {
+        console.error("[handleWithdrawal] Transaction insert failed:", txError);
+
+        if (
+          txError.message.includes("relation") &&
+          txError.message.includes("does not exist")
+        ) {
+          console.warn(
+            'Table "transactions" does not exist. Run supabase/migrations/001_add_withdrawal_columns.sql to create it.'
+          );
+        } else if (txError.message.includes("permission")) {
+          console.warn(
+            "Transaction insert blocked by RLS. Check your Supabase policies."
+          );
+        }
+        // Don't block the withdrawal — the partner balance was already updated
+      }
+    } catch (txCatchErr) {
+      console.error(
+        "[handleWithdrawal] Transaction insert threw:",
+        txCatchErr
+      );
     }
 
-    // 3. Recalculate ownership percentages
-    const { error: rpcError } = await supabase.rpc("recalculate_ownership");
-    if (rpcError) {
-      set({ error: rpcError.message });
+    // --- 3. Recalculate ownership (non-blocking) ---
+    try {
+      const { error: rpcError } = await supabase.rpc("recalculate_ownership");
+      if (rpcError) {
+        console.error(
+          "[handleWithdrawal] recalculate_ownership RPC failed:",
+          rpcError
+        );
+      }
+    } catch (rpcCatchErr) {
+      console.error(
+        "[handleWithdrawal] recalculate_ownership threw:",
+        rpcCatchErr
+      );
     }
 
-    // 4. Optimistic local update for instant UI feedback (with derived ownership)
-    set((state) => ({
-      partners: withDerivedOwnership(
-        state.partners.map((p) =>
-          p.id === partnerId
-            ? {
-                ...p,
-                currentBalance: newCurrentBalance,
-                totalBalance: newTotalBalance,
-                totalWithdrawals: newTotalWithdrawals,
-                balanceHistory: updatedHistory,
-              }
-            : p
-        )
-      ),
+    // --- 4. Success! Update UI immediately ---
+    set({
       notification: {
-        type: "success" as const,
+        type: "success",
         message: `تم سحب $${amount.toLocaleString()} من حساب ${partner.name} بنجاح`,
       },
-    }));
+    });
 
-    // 5. Refetch for accurate ownership percentages from server
+    // --- 5. Refetch to sync with server ---
+    if (onDone) {
+      await onDone();
+    }
     await get().fetchPartners();
   },
 

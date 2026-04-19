@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, safeNumber } from "@/lib/utils";
 import type { Partner } from "@/types";
 
 interface WithdrawalDialogProps {
   open: boolean;
   partner: Partner | null;
   onClose: () => void;
-  onSubmit: (partnerId: string, amount: number) => Promise<void>;
+  onSubmit: (partner: Partner, amount: number) => Promise<void>;
 }
 
 export function WithdrawalDialog({
@@ -43,12 +43,12 @@ export function WithdrawalDialog({
 
   if (!open || !partner) return null;
 
+  const balance = safeNumber(partner.currentBalance) || safeNumber(partner.totalBalance);
   const numericAmount = parseFloat(amount);
-  const isOverBalance =
-    !isNaN(numericAmount) && numericAmount > partner.currentBalance;
+  const isOverBalance = !isNaN(numericAmount) && numericAmount > balance;
   const percentage =
-    !isNaN(numericAmount) && partner.currentBalance > 0
-      ? Math.min((numericAmount / partner.currentBalance) * 100, 100)
+    !isNaN(numericAmount) && balance > 0
+      ? Math.min((numericAmount / balance) * 100, 100)
       : 0;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -63,26 +63,42 @@ export function WithdrawalDialog({
       return;
     }
 
-    if (parsed > partner.currentBalance) {
+    if (parsed > balance) {
       setError(
-        `المبلغ يتجاوز الرصيد المتاح (${formatCurrency(partner.currentBalance)})`
+        `المبلغ يتجاوز الرصيد المتاح (${formatCurrency(balance)})`
       );
       return;
     }
 
     setSubmitting(true);
     try {
-      await onSubmit(partner.id, parsed);
+      await onSubmit(partner, parsed);
       onClose();
-    } catch {
-      setError("فشلت عملية السحب. يرجى المحاولة مرة أخرى.");
+    } catch (err: unknown) {
+      console.error("[WithdrawalDialog] Submission error:", err);
+      const supabaseMsg =
+        err && typeof err === "object" && "message" in err
+          ? (err as { message: string }).message
+          : null;
+
+      if (supabaseMsg?.includes("does not exist")) {
+        setError(
+          'جدول "transactions" غير موجود في قاعدة البيانات. يرجى تشغيل ملف الهجرة أولاً.'
+        );
+      } else if (supabaseMsg?.includes("permission")) {
+        setError("لا توجد صلاحية كافية. تحقق من سياسات RLS في Supabase.");
+      } else {
+        setError(
+          supabaseMsg || "فشلت عملية السحب. يرجى المحاولة مرة أخرى."
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
   function setMaxAmount() {
-    setAmount(partner!.currentBalance.toString());
+    setAmount(balance.toString());
     setError(null);
   }
 
@@ -141,7 +157,7 @@ export function WithdrawalDialog({
               الرصيد المتاح
             </p>
             <p className="text-sm font-headline font-bold text-primary">
-              {formatCurrency(partner.currentBalance)}
+              {formatCurrency(balance)}
             </p>
           </div>
         </div>
@@ -177,7 +193,7 @@ export function WithdrawalDialog({
                 }}
                 placeholder="0.00"
                 min="0"
-                max={partner.currentBalance}
+                max={balance}
                 step="0.01"
                 disabled={submitting}
                 className={`w-full bg-surface-container-low border rounded-sm pr-8 pl-4 py-3 text-sm text-white font-mono placeholder:text-on-surface-variant/40 focus:ring-1 outline-none transition-all disabled:opacity-50 ${
@@ -212,7 +228,7 @@ export function WithdrawalDialog({
                 <span>
                   الرصيد بعد السحب:{" "}
                   <span className="text-white font-mono">
-                    {formatCurrency(partner.currentBalance - numericAmount)}
+                    {formatCurrency(balance - numericAmount)}
                   </span>
                 </span>
               </div>
@@ -223,7 +239,7 @@ export function WithdrawalDialog({
           {error && (
             <div className="p-3 bg-secondary/10 border border-secondary/20 rounded-sm text-xs text-secondary flex items-center gap-2">
               <Icon name="error" className="!text-base" />
-              {error}
+              <span className="flex-1">{error}</span>
             </div>
           )}
 

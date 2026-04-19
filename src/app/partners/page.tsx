@@ -15,20 +15,21 @@ import { usePartnersStore } from "@/store/partners-store";
 import type { Partner } from "@/types";
 
 export default function PartnersPage() {
-  const { partners, loading, error, totalAssets, deletePartner, addPartner } = usePartners();
-  const { handleWithdrawal, notification, clearNotification } = usePartnersStore();
+  const {
+    partners,
+    loading,
+    error,
+    totalAssets,
+    deletePartner,
+    addPartner,
+    refetch,
+  } = usePartners();
+  const { handleWithdrawal, notification, clearNotification } =
+    usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
-
-  // Sync partners into the Zustand store so handleWithdrawal can validate
-  const storeSetPartners = usePartnersStore((s) => s.fetchPartners);
-  useEffect(() => {
-    if (!loading && partners.length > 0) {
-      storeSetPartners();
-    }
-  }, [loading, partners.length, storeSetPartners]);
 
   // Auto-dismiss success notification
   useEffect(() => {
@@ -45,8 +46,8 @@ export default function PartnersPage() {
     setDeleteTarget(null);
   }
 
-  async function onWithdraw(partnerId: string, amount: number) {
-    await handleWithdrawal(partnerId, amount);
+  async function onWithdraw(partner: Partner, amount: number) {
+    await handleWithdrawal(partner, amount, refetch);
   }
 
   return (
@@ -82,7 +83,7 @@ export default function PartnersPage() {
 
       {/* Success Notification */}
       {notification?.type === "success" && (
-        <div className="mb-6 p-4 bg-primary/10 border border-primary/30 rounded-sm text-sm text-primary flex items-center gap-3 animate-in fade-in duration-300">
+        <div className="mb-6 p-4 bg-primary/10 border border-primary/30 rounded-sm text-sm text-primary flex items-center gap-3">
           <Icon name="check_circle" className="!text-xl" />
           <span className="flex-1">{notification.message}</span>
           <button
@@ -106,7 +107,9 @@ export default function PartnersPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {loading ? (
           <>
-            <div className="md:col-span-2"><CardSkeleton /></div>
+            <div className="md:col-span-2">
+              <CardSkeleton />
+            </div>
             <CardSkeleton />
           </>
         ) : (
@@ -122,9 +125,6 @@ export default function PartnersPage() {
               <div className="flex items-baseline gap-3">
                 <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
                   {formatCurrency(totalAssets)}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
-                  +12.5%
                 </span>
               </div>
             </div>
@@ -201,112 +201,130 @@ export default function PartnersPage() {
               {!loading && partners.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center">
-                    <Icon name="group_off" className="!text-5xl text-on-surface-variant/30 mb-3 block mx-auto" />
-                    <p className="text-sm text-on-surface-variant">لا يوجد شركاء في المحفظة</p>
-                    <p className="text-[10px] text-on-surface-variant/60 mt-1">قم بإضافة شريك جديد للبدء</p>
+                    <Icon
+                      name="group_off"
+                      className="!text-5xl text-on-surface-variant/30 mb-3 block mx-auto"
+                    />
+                    <p className="text-sm text-on-surface-variant">
+                      لا يوجد شركاء في المحفظة
+                    </p>
+                    <p className="text-[10px] text-on-surface-variant/60 mt-1">
+                      قم بإضافة شريك جديد للبدء
+                    </p>
                   </td>
                 </tr>
               )}
 
               {/* Data Rows */}
-              {!loading && partners.map((partner) => (
-                <tr
-                  key={partner.id}
-                  className="hover:bg-white/[0.02] transition-colors"
-                >
-                  {/* Name & ID */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                        {partner.initials}
+              {!loading &&
+                partners.map((partner) => (
+                  <tr
+                    key={partner.id}
+                    className="hover:bg-white/[0.02] transition-colors"
+                  >
+                    {/* Name & ID */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          {partner.initials}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm text-white font-bold">
+                            {partner.name}
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant font-mono">
+                            {partner.code}
+                          </span>
+                        </div>
                       </div>
+                    </td>
+
+                    {/* Balance */}
+                    <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm text-white font-bold">
-                          {partner.name}
+                        <span className="text-sm font-headline font-medium text-white">
+                          {formatCurrency(
+                            partner.currentBalance || partner.totalBalance
+                          )}
                         </span>
-                        <span className="text-[10px] text-on-surface-variant font-mono">
-                          {partner.code}
+                        <span
+                          className={`text-[10px] font-bold ${
+                            partner.performance24h >= 0
+                              ? "text-primary"
+                              : "text-secondary"
+                          }`}
+                        >
+                          {formatPercent(partner.performance24h)}
                         </span>
                       </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Total Balance (uses currentBalance, falls back to totalBalance) */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-headline font-medium text-white">
-                        {formatCurrency(partner.currentBalance || partner.totalBalance)}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold ${
-                          partner.performance24h >= 0
-                            ? "text-primary"
-                            : "text-secondary"
-                        }`}
-                      >
-                        {formatPercent(partner.performance24h)}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Ownership Percentage (computed client-side) */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-headline font-medium text-white">
-                        {partner.ownershipPercentage.toFixed(1)}%
-                      </span>
-                      <div className="w-24 h-1 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.max(0, Math.min(100, partner.ownershipPercentage))}%`,
-                          }}
-                        />
+                    {/* Ownership Percentage */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-sm font-headline font-medium text-white">
+                          {partner.ownershipPercentage.toFixed(1)}%
+                        </span>
+                        <div className="w-24 h-1 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, partner.ownershipPercentage))}%`,
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Management Fee */}
-                  <td className="px-6 py-4 text-sm font-headline font-medium text-on-surface-variant">
-                    {partner.managementFeeRate.toFixed(2)}%
-                  </td>
+                    {/* Management Fee */}
+                    <td className="px-6 py-4 text-sm font-headline font-medium text-on-surface-variant">
+                      {partner.managementFeeRate.toFixed(2)}%
+                    </td>
 
-                  {/* Sparkline (real chart from balanceHistory) */}
-                  <td className="px-6 py-4">
-                    <Sparkline
-                      data={partner.balanceHistory}
-                      fallbackTrend={partner.performance24h >= 0 ? "up" : "down"}
-                    />
-                  </td>
+                    {/* Sparkline */}
+                    <td className="px-6 py-4">
+                      <Sparkline
+                        data={partner.balanceHistory}
+                        fallbackTrend={
+                          partner.performance24h >= 0 ? "up" : "down"
+                        }
+                      />
+                    </td>
 
-                  {/* Actions */}
-                  <td className="px-6 py-4 text-left">
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setWithdrawTarget(partner)}
-                        className="text-[10px] px-3 py-1.5 rounded-sm border border-secondary/20 text-secondary/80 hover:text-secondary hover:border-secondary/40 hover:bg-secondary/5 transition-colors uppercase tracking-widest font-bold flex items-center gap-1"
-                        title="سحب أموال"
-                      >
-                        <Icon name="account_balance" className="!text-xs" />
-                        سحب
-                      </button>
-                      <Link
-                        href={`/partners/${partner.id}`}
-                        className="text-[10px] px-3 py-1.5 rounded-sm border border-white/10 text-on-surface-variant hover:text-primary hover:border-primary/30 transition-colors uppercase tracking-widest font-bold"
-                      >
-                        عرض التفاصيل
-                      </Link>
-                      <button
-                        onClick={() => setDeleteTarget(partner)}
-                        className="p-1.5 rounded-sm border border-white/5 text-on-surface-variant/40 hover:text-secondary hover:border-secondary/30 hover:bg-secondary/5 transition-all group"
-                        title="حذف الشريك"
-                      >
-                        <Icon name="delete" className="!text-base group-hover:!font-[600]" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-left">
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => setWithdrawTarget(partner)}
+                          className="text-[10px] px-3 py-1.5 rounded-sm border border-secondary/20 text-secondary/80 hover:text-secondary hover:border-secondary/40 hover:bg-secondary/5 transition-colors uppercase tracking-widest font-bold flex items-center gap-1"
+                          title="سحب أموال"
+                        >
+                          <Icon
+                            name="account_balance"
+                            className="!text-xs"
+                          />
+                          سحب
+                        </button>
+                        <Link
+                          href={`/partners/${partner.id}`}
+                          className="text-[10px] px-3 py-1.5 rounded-sm border border-white/10 text-on-surface-variant hover:text-primary hover:border-primary/30 transition-colors uppercase tracking-widest font-bold"
+                        >
+                          عرض التفاصيل
+                        </Link>
+                        <button
+                          onClick={() => setDeleteTarget(partner)}
+                          className="p-1.5 rounded-sm border border-white/5 text-on-surface-variant/40 hover:text-secondary hover:border-secondary/30 hover:bg-secondary/5 transition-all group"
+                          title="حذف الشريك"
+                        >
+                          <Icon
+                            name="delete"
+                            className="!text-base group-hover:!font-[600]"
+                          />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -315,7 +333,9 @@ export default function PartnersPage() {
         <div className="p-4 bg-surface-container-low flex justify-between items-center text-[10px] text-on-surface-variant">
           <span>عرض {partners.length} شريك</span>
           <div className="flex gap-4">
-            <button className="hover:text-white transition-colors">السابق</button>
+            <button className="hover:text-white transition-colors">
+              السابق
+            </button>
             <button className="text-primary font-black">التالي</button>
           </div>
         </div>
