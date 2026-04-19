@@ -2,31 +2,54 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { safeNumber } from "@/lib/utils";
 import type { Partner } from "@/types";
 import type { PartnerRow } from "@/types/database";
 
 function rowToPartner(row: PartnerRow): Partner {
+  // currentBalance falls back to total_balance if the new column is empty
+  const currentBalance =
+    safeNumber(row.currentBalance) || safeNumber(row.total_balance);
+  // Fee can be stored under either name depending on schema migrations
+  const feePercent =
+    safeNumber(row.managementFeePercent) || safeNumber(row.management_fee_rate);
+
   return {
     id: row.id,
     name: row.name,
     code: row.code,
     initials: row.initials,
     avatarUrl: row.avatar_url ?? undefined,
-    totalBalance: Number(row.total_balance),
-    ownershipPercentage: Number(row.ownership_percentage),
-    managementFeeRate: Number(row.management_fee_rate),
-    performance24h: Number(row.performance_24h),
-    performanceTrend: row.performance_trend,
+    totalBalance: safeNumber(row.total_balance),
+    ownershipPercentage: safeNumber(row.ownership_percentage),
+    managementFeeRate: feePercent,
+    performance24h: safeNumber(row.performance_24h),
+    performanceTrend: row.performance_trend ?? "up",
     joinedAt: row.joined_at,
     isAdmin: row.isAdmin ?? false,
-    totalDeposits: Number(row.totalDeposits ?? 0),
-    totalWithdrawals: Number(row.totalWithdrawals ?? 0),
-    currentBalance: Number(row.currentBalance ?? 0),
-    totalNetProfit: Number(row.totalNetProfit ?? 0),
-    managementFeesPaid: Number(row.managementFeesPaid ?? 0),
-    baseCapital: Number(row.baseCapital ?? 0),
-    balanceHistory: (row.balanceHistory as Partner["balanceHistory"]) ?? [],
+    totalDeposits: safeNumber(row.totalDeposits),
+    totalWithdrawals: safeNumber(row.totalWithdrawals),
+    currentBalance,
+    totalNetProfit: safeNumber(row.totalNetProfit),
+    managementFeesPaid: safeNumber(row.managementFeesPaid),
+    baseCapital: safeNumber(row.baseCapital) || currentBalance,
+    balanceHistory: Array.isArray(row.balanceHistory)
+      ? (row.balanceHistory as Partner["balanceHistory"])
+      : [],
   };
+}
+
+// Recompute ownership client-side from currentBalance so it works even
+// when the server-side column is null/stale.
+function withDerivedOwnership(partners: Partner[]): Partner[] {
+  const totalAssets = partners.reduce((sum, p) => sum + p.currentBalance, 0);
+  if (totalAssets <= 0) {
+    return partners.map((p) => ({ ...p, ownershipPercentage: 0 }));
+  }
+  return partners.map((p) => ({
+    ...p,
+    ownershipPercentage: (p.currentBalance / totalAssets) * 100,
+  }));
 }
 
 export function usePartners() {
@@ -47,7 +70,7 @@ export function usePartners() {
       setError(fetchError.message);
       setPartners([]);
     } else {
-      setPartners((data ?? []).map(rowToPartner));
+      setPartners(withDerivedOwnership((data ?? []).map(rowToPartner)));
     }
 
     setLoading(false);
@@ -128,7 +151,12 @@ export function usePartners() {
     [fetchPartners]
   );
 
-  const totalAssets = partners.reduce((sum, p) => sum + p.totalBalance, 0);
+  // Use currentBalance (the live working balance) for ownership math; fall
+  // back to totalBalance if currentBalance was never populated.
+  const totalAssets = partners.reduce(
+    (sum, p) => sum + (p.currentBalance || p.totalBalance),
+    0
+  );
 
   return { partners, loading, error, totalAssets, deletePartner, addPartner, refetch: fetchPartners };
 }

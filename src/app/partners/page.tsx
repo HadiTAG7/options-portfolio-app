@@ -7,8 +7,9 @@ import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
+import { Sparkline } from "@/components/ui/sparkline";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatPercent } from "@/lib/utils";
 import { usePartners } from "@/hooks/use-partners";
 import { usePartnersStore } from "@/store/partners-store";
 import type { Partner } from "@/types";
@@ -230,26 +231,25 @@ export default function PartnersPage() {
                     </div>
                   </td>
 
-                  {/* Total Balance */}
+                  {/* Total Balance (uses currentBalance, falls back to totalBalance) */}
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-headline font-medium text-white">
-                        {formatCurrency(partner.totalBalance)}
+                        {formatCurrency(partner.currentBalance || partner.totalBalance)}
                       </span>
                       <span
                         className={`text-[10px] font-bold ${
-                          partner.performanceTrend === "up"
+                          partner.performance24h >= 0
                             ? "text-primary"
                             : "text-secondary"
                         }`}
                       >
-                        {partner.performance24h >= 0 ? "+" : ""}
-                        {partner.performance24h.toFixed(2)}%
+                        {formatPercent(partner.performance24h)}
                       </span>
                     </div>
                   </td>
 
-                  {/* Ownership Percentage */}
+                  {/* Ownership Percentage (computed client-side) */}
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1.5">
                       <span className="text-sm font-headline font-medium text-white">
@@ -259,7 +259,7 @@ export default function PartnersPage() {
                         <div
                           className="h-full bg-primary rounded-full transition-all duration-500"
                           style={{
-                            width: `${partner.ownershipPercentage}%`,
+                            width: `${Math.max(0, Math.min(100, partner.ownershipPercentage))}%`,
                           }}
                         />
                       </div>
@@ -271,20 +271,11 @@ export default function PartnersPage() {
                     {partner.managementFeeRate.toFixed(2)}%
                   </td>
 
-                  {/* Sparkline */}
+                  {/* Sparkline (real chart from balanceHistory) */}
                   <td className="px-6 py-4">
-                    <div
-                      className={`w-20 h-8 rounded-sm ${
-                        partner.performanceTrend === "up"
-                          ? "bg-primary/30"
-                          : "bg-secondary/30"
-                      }`}
-                      style={{
-                        clipPath:
-                          partner.performanceTrend === "up"
-                            ? "polygon(0 80%, 20% 60%, 40% 70%, 60% 30%, 80% 40%, 100% 10%, 100% 100%, 0 100%)"
-                            : "polygon(0 20%, 20% 40%, 40% 30%, 60% 70%, 80% 60%, 100% 90%, 100% 100%, 0 100%)",
-                      }}
+                    <Sparkline
+                      data={partner.balanceHistory}
+                      fallbackTrend={partner.performance24h >= 0 ? "up" : "down"}
                     />
                   </td>
 

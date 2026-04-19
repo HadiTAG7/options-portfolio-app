@@ -2,31 +2,50 @@
 
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { safeNumber } from "@/lib/utils";
 import type { Partner } from "@/types";
 import type { PartnerRow, BalanceHistoryEntry } from "@/types/database";
 
 function rowToPartner(row: PartnerRow): Partner {
+  const currentBalance =
+    safeNumber(row.currentBalance) || safeNumber(row.total_balance);
+  const feePercent =
+    safeNumber(row.managementFeePercent) || safeNumber(row.management_fee_rate);
+
   return {
     id: row.id,
     name: row.name,
     code: row.code,
     initials: row.initials,
     avatarUrl: row.avatar_url ?? undefined,
-    totalBalance: Number(row.total_balance),
-    ownershipPercentage: Number(row.ownership_percentage),
-    managementFeeRate: Number(row.management_fee_rate),
-    performance24h: Number(row.performance_24h),
-    performanceTrend: row.performance_trend,
+    totalBalance: safeNumber(row.total_balance),
+    ownershipPercentage: safeNumber(row.ownership_percentage),
+    managementFeeRate: feePercent,
+    performance24h: safeNumber(row.performance_24h),
+    performanceTrend: row.performance_trend ?? "up",
     joinedAt: row.joined_at,
     isAdmin: row.isAdmin ?? false,
-    totalDeposits: Number(row.totalDeposits ?? 0),
-    totalWithdrawals: Number(row.totalWithdrawals ?? 0),
-    currentBalance: Number(row.currentBalance ?? 0),
-    totalNetProfit: Number(row.totalNetProfit ?? 0),
-    managementFeesPaid: Number(row.managementFeesPaid ?? 0),
-    baseCapital: Number(row.baseCapital ?? 0),
-    balanceHistory: (row.balanceHistory as Partner["balanceHistory"]) ?? [],
+    totalDeposits: safeNumber(row.totalDeposits),
+    totalWithdrawals: safeNumber(row.totalWithdrawals),
+    currentBalance,
+    totalNetProfit: safeNumber(row.totalNetProfit),
+    managementFeesPaid: safeNumber(row.managementFeesPaid),
+    baseCapital: safeNumber(row.baseCapital) || currentBalance,
+    balanceHistory: Array.isArray(row.balanceHistory)
+      ? (row.balanceHistory as Partner["balanceHistory"])
+      : [],
   };
+}
+
+function withDerivedOwnership(partners: Partner[]): Partner[] {
+  const totalAssets = partners.reduce((sum, p) => sum + p.currentBalance, 0);
+  if (totalAssets <= 0) {
+    return partners.map((p) => ({ ...p, ownershipPercentage: 0 }));
+  }
+  return partners.map((p) => ({
+    ...p,
+    ownershipPercentage: (p.currentBalance / totalAssets) * 100,
+  }));
 }
 
 interface Notification {
@@ -62,7 +81,10 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     if (error) {
       set({ error: error.message, partners: [], loading: false });
     } else {
-      set({ partners: (data ?? []).map(rowToPartner), loading: false });
+      set({
+        partners: withDerivedOwnership((data ?? []).map(rowToPartner)),
+        loading: false,
+      });
     }
   },
 
@@ -126,18 +148,20 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       set({ error: rpcError.message });
     }
 
-    // 4. Optimistic local update for instant UI feedback
+    // 4. Optimistic local update for instant UI feedback (with derived ownership)
     set((state) => ({
-      partners: state.partners.map((p) =>
-        p.id === partnerId
-          ? {
-              ...p,
-              currentBalance: newCurrentBalance,
-              totalBalance: newTotalBalance,
-              totalWithdrawals: newTotalWithdrawals,
-              balanceHistory: updatedHistory,
-            }
-          : p
+      partners: withDerivedOwnership(
+        state.partners.map((p) =>
+          p.id === partnerId
+            ? {
+                ...p,
+                currentBalance: newCurrentBalance,
+                totalBalance: newTotalBalance,
+                totalWithdrawals: newTotalWithdrawals,
+                balanceHistory: updatedHistory,
+              }
+            : p
+        )
       ),
       notification: {
         type: "success" as const,

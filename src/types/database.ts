@@ -30,6 +30,7 @@ export interface Database {
           currentBalance: number;
           totalNetProfit: number;
           managementFeesPaid: number;
+          managementFeePercent: number | null;
           baseCapital: number;
           balanceHistory: BalanceHistoryEntry[];
         };
@@ -53,6 +54,7 @@ export interface Database {
           currentBalance?: number;
           totalNetProfit?: number;
           managementFeesPaid?: number;
+          managementFeePercent?: number | null;
           baseCapital?: number;
           balanceHistory?: BalanceHistoryEntry[];
         };
