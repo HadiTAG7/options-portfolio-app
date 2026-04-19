@@ -35,84 +35,104 @@ function rowToActiveStock(row: ActiveStockRow): ActiveStock {
 }
 
 export function useTrades() {
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [activeStocks, setActiveStocks] = useState<ActiveStock[]>([]);
+  const [tradesList, setTradesList] = useState<Trade[]>([]);
+  const [activeStocksList, setActiveStocksList] = useState<ActiveStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchTradesData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const [tradesRes, stocksRes] = await Promise.all([
-      supabase.from("trades").select("*").order("date", { ascending: false }),
-      supabase.from("active_stocks").select("*"),
-    ]);
+    // --- Trades ---
+    const { data: trades, error: tradesError } = await supabase
+      .from("trades")
+      .select("*")
+      .order("date", { ascending: false });
 
-    if (tradesRes.error) {
-      console.error("[useTrades] trades fetch failed:", tradesRes.error);
-      setError(tradesRes.error.message);
-      setTrades([]);
+    console.log("Fetched Trades:", trades, tradesError);
+
+    if (tradesError) {
+      console.error("[useTrades] trades fetch failed:", tradesError);
+      setError(`trades: ${tradesError.message}`);
+      setTradesList([]);
     } else {
-      setTrades((tradesRes.data ?? []).map(rowToTrade));
+      const mapped = (trades ?? []).map(rowToTrade);
+      setTradesList(mapped);
+      console.log(
+        `[useTrades] trades rows=${mapped.length}`,
+        "types seen:",
+        Array.from(new Set(mapped.map((t) => t.type)))
+      );
     }
 
-    if (stocksRes.error) {
-      console.error("[useTrades] active_stocks fetch failed:", stocksRes.error);
-      if (!tradesRes.error) {
-        setError(stocksRes.error.message);
-      }
-      setActiveStocks([]);
+    // --- Active Stocks ---
+    const { data: activeStocks, error: stocksError } = await supabase
+      .from("active_stocks")
+      .select("*");
+
+    console.log("Fetched Active Stocks:", activeStocks, stocksError);
+
+    if (stocksError) {
+      console.error("[useTrades] active_stocks fetch failed:", stocksError);
+      setError((prev) =>
+        prev ? `${prev} | active_stocks: ${stocksError.message}` : `active_stocks: ${stocksError.message}`
+      );
+      setActiveStocksList([]);
     } else {
-      setActiveStocks((stocksRes.data ?? []).map(rowToActiveStock));
+      const mapped = (activeStocks ?? []).map(rowToActiveStock);
+      setActiveStocksList(mapped);
+      console.log(`[useTrades] active_stocks rows=${mapped.length}`);
     }
 
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchTradesData();
+  }, [fetchTradesData]);
 
-  const sellCalls = useMemo(
-    () => trades.filter((t) => t.type === "Sell Call"),
-    [trades]
-  );
+  // --- Categorize by exact string match ---
   const sellPuts = useMemo(
-    () => trades.filter((t) => t.type === "Sell Put"),
-    [trades]
+    () => tradesList.filter((t) => t.type === "Sell Put"),
+    [tradesList]
+  );
+  const sellCalls = useMemo(
+    () => tradesList.filter((t) => t.type === "Sell Call"),
+    [tradesList]
   );
   const stockSells = useMemo(
-    () => trades.filter((t) => t.type === "Stock Sell"),
-    [trades]
+    () => tradesList.filter((t) => t.type === "Stock Sell"),
+    [tradesList]
   );
 
+  // --- KPI aggregations (all numerics coerced via safeNumber in rowToTrade) ---
   const totalPremium = useMemo(
     () =>
-      trades
-        .filter((t) => t.type !== "Stock Sell")
-        .reduce((sum, t) => sum + t.premium, 0),
-    [trades]
+      tradesList
+        .filter((t) => t.type === "Sell Put" || t.type === "Sell Call")
+        .reduce((sum, t) => sum + Number(t.premium || 0), 0),
+    [tradesList]
   );
   const totalResult = useMemo(
-    () => stockSells.reduce((sum, t) => sum + t.result, 0),
+    () => stockSells.reduce((sum, t) => sum + Number(t.result || 0), 0),
     [stockSells]
   );
   const totalProfit = totalPremium + totalResult;
-  const openCount = sellCalls.length + sellPuts.length;
+  const openCount = sellPuts.length + sellCalls.length;
 
   return {
-    trades,
+    trades: tradesList,
     sellCalls,
     sellPuts,
     stockSells,
-    activeStocks,
+    activeStocks: activeStocksList,
     loading,
     error,
     totalPremium,
     totalResult,
     totalProfit,
     openCount,
-    refetch: fetchData,
+    refetch: fetchTradesData,
   };
 }

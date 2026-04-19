@@ -71,9 +71,36 @@ export default function TradesPage() {
       {error && (
         <div className="mb-6 flex items-center gap-3 rounded-sm border border-secondary/30 bg-secondary/10 p-4 text-sm text-secondary">
           <Icon name="error" className="!text-xl" />
-          <span>{error}</span>
+          <span className="font-mono">{error}</span>
         </div>
       )}
+
+      {/* Debug Strip (temporary) */}
+      <div className="mb-6 flex flex-wrap items-center gap-4 rounded-sm border border-white/5 bg-surface-container-low px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-on-surface-variant">
+        <span>
+          fetch status:{" "}
+          <span className={loading ? "text-tertiary" : "text-primary"}>
+            {loading ? "loading…" : "idle"}
+          </span>
+        </span>
+        <span>
+          trades rows: <span className="text-on-surface">{trades.length}</span>
+        </span>
+        <span>
+          active_stocks rows:{" "}
+          <span className="text-on-surface">{activeStocks.length}</span>
+        </span>
+        <span>
+          puts: <span className="text-on-surface">{sellPuts.length}</span>
+        </span>
+        <span>
+          calls: <span className="text-on-surface">{sellCalls.length}</span>
+        </span>
+        <span>
+          stock sells:{" "}
+          <span className="text-on-surface">{stockSells.length}</span>
+        </span>
+      </div>
 
       {/* Summary Cards */}
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
