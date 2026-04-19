@@ -18,6 +18,14 @@ function rowToPartner(row: PartnerRow): Partner {
     performance24h: Number(row.performance_24h),
     performanceTrend: row.performance_trend,
     joinedAt: row.joined_at,
+    isAdmin: row.isAdmin ?? false,
+    totalDeposits: Number(row.totalDeposits ?? 0),
+    totalWithdrawals: Number(row.totalWithdrawals ?? 0),
+    currentBalance: Number(row.currentBalance ?? 0),
+    totalNetProfit: Number(row.totalNetProfit ?? 0),
+    managementFeesPaid: Number(row.managementFeesPaid ?? 0),
+    baseCapital: Number(row.baseCapital ?? 0),
+    balanceHistory: (row.balanceHistory as Partner["balanceHistory"]) ?? [],
   };
 }
 

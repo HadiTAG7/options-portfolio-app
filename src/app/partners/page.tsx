@@ -1,21 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
+import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { usePartners } from "@/hooks/use-partners";
+import { usePartnersStore } from "@/store/partners-store";
 import type { Partner } from "@/types";
 
 export default function PartnersPage() {
   const { partners, loading, error, totalAssets, deletePartner, addPartner } = usePartners();
+  const { handleWithdrawal, notification, clearNotification } = usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
+
+  // Sync partners into the Zustand store so handleWithdrawal can validate
+  const storeSetPartners = usePartnersStore((s) => s.fetchPartners);
+  useEffect(() => {
+    if (!loading && partners.length > 0) {
+      storeSetPartners();
+    }
+  }, [loading, partners.length, storeSetPartners]);
+
+  // Auto-dismiss success notification
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(clearNotification, 4000);
+    return () => clearTimeout(timer);
+  }, [notification, clearNotification]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -25,6 +44,10 @@ export default function PartnersPage() {
     setDeleteTarget(null);
   }
 
+  async function onWithdraw(partnerId: string, amount: number) {
+    await handleWithdrawal(partnerId, amount);
+  }
+
   return (
     <AppShell>
       {/* Add Partner Dialog */}
@@ -32,6 +55,14 @@ export default function PartnersPage() {
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
         onSubmit={addPartner}
+      />
+
+      {/* Withdrawal Dialog */}
+      <WithdrawalDialog
+        open={withdrawTarget !== null}
+        partner={withdrawTarget}
+        onClose={() => setWithdrawTarget(null)}
+        onSubmit={onWithdraw}
       />
 
       {/* Confirmation Dialog */}
@@ -48,11 +79,25 @@ export default function PartnersPage() {
         onCancel={() => !deleting && setDeleteTarget(null)}
       />
 
+      {/* Success Notification */}
+      {notification?.type === "success" && (
+        <div className="mb-6 p-4 bg-primary/10 border border-primary/30 rounded-sm text-sm text-primary flex items-center gap-3 animate-in fade-in duration-300">
+          <Icon name="check_circle" className="!text-xl" />
+          <span className="flex-1">{notification.message}</span>
+          <button
+            onClick={clearNotification}
+            className="text-primary/60 hover:text-primary transition-colors"
+          >
+            <Icon name="close" className="!text-base" />
+          </button>
+        </div>
+      )}
+
       {/* Error Banner */}
-      {error && (
+      {(error || notification?.type === "error") && (
         <div className="mb-6 p-4 bg-secondary/10 border border-secondary/30 rounded-sm text-sm text-secondary flex items-center gap-3">
           <Icon name="error" className="!text-xl" />
-          <span>خطأ في تحميل البيانات: {error}</span>
+          <span>{error || notification?.message}</span>
         </div>
       )}
 
@@ -246,6 +291,14 @@ export default function PartnersPage() {
                   {/* Actions */}
                   <td className="px-6 py-4 text-left">
                     <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setWithdrawTarget(partner)}
+                        className="text-[10px] px-3 py-1.5 rounded-sm border border-secondary/20 text-secondary/80 hover:text-secondary hover:border-secondary/40 hover:bg-secondary/5 transition-colors uppercase tracking-widest font-bold flex items-center gap-1"
+                        title="سحب أموال"
+                      >
+                        <Icon name="account_balance" className="!text-xs" />
+                        سحب
+                      </button>
                       <Link
                         href={`/partners/${partner.id}`}
                         className="text-[10px] px-3 py-1.5 rounded-sm border border-white/10 text-on-surface-variant hover:text-primary hover:border-primary/30 transition-colors uppercase tracking-widest font-bold"

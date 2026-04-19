@@ -1,6 +1,11 @@
 // Auto-generated types matching the Supabase SQL schema.
 // Regenerate with: npx supabase gen types typescript --local > src/types/database.ts
 
+export interface BalanceHistoryEntry {
+  date: string;
+  balance: number;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -19,6 +24,14 @@ export interface Database {
           joined_at: string;
           created_at: string;
           updated_at: string;
+          isAdmin: boolean;
+          totalDeposits: number;
+          totalWithdrawals: number;
+          currentBalance: number;
+          totalNetProfit: number;
+          managementFeesPaid: number;
+          baseCapital: number;
+          balanceHistory: BalanceHistoryEntry[];
         };
         Insert: {
           id?: string;
@@ -34,6 +47,14 @@ export interface Database {
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
+          isAdmin?: boolean;
+          totalDeposits?: number;
+          totalWithdrawals?: number;
+          currentBalance?: number;
+          totalNetProfit?: number;
+          managementFeesPaid?: number;
+          baseCapital?: number;
+          balanceHistory?: BalanceHistoryEntry[];
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];
@@ -74,6 +95,26 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];
       };
+      transactions: {
+        Row: {
+          id: string;
+          investorId: string;
+          amount: number;
+          type: "Deposit" | "Withdrawal";
+          date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          investorId: string;
+          amount: number;
+          type: "Deposit" | "Withdrawal";
+          date?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["transactions"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -90,3 +131,4 @@ export interface Database {
 // Convenience aliases
 export type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
 export type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
+export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];

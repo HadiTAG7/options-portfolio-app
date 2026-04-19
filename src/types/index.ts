@@ -2,6 +2,11 @@
 // Partner (Investor) Types
 // ============================================================
 
+export interface BalanceHistoryEntry {
+  date: string;
+  balance: number;
+}
+
 export interface Partner {
   id: string;
   name: string;
@@ -14,6 +19,14 @@ export interface Partner {
   performance24h: number; // percentage change
   performanceTrend: "up" | "down";
   joinedAt: string;
+  isAdmin: boolean;
+  totalDeposits: number;
+  totalWithdrawals: number;
+  currentBalance: number;
+  totalNetProfit: number;
+  managementFeesPaid: number;
+  baseCapital: number;
+  balanceHistory: BalanceHistoryEntry[];
 }
 
 // ============================================================
