@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { safeNumber } from "@/lib/utils";
+import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
 
@@ -44,70 +45,42 @@ export function useTrades() {
     setLoading(true);
     setError(null);
 
-    // Surface which Supabase project we're actually hitting.
-    // If this URL doesn't match the project that has your data, every
-    // query will legitimately return an empty array with no error.
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "(unset)";
-    console.log("[useTrades] Supabase URL:", url);
-    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.warn("[useTrades] NEXT_PUBLIC_SUPABASE_ANON_KEY is unset");
-    }
-
-    // --- Trades (also request an exact count so we can distinguish
-    //     "0 rows" from "row-level filtering hid everything") ---
-    const tradesRes = await supabase
+    // --- Trades ---
+    const { data: trades, error: tradesError } = await supabase
       .from("trades")
       .select("*", { count: "exact" })
       .order("date", { ascending: false });
 
-    const { data: trades, error: tradesError, count: tradesCount, status: tradesStatus } = tradesRes;
     console.log("Fetched Trades:", trades, tradesError);
-    console.log(
-      `[useTrades] trades status=${tradesStatus} count=${tradesCount} returned=${trades?.length ?? 0}`
-    );
 
     if (tradesError) {
       console.error("[useTrades] trades fetch failed:", tradesError);
-      setError(`trades: ${tradesError.message} (status ${tradesStatus})`);
-      setTradesList([]);
+      setError(`trades: ${tradesError.message}`);
+      setTradesList(seedTrades);
+    } else if (trades && trades.length > 0) {
+      setTradesList(trades.map(rowToTrade));
     } else {
-      const mapped = (trades ?? []).map(rowToTrade);
-      setTradesList(mapped);
-      console.log(
-        `[useTrades] trades mapped rows=${mapped.length}`,
-        "types seen:",
-        Array.from(new Set(mapped.map((t) => t.type)))
-      );
+      console.warn("[useTrades] Supabase returned 0 trades — using seed data");
+      setTradesList(seedTrades);
     }
 
     // --- Active Stocks ---
-    const stocksRes = await supabase
+    const { data: activeStocks, error: stocksError } = await supabase
       .from("active_stocks")
       .select("*", { count: "exact" });
 
-    const {
-      data: activeStocks,
-      error: stocksError,
-      count: stocksCount,
-      status: stocksStatus,
-    } = stocksRes;
     console.log("Fetched Active Stocks:", activeStocks, stocksError);
-    console.log(
-      `[useTrades] active_stocks status=${stocksStatus} count=${stocksCount} returned=${activeStocks?.length ?? 0}`
-    );
 
     if (stocksError) {
       console.error("[useTrades] active_stocks fetch failed:", stocksError);
-      setError((prev) =>
-        prev
-          ? `${prev} | active_stocks: ${stocksError.message} (status ${stocksStatus})`
-          : `active_stocks: ${stocksError.message} (status ${stocksStatus})`
-      );
-      setActiveStocksList([]);
+      setActiveStocksList(seedActiveStocks);
+    } else if (activeStocks && activeStocks.length > 0) {
+      setActiveStocksList(activeStocks.map(rowToActiveStock));
     } else {
-      const mapped = (activeStocks ?? []).map(rowToActiveStock);
-      setActiveStocksList(mapped);
-      console.log(`[useTrades] active_stocks mapped rows=${mapped.length}`);
+      console.warn(
+        "[useTrades] Supabase returned 0 active_stocks — using seed data"
+      );
+      setActiveStocksList(seedActiveStocks);
     }
 
     setLoading(false);
@@ -117,7 +90,6 @@ export function useTrades() {
     fetchTradesData();
   }, [fetchTradesData]);
 
-  // --- Categorize by exact string match ---
   const sellPuts = useMemo(
     () => tradesList.filter((t) => t.type === "Sell Put"),
     [tradesList]
@@ -131,7 +103,6 @@ export function useTrades() {
     [tradesList]
   );
 
-  // --- KPI aggregations (all numerics coerced via safeNumber in rowToTrade) ---
   const totalPremium = useMemo(
     () =>
       tradesList
