@@ -129,14 +129,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       : [];
     const updatedHistory = [...existingHistory, newHistoryEntry];
 
-    // --- 1. Update the partner row ---
+    // --- 1a. Update the numeric fields (guaranteed to exist) ---
     const { error: updateError } = await supabase
       .from("partners")
       .update({
         "currentBalance": newCurrentBalance,
         total_balance: newTotalBalance,
         "totalWithdrawals": newTotalWithdrawals,
-        "balanceHistory": updatedHistory as unknown as BalanceHistoryEntry[],
       })
       .eq("id", partner.id);
 
@@ -147,11 +146,50 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       if (updateError.message.includes("permission")) {
         userMsg =
           "ليس لديك صلاحية لتحديث بيانات الشريك. تحقق من سياسات RLS في Supabase.";
+      } else if (
+        updateError.message.includes("column") &&
+        updateError.message.includes("schema cache")
+      ) {
+        userMsg =
+          "أحد الأعمدة مفقود في قاعدة البيانات. يرجى تشغيل ملف الهجرة وإعادة تحميل مخطط Supabase.";
       }
-      set({
-        notification: { type: "error", message: userMsg },
-      });
+      set({ notification: { type: "error", message: userMsg } });
       throw updateError;
+    }
+
+    // --- 1b. Update balanceHistory separately (tolerate missing column) ---
+    // The column may be absent or the PostgREST schema cache may be stale.
+    // Either way, don't let it block the withdrawal itself.
+    try {
+      const { error: historyError } = await supabase
+        .from("partners")
+        .update({
+          "balanceHistory": updatedHistory as unknown as BalanceHistoryEntry[],
+        })
+        .eq("id", partner.id);
+
+      if (historyError) {
+        console.error(
+          "[handleWithdrawal] balanceHistory update failed (non-fatal):",
+          historyError
+        );
+        if (
+          historyError.message.includes("column") &&
+          historyError.message.includes("schema cache")
+        ) {
+          console.warn(
+            'The "balanceHistory" column is missing from the partners table schema cache.\n' +
+              "Run this SQL in Supabase, then reload the schema:\n" +
+              "  alter table public.partners add column if not exists \"balanceHistory\" jsonb not null default '[]'::jsonb;\n" +
+              "  notify pgrst, 'reload schema';"
+          );
+        }
+      }
+    } catch (historyCatchErr) {
+      console.error(
+        "[handleWithdrawal] balanceHistory update threw (non-fatal):",
+        historyCatchErr
+      );
     }
 
     // --- 2. Insert transaction record (non-blocking) ---
