@@ -87,6 +87,26 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];
       };
+      active_stocks: {
+        Row: {
+          id: string;
+          ticker: string;
+          quantity: number;
+          purchasePrice: number;
+          targetSellPrice: number;
+          purchaseDate: string;
+        };
+        Insert: {
+          id?: string;
+          ticker: string;
+          quantity: number;
+          purchasePrice: number;
+          targetSellPrice?: number;
+          purchaseDate?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["active_stocks"]["Insert"]>;
+        Relationships: [];
+      };
       transactions: {
         Row: {
           id: string;
@@ -123,4 +143,5 @@ export interface Database {
 // Convenience aliases
 export type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
 export type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
+export type ActiveStockRow = Database["public"]["Tables"]["active_stocks"]["Row"];
 export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];

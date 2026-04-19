@@ -87,16 +87,17 @@ export interface Trade {
 }
 
 // ============================================================
-// Active Stock Holding (derived from open option positions)
+// Active Stock Holding (from Supabase active_stocks table)
 // ============================================================
 
 export interface ActiveStock {
+  id: string;
   ticker: string;
-  quantity: number; // shares
-  purchasePrice: number; // Sell Put strike = assignment price
-  targetSellPrice: number | null; // Sell Call strike, if a covered call exists
-  costBasis: number; // quantity * purchasePrice
-  premiumCollected: number; // sum of option premium credited against this ticker
+  quantity: number;
+  purchasePrice: number;
+  targetSellPrice: number;
+  purchaseDate: string;
+  costBasis: number; // computed: quantity * purchasePrice
 }
 
 // ============================================================

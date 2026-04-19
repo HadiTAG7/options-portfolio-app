@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { safeNumber } from "@/lib/utils";
 import type { Trade, ActiveStock } from "@/types";
-import type { TradeRow } from "@/types/database";
+import type { TradeRow, ActiveStockRow } from "@/types/database";
 
 function rowToTrade(row: TradeRow): Trade {
   return {
@@ -20,97 +20,59 @@ function rowToTrade(row: TradeRow): Trade {
   };
 }
 
-// Derive current holdings from the trade ledger:
-//   - Sell Put strike = assignment price (purchase price)
-//   - Sell Call strike = covered-call target sell price
-//   - Stock Sell rows mean the ticker has already been exited → skip
-function deriveActiveStocks(trades: Trade[]): ActiveStock[] {
-  const soldTickers = new Set(
-    trades.filter((t) => t.type === "Stock Sell").map((t) => t.ticker)
-  );
-
-  type Accum = {
-    ticker: string;
-    putContracts: number;
-    putStrikeWeightedSum: number;
-    callStrike: number | null;
-    premiumCollected: number;
+function rowToActiveStock(row: ActiveStockRow): ActiveStock {
+  const qty = safeNumber(row.quantity);
+  const price = safeNumber(row.purchasePrice);
+  return {
+    id: row.id,
+    ticker: row.ticker,
+    quantity: qty,
+    purchasePrice: price,
+    targetSellPrice: safeNumber(row.targetSellPrice),
+    purchaseDate: row.purchaseDate ?? "",
+    costBasis: qty * price,
   };
-
-  const byTicker = new Map<string, Accum>();
-
-  for (const trade of trades) {
-    if (trade.type === "Stock Sell") continue;
-    if (soldTickers.has(trade.ticker)) continue;
-
-    const acc =
-      byTicker.get(trade.ticker) ??
-      ({
-        ticker: trade.ticker,
-        putContracts: 0,
-        putStrikeWeightedSum: 0,
-        callStrike: null,
-        premiumCollected: 0,
-      } satisfies Accum);
-
-    acc.premiumCollected += trade.premium;
-
-    if (trade.type === "Sell Put") {
-      acc.putContracts += trade.quantity;
-      acc.putStrikeWeightedSum += trade.strike * trade.quantity;
-    } else if (trade.type === "Sell Call") {
-      acc.callStrike = trade.strike;
-    }
-
-    byTicker.set(trade.ticker, acc);
-  }
-
-  return Array.from(byTicker.values())
-    .filter((a) => a.putContracts > 0)
-    .map((a) => {
-      const shares = a.putContracts * 100;
-      const purchasePrice =
-        a.putContracts > 0 ? a.putStrikeWeightedSum / a.putContracts : 0;
-      return {
-        ticker: a.ticker,
-        quantity: shares,
-        purchasePrice,
-        targetSellPrice: a.callStrike,
-        costBasis: shares * purchasePrice,
-        premiumCollected: a.premiumCollected,
-      };
-    })
-    .sort((a, b) => b.costBasis - a.costBasis);
 }
 
 export function useTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [activeStocks, setActiveStocks] = useState<ActiveStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTrades = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const { data, error: fetchError } = await supabase
-      .from("trades")
-      .select("*")
-      .order("date", { ascending: false });
+    const [tradesRes, stocksRes] = await Promise.all([
+      supabase.from("trades").select("*").order("date", { ascending: false }),
+      supabase.from("active_stocks").select("*"),
+    ]);
 
-    if (fetchError) {
-      console.error("[useTrades] fetch failed:", fetchError);
-      setError(fetchError.message);
+    if (tradesRes.error) {
+      console.error("[useTrades] trades fetch failed:", tradesRes.error);
+      setError(tradesRes.error.message);
       setTrades([]);
     } else {
-      setTrades((data ?? []).map(rowToTrade));
+      setTrades((tradesRes.data ?? []).map(rowToTrade));
+    }
+
+    if (stocksRes.error) {
+      console.error("[useTrades] active_stocks fetch failed:", stocksRes.error);
+      if (!tradesRes.error) {
+        setError(stocksRes.error.message);
+      }
+      setActiveStocks([]);
+    } else {
+      setActiveStocks((stocksRes.data ?? []).map(rowToActiveStock));
     }
 
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchTrades();
-  }, [fetchTrades]);
+    fetchData();
+  }, [fetchData]);
 
   const sellCalls = useMemo(
     () => trades.filter((t) => t.type === "Sell Call"),
@@ -124,8 +86,6 @@ export function useTrades() {
     () => trades.filter((t) => t.type === "Stock Sell"),
     [trades]
   );
-
-  const activeStocks = useMemo(() => deriveActiveStocks(trades), [trades]);
 
   const totalPremium = useMemo(
     () =>
@@ -153,6 +113,6 @@ export function useTrades() {
     totalResult,
     totalProfit,
     openCount,
-    refetch: fetchTrades,
+    refetch: fetchData,
   };
 }

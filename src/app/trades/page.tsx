@@ -120,7 +120,7 @@ export default function TradesPage() {
             </span>
           </div>
           <span className="text-xs text-on-surface-variant">
-            مشتقة من صفقات الخيارات المفتوحة
+            Current Holdings
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -129,10 +129,10 @@ export default function TradesPage() {
               <tr className="bg-surface-container-low text-[10px] uppercase tracking-wider text-on-surface-variant">
                 <th className="px-4 py-3 text-start">الرمز (Ticker)</th>
                 <th className="px-4 py-3 text-start">الكمية (Quantity)</th>
-                <th className="px-4 py-3 text-start">سعر الشراء</th>
-                <th className="px-4 py-3 text-start">السعر المستهدف</th>
-                <th className="px-4 py-3 text-start">العلاوة المحصّلة</th>
+                <th className="px-4 py-3 text-start">سعر الشراء (Purchase Price)</th>
+                <th className="px-4 py-3 text-start">السعر المستهدف (Target Sell)</th>
                 <th className="px-4 py-3 text-start">الأساس الكلي (Cost Basis)</th>
+                <th className="px-4 py-3 text-start">تاريخ الشراء (Date)</th>
               </tr>
             </thead>
             <tbody>
@@ -160,7 +160,7 @@ export default function TradesPage() {
               {!loading &&
                 activeStocks.map((stock) => (
                   <tr
-                    key={stock.ticker}
+                    key={stock.id}
                     className="border-t border-white/5 transition hover:bg-white/[0.02]"
                   >
                     <td className="px-4 py-3 font-mono font-semibold text-on-surface">
@@ -173,7 +173,7 @@ export default function TradesPage() {
                       {formatCurrency(stock.purchasePrice)}
                     </td>
                     <td className="px-4 py-3 font-mono">
-                      {stock.targetSellPrice !== null ? (
+                      {stock.targetSellPrice > 0 ? (
                         <span className="text-tertiary">
                           {formatCurrency(stock.targetSellPrice)}
                         </span>
@@ -181,11 +181,11 @@ export default function TradesPage() {
                         <span className="text-on-surface-variant/40">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-primary">
-                      {formatCurrency(stock.premiumCollected)}
-                    </td>
                     <td className="px-4 py-3 font-mono font-semibold text-on-surface">
                       {formatCurrency(stock.costBasis)}
+                    </td>
+                    <td className="px-4 py-3 text-on-surface-variant">
+                      {stock.purchaseDate || "—"}
                     </td>
                   </tr>
                 ))}
