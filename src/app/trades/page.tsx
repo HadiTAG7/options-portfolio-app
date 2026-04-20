@@ -130,6 +130,8 @@ export default function TradesPage() {
                 <th className="px-4 py-3 text-start">الرمز (Ticker)</th>
                 <th className="px-4 py-3 text-start">الكمية (Quantity)</th>
                 <th className="px-4 py-3 text-start">سعر الشراء (Purchase Price)</th>
+                <th className="px-4 py-3 text-start">السعر الحالي (Current Price)</th>
+                <th className="px-4 py-3 text-start">الربح غير المحقق (Unrealized P&amp;L)</th>
                 <th className="px-4 py-3 text-start">السعر المستهدف (Target Sell)</th>
                 <th className="px-4 py-3 text-start">الأساس الكلي (Cost Basis)</th>
                 <th className="px-4 py-3 text-start">تاريخ الشراء (Date)</th>
@@ -138,14 +140,14 @@ export default function TradesPage() {
             <tbody>
               {loading && (
                 <>
-                  <TableRowSkeleton cols={6} />
-                  <TableRowSkeleton cols={6} />
+                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={8} />
                 </>
               )}
 
               {!loading && activeStocks.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center">
+                  <td colSpan={8} className="px-4 py-12 text-center">
                     <Icon
                       name="inventory_2"
                       className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
@@ -158,37 +160,94 @@ export default function TradesPage() {
               )}
 
               {!loading &&
-                activeStocks.map((stock) => (
-                  <tr
-                    key={stock.id}
-                    className="border-t border-white/5 transition hover:bg-white/[0.02]"
-                  >
-                    <td className="px-4 py-3 font-mono font-semibold text-on-surface">
-                      {stock.ticker}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-on-surface-variant">
-                      {stock.quantity.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-on-surface-variant">
-                      {formatCurrency(stock.purchasePrice)}
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      {stock.targetSellPrice > 0 ? (
-                        <span className="text-tertiary">
-                          {formatCurrency(stock.targetSellPrice)}
-                        </span>
-                      ) : (
-                        <span className="text-on-surface-variant/40">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono font-semibold text-on-surface">
-                      {formatCurrency(stock.costBasis)}
-                    </td>
-                    <td className="px-4 py-3 text-on-surface-variant">
-                      {stock.purchaseDate || "—"}
-                    </td>
-                  </tr>
-                ))}
+                activeStocks.map((stock) => {
+                  const hasLivePrice =
+                    typeof stock.currentPrice === "number" &&
+                    Number.isFinite(stock.currentPrice) &&
+                    stock.currentPrice > 0;
+                  const pnlAbs = hasLivePrice
+                    ? (stock.currentPrice! - stock.purchasePrice) *
+                      stock.quantity
+                    : 0;
+                  const pnlPct =
+                    hasLivePrice && stock.purchasePrice > 0
+                      ? ((stock.currentPrice! - stock.purchasePrice) /
+                          stock.purchasePrice) *
+                        100
+                      : 0;
+                  const pnlTone =
+                    pnlAbs > 0
+                      ? "text-emerald-500"
+                      : pnlAbs < 0
+                        ? "text-rose-500"
+                        : "text-on-surface-variant";
+
+                  return (
+                    <tr
+                      key={stock.id}
+                      className="border-t border-white/5 transition hover:bg-white/[0.02]"
+                    >
+                      <td className="px-4 py-3 font-mono font-semibold text-on-surface">
+                        {stock.ticker}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-on-surface-variant">
+                        {stock.quantity.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-on-surface-variant">
+                        {formatCurrency(stock.purchasePrice)}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        {stock.priceLoading ? (
+                          <span className="inline-flex items-center gap-2 text-on-surface-variant/60">
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-on-surface-variant/30 border-t-primary" />
+                            <span className="text-[10px] uppercase tracking-wider">
+                              جاري...
+                            </span>
+                          </span>
+                        ) : hasLivePrice ? (
+                          <span className="text-on-surface">
+                            {formatCurrency(stock.currentPrice!)}
+                          </span>
+                        ) : (
+                          <span className="text-on-surface-variant/40">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        {stock.priceLoading ? (
+                          <span className="h-3 w-3 inline-block animate-spin rounded-full border-2 border-on-surface-variant/30 border-t-primary" />
+                        ) : hasLivePrice ? (
+                          <div className="flex flex-col">
+                            <span className={`font-semibold ${pnlTone}`}>
+                              {pnlAbs >= 0 ? "+" : ""}
+                              {formatCurrency(pnlAbs)}
+                            </span>
+                            <span className={`text-[10px] ${pnlTone} opacity-80`}>
+                              {pnlPct >= 0 ? "+" : ""}
+                              {pnlPct.toFixed(2)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-on-surface-variant/40">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        {stock.targetSellPrice > 0 ? (
+                          <span className="text-tertiary">
+                            {formatCurrency(stock.targetSellPrice)}
+                          </span>
+                        ) : (
+                          <span className="text-on-surface-variant/40">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono font-semibold text-on-surface">
+                        {formatCurrency(stock.costBasis)}
+                      </td>
+                      <td className="px-4 py-3 text-on-surface-variant">
+                        {stock.purchaseDate || "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { safeNumber } from "@/lib/utils";
+import { fetchLivePrices } from "@/lib/finnhub";
 import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
@@ -41,6 +42,25 @@ export function useTrades() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const enrichWithLivePrices = useCallback(async (stocks: ActiveStock[]) => {
+    if (stocks.length === 0) return;
+
+    // Mark every row as loading while we hit Finnhub
+    setActiveStocksList((prev) =>
+      prev.map((s) => ({ ...s, priceLoading: true }))
+    );
+
+    const prices = await fetchLivePrices(stocks.map((s) => s.ticker));
+
+    setActiveStocksList((prev) =>
+      prev.map((s) => ({
+        ...s,
+        currentPrice: prices[s.ticker.toUpperCase()] ?? null,
+        priceLoading: false,
+      }))
+    );
+  }, []);
+
   const fetchTradesData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -71,20 +91,25 @@ export function useTrades() {
 
     console.log("Fetched Active Stocks:", activeStocks, stocksError);
 
+    let stocks: ActiveStock[];
     if (stocksError) {
       console.error("[useTrades] active_stocks fetch failed:", stocksError);
-      setActiveStocksList(seedActiveStocks);
+      stocks = seedActiveStocks;
     } else if (activeStocks && activeStocks.length > 0) {
-      setActiveStocksList(activeStocks.map(rowToActiveStock));
+      stocks = activeStocks.map(rowToActiveStock);
     } else {
       console.warn(
         "[useTrades] Supabase returned 0 active_stocks — using seed data"
       );
-      setActiveStocksList(seedActiveStocks);
+      stocks = seedActiveStocks;
     }
+    setActiveStocksList(stocks);
 
     setLoading(false);
-  }, []);
+
+    // Kick off live price enrichment in the background — don't block loading
+    void enrichWithLivePrices(stocks);
+  }, [enrichWithLivePrices]);
 
   useEffect(() => {
     fetchTradesData();

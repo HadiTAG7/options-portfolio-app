@@ -98,6 +98,8 @@ export interface ActiveStock {
   targetSellPrice: number;
   purchaseDate: string;
   costBasis: number; // computed: quantity * purchasePrice
+  currentPrice?: number | null; // live quote (null if fetch failed)
+  priceLoading?: boolean; // true while live quote is being fetched
 }
 
 // ============================================================
