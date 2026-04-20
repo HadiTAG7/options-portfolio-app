@@ -160,12 +160,15 @@ export default function TradesPage() {
               disabled={pricesRefreshing || activeStocks.length === 0}
               title="Refresh Prices"
               aria-label="Refresh Prices"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-on-surface-variant/70 transition hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] uppercase tracking-wider text-on-surface-variant/70 transition hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RefreshCw
-                size={14}
+                size={12}
                 className={pricesRefreshing ? "animate-spin" : ""}
               />
+              <span>
+                {pricesRefreshing ? "Refreshing…" : "Refresh"}
+              </span>
             </button>
           </div>
           <span className="text-xs text-on-surface-variant">
