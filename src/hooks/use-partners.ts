@@ -67,11 +67,19 @@ export function usePartners() {
       .select("*")
       .order("total_balance", { ascending: false });
 
+    console.log(
+      "[fetchPartners] Supabase response:",
+      fetchError ? `ERROR: ${fetchError.message}` : `${(data ?? []).length} rows returned`
+    );
+
     if (fetchError) {
+      console.error("[fetchPartners] Error details:", fetchError);
       setError(fetchError.message);
       setPartners([]);
     } else {
-      setPartners(withDerivedOwnership((data ?? []).map(rowToPartner)));
+      const mapped = withDerivedOwnership((data ?? []).map(rowToPartner));
+      console.log("[fetchPartners] Partners loaded:", mapped.map(p => `${p.name} (${p.id})`));
+      setPartners(mapped);
     }
 
     setLoading(false);
@@ -140,30 +148,35 @@ export function usePartners() {
           managementFeePercent: 20,
           balanceHistory: [{ date: nowIso, balance: capital }],
           isAdmin: false,
+          entry_date: today,
         };
 
-        console.log("Supabase insert payload:", JSON.stringify(payload));
+        console.log("[addPartner] Supabase insert payload:", JSON.stringify(payload));
 
-        const { error: insertError } = await supabase
+        const { data: insertedRow, error: insertError } = await supabase
           .from("partners")
-          .insert(payload);
+          .insert(payload)
+          .select()
+          .single();
 
         if (insertError) {
-          console.error("Supabase Insert Error:", insertError);
+          console.error("[addPartner] Supabase Insert Error:", insertError);
           setError(insertError.message);
           throw insertError;
         }
 
+        console.log("[addPartner] Insert succeeded, returned row:", insertedRow);
+
         // Log the initial deposit (non-fatal)
         const { error: txError } = await supabase.from("transactions").insert({
-          investorId: payload.name,
+          investorId: insertedRow?.id ?? trimmedName,
           amount: capital,
           type: "Deposit" as const,
           date: today,
         });
 
         if (txError) {
-          console.error("Supabase Insert Error (transactions):", txError);
+          console.warn("[addPartner] Transaction insert failed (non-fatal):", txError.message);
         }
 
         // Recalculate ownership server-side (non-fatal)
@@ -171,12 +184,13 @@ export function usePartners() {
           "recalculate_ownership"
         );
         if (rpcError) {
-          console.error("Supabase RPC Error:", rpcError);
+          console.warn("[addPartner] recalculate_ownership RPC failed (non-fatal):", rpcError.message);
         }
 
+        console.log("[addPartner] Refetching partners list...");
         await fetchPartners();
       } catch (err) {
-        console.error("Supabase Insert Error:", err);
+        console.error("[addPartner] Failed:", err);
         throw err;
       }
     },
