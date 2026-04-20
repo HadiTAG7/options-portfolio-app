@@ -66,6 +66,10 @@ interface PartnersState {
     amount: number,
     onDone?: () => Promise<void>
   ) => Promise<void>;
+  capitalizeProfits: (
+    partner: Partner,
+    onDone?: () => Promise<void>
+  ) => Promise<void>;
   clearNotification: () => void;
 }
 
@@ -254,6 +258,59 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     if (onDone) {
       await onDone();
     }
+    await get().fetchPartners();
+  },
+
+  // Capitalize a partner's profits: reset their cost basis so that
+  // currentBalance == totalDeposits == baseCapital, which makes their
+  // "apparent profit" (currentBalance − baseCapital) exactly $0 going
+  // forward. No cash leaves the fund.
+  capitalizeProfits: async (
+    partner: Partner,
+    onDone?: () => Promise<void>
+  ) => {
+    set({ error: null, notification: null });
+
+    const currentBalance = safeNumber(partner.currentBalance);
+    if (currentBalance <= 0) {
+      const msg = "لا يوجد رصيد لتثبيته";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    const { error: updateError } = await supabase
+      .from("partners")
+      .update({
+        totalDeposits: currentBalance,
+        baseCapital: currentBalance,
+      })
+      .eq("id", partner.id);
+
+    if (updateError) {
+      console.error("[capitalizeProfits] update failed:", updateError);
+      let userMsg = `فشل تثبيت الأرباح: ${updateError.message}`;
+      if (updateError.message.includes("permission")) {
+        userMsg =
+          "ليس لديك صلاحية لتثبيت الأرباح. تحقق من سياسات RLS في Supabase.";
+      } else if (
+        updateError.message.includes("column") &&
+        updateError.message.includes("schema cache")
+      ) {
+        userMsg =
+          "أحد الأعمدة مفقود في قاعدة البيانات. يرجى تشغيل ملفات الهجرة.";
+      }
+      set({ notification: { type: "error", message: userMsg } });
+      throw updateError;
+    }
+
+    set({
+      notification: {
+        type: "success",
+        message: "تم تثبيت الأرباح وإضافتها لرأس المال بنجاح",
+      },
+    });
+
+    if (onDone) await onDone();
     await get().fetchPartners();
   },
 

@@ -37,7 +37,7 @@ export default function PartnersPage() {
     () => computePartnerProfits(partners, trades),
     [partners, trades]
   );
-  const { handleWithdrawal, notification, clearNotification } =
+  const { handleWithdrawal, capitalizeProfits, notification, clearNotification } =
     usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -64,6 +64,10 @@ export default function PartnersPage() {
     await handleWithdrawal(partner, amount, refetch);
   }
 
+  async function onCapitalize(partner: Partner) {
+    await capitalizeProfits(partner, refetch);
+  }
+
   return (
     <AppShell>
       {/* Add Partner Dialog */}
@@ -85,8 +89,14 @@ export default function PartnersPage() {
       <WithdrawalDialog
         open={withdrawTarget !== null}
         partner={withdrawTarget}
+        remainingProfit={
+          withdrawTarget
+            ? (profitByPartner[withdrawTarget.id]?.netProfit ?? 0)
+            : 0
+        }
         onClose={() => setWithdrawTarget(null)}
         onSubmit={onWithdraw}
+        onCapitalize={onCapitalize}
       />
 
       {/* Confirmation Dialog */}

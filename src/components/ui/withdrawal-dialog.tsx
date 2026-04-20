@@ -8,18 +8,24 @@ import type { Partner } from "@/types";
 interface WithdrawalDialogProps {
   open: boolean;
   partner: Partner | null;
+  remainingProfit?: number;
   onClose: () => void;
   onSubmit: (partner: Partner, amount: number) => Promise<void>;
+  onCapitalize?: (partner: Partner) => Promise<void>;
 }
 
 export function WithdrawalDialog({
   open,
   partner,
+  remainingProfit = 0,
   onClose,
   onSubmit,
+  onCapitalize,
 }: WithdrawalDialogProps) {
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [capitalizing, setCapitalizing] = useState(false);
+  const [confirmCapitalize, setConfirmCapitalize] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,6 +34,8 @@ export function WithdrawalDialog({
       setAmount("");
       setError(null);
       setSubmitting(false);
+      setCapitalizing(false);
+      setConfirmCapitalize(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -35,11 +43,11 @@ export function WithdrawalDialog({
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !submitting) onClose();
+      if (e.key === "Escape" && !submitting && !capitalizing) onClose();
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [open, submitting, onClose]);
+  }, [open, submitting, capitalizing, onClose]);
 
   if (!open || !partner) return null;
 
@@ -102,12 +110,41 @@ export function WithdrawalDialog({
     setError(null);
   }
 
+  function fillProfitAmount() {
+    const clamped = Math.max(0, Math.min(remainingProfit, balance));
+    setAmount(clamped.toFixed(2));
+    setError(null);
+  }
+
+  async function handleCapitalize() {
+    if (!partner || !onCapitalize) return;
+    setError(null);
+    setCapitalizing(true);
+    try {
+      await onCapitalize(partner);
+      onClose();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? (err as { message: string }).message
+          : "فشلت عملية تثبيت الأرباح";
+      setError(msg);
+      setConfirmCapitalize(false);
+    } finally {
+      setCapitalizing(false);
+    }
+  }
+
+  const showProfitActions =
+    remainingProfit > 0 && typeof onCapitalize === "function";
+  const busy = submitting || capitalizing;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={() => !submitting && onClose()}
+        onClick={() => !busy && onClose()}
       />
 
       {/* Dialog */}
@@ -132,7 +169,7 @@ export function WithdrawalDialog({
             </div>
           </div>
           <button
-            onClick={() => !submitting && onClose()}
+            onClick={() => !busy && onClose()}
             className="p-1 text-on-surface-variant hover:text-white transition-colors"
           >
             <Icon name="close" className="!text-xl" />
@@ -164,6 +201,85 @@ export function WithdrawalDialog({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Profit actions — visible only when partner has remaining profit */}
+          {showProfitActions && (
+            <div className="p-4 rounded-sm bg-surface-container-low border border-white/5 border-r-2 border-r-primary/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
+                    الأرباح المتبقية (Remaining Profit)
+                  </p>
+                  <p className="text-[10px] text-on-surface-variant/60 mt-0.5">
+                    صافي ربح هذا الشريك بعد رسوم الإدارة
+                  </p>
+                </div>
+                <span className="text-lg font-headline font-bold text-primary font-mono">
+                  {formatCurrency(remainingProfit)}
+                </span>
+              </div>
+
+              {confirmCapitalize ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-on-surface leading-relaxed">
+                    سيتم تحويل الأرباح الحالية إلى رأس المال الأساسي (لن يغادر
+                    أي مبلغ الصندوق). هل أنت متأكد؟
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => !busy && setConfirmCapitalize(false)}
+                      disabled={busy}
+                      className="flex-1 px-3 py-2 rounded-sm border border-white/10 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCapitalize}
+                      disabled={busy}
+                      className="flex-1 px-3 py-2 rounded-sm bg-primary text-on-primary text-[10px] font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-70 flex items-center justify-center gap-1.5"
+                    >
+                      {capitalizing ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />
+                          جاري التثبيت...
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="check" className="!text-sm" />
+                          تأكيد التثبيت
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={fillProfitAmount}
+                    disabled={busy}
+                    className="flex-1 px-3 py-2 rounded-sm border border-secondary/30 text-secondary text-[10px] font-bold uppercase tracking-widest hover:bg-secondary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    title="تعبئة المبلغ بقيمة الأرباح المتبقية"
+                  >
+                    <Icon name="payments" className="!text-sm" />
+                    سحب الأرباح
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => !busy && setConfirmCapitalize(true)}
+                    disabled={busy}
+                    className="flex-1 px-3 py-2 rounded-sm border border-primary/30 text-primary text-[10px] font-bold uppercase tracking-widest hover:bg-primary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    title="إضافة الأرباح إلى رأس المال الأساسي"
+                  >
+                    <Icon name="savings" className="!text-sm" />
+                    تثبيت الأرباح
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Amount Field */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
