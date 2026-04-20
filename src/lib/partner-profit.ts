@@ -142,6 +142,78 @@ export function computePartnerProfits(
   return result;
 }
 
+// Current-cycle profit: unsettled earnings still sitting on top of a
+// partner's invested basis. After "تثبيت الأرباح" (capitalize) runs,
+// totalDeposits == currentBalance, so gross reduces to $0 by design.
+//
+// Unlike computePartnerProfits (which sums every eligible trade for
+// an all-time view), this pays no attention to historical trades — it
+// reads live equity vs. deposits, so the Partners Table always
+// reflects "what the partner could withdraw right now as profit".
+export function computeCurrentCycleProfits(
+  partners: Partner[]
+): Record<string, PartnerProfit> {
+  const managerId = partners.find(isManagerPartner)?.id ?? null;
+
+  const grossById: Record<string, number> = {};
+  for (const p of partners) {
+    const equity = Number(p.currentBalance) || 0;
+    const basis = Number(p.totalDeposits) || 0;
+    grossById[p.id] = equity - basis;
+  }
+
+  const lpFeeById: Record<string, number> = {};
+  let totalLpFees = 0;
+  for (const p of partners) {
+    if (p.id === managerId) continue;
+    const feeRate = (Number(p.managementFeeRate) || 0) / 100;
+    // Fees only accrue on positive profit — losses don't refund fees
+    const gross = grossById[p.id];
+    const fee = gross > 0 ? gross * feeRate : 0;
+    lpFeeById[p.id] = fee;
+    totalLpFees += fee;
+  }
+
+  const totalCapital = partners.reduce(
+    (sum, p) => sum + (Number(p.currentBalance) || 0),
+    0
+  );
+
+  const result: Record<string, PartnerProfit> = {};
+  for (const p of partners) {
+    const ownershipPct =
+      totalCapital > 0
+        ? ((Number(p.currentBalance) || 0) / totalCapital) * 100
+        : 0;
+    const grossProfit = grossById[p.id];
+    const isManager = p.id === managerId;
+
+    let feeAmount: number;
+    let netProfit: number;
+    if (isManager) {
+      feeAmount = totalLpFees;
+      netProfit = grossProfit + totalLpFees;
+    } else {
+      feeAmount = lpFeeById[p.id] ?? 0;
+      netProfit = grossProfit - feeAmount;
+    }
+
+    const denom = Number(p.totalDeposits) || 0;
+    const returnPct = denom > 0 ? (netProfit / denom) * 100 : 0;
+
+    result[p.id] = {
+      ownershipPct,
+      grossProfit,
+      feeAmount,
+      isManager,
+      netProfit,
+      returnPct,
+    };
+  }
+
+  return result;
+}
+
 export interface FundBreakdown {
   originalCapital: number;
   generatedProfit: number;

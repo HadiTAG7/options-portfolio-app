@@ -13,10 +13,9 @@ import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import {
   computeFundBreakdown,
-  computePartnerProfits,
+  computeCurrentCycleProfits,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
-import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
 import type { Partner } from "@/types";
 
@@ -31,11 +30,14 @@ export default function PartnersPage() {
     updatePartner,
     refetch,
   } = usePartners();
-  const { trades } = useTrades();
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
+  // Table shows current-cycle profit only: equity − deposits, with GP/LP
+  // fee flow applied on top. Capitalizing collapses gross to $0 because
+  // "تثبيت الأرباح" sets totalDeposits = currentBalance. All-time history
+  // lives on the Partner Details page via stored columns.
   const profitByPartner = useMemo(
-    () => computePartnerProfits(partners, trades),
-    [partners, trades]
+    () => computeCurrentCycleProfits(partners),
+    [partners]
   );
   const { handleWithdrawal, capitalizeProfits, notification, clearNotification } =
     usePartnersStore();
