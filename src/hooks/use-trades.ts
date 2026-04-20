@@ -73,6 +73,7 @@ export function useTrades() {
   const [error, setError] = useState<string | null>(null);
   const [usingSeedData, setUsingSeedData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [lastPriceUpdate, setLastPriceUpdate] = useState<Date | null>(null);
 
   const enrichWithLivePrices = useCallback(async (stocks: ActiveStock[]) => {
     if (stocks.length === 0) return;
@@ -128,6 +129,9 @@ export function useTrades() {
           }
         })
       );
+      // Stamp the wall-clock time of the most recent successful refresh
+      // so the UI can render a "Last Updated" indicator.
+      setLastPriceUpdate(new Date(nowIso));
     } else {
       console.warn("[enrichWithLivePrices] No valid prices to persist — all null/zero from Finnhub");
     }
@@ -179,6 +183,16 @@ export function useTrades() {
       stocks = seedActiveStocks;
     } else if (activeStocks && activeStocks.length > 0) {
       stocks = activeStocks.map(rowToActiveStock);
+      // Hydrate the "Last Updated" indicator from whichever cached
+      // currentPriceUpdatedAt is most recent — gives users immediate
+      // freshness feedback before the live refresh stamps a new time.
+      const latestStamp = activeStocks.reduce<string | null>((acc, row) => {
+        const stamp = row.currentPriceUpdatedAt;
+        if (!stamp) return acc;
+        if (!acc || stamp > acc) return stamp;
+        return acc;
+      }, null);
+      if (latestStamp) setLastPriceUpdate(new Date(latestStamp));
     } else {
       // Empty active_stocks table = empty list. Do not reintroduce
       // seeds on empty result — that was causing user-added stocks
@@ -614,5 +628,6 @@ export function useTrades() {
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,
     refreshPrices,
+    lastPriceUpdate,
   };
 }

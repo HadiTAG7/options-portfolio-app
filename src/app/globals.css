@@ -45,35 +45,35 @@
   --color-error-dim: #d53d18;
 
   /* Surface */
-  --color-surface: #0e0e0e;
+  --color-surface: #050505;
   --color-on-surface: #ffffff;
-  --color-surface-variant: #262626;
-  --color-on-surface-variant: #adaaaa;
-  --color-surface-tint: #5bff49;
-  --color-surface-dim: #0e0e0e;
-  --color-surface-bright: #2c2c2c;
+  --color-surface-variant: #1f1f1f;
+  --color-on-surface-variant: #a1a1aa;
+  --color-surface-tint: #10b981;
+  --color-surface-dim: #050505;
+  --color-surface-bright: #1a1a1a;
   --color-surface-container-lowest: #000000;
-  --color-surface-container-low: #131313;
-  --color-surface-container: #1a1a1a;
-  --color-surface-container-high: #20201f;
-  --color-surface-container-highest: #262626;
+  --color-surface-container-low: #0a0a0a;
+  --color-surface-container: #0f0f0f;
+  --color-surface-container-high: #161616;
+  --color-surface-container-highest: #1d1d1d;
   --color-inverse-surface: #fcf9f8;
   --color-inverse-on-surface: #565555;
 
   /* Background */
-  --color-background: #0e0e0e;
+  --color-background: #050505;
   --color-on-background: #ffffff;
 
   /* Outline */
-  --color-outline: #767575;
-  --color-outline-variant: #484847;
+  --color-outline: #525258;
+  --color-outline-variant: #2a2a2e;
 
   /* Fonts */
   --font-headline: "Be Vietnam Pro", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
   --font-label: "Inter", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* Border Radius - terminal aesthetic */
   --radius-sm: 0.125rem;

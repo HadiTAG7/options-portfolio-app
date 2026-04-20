@@ -359,13 +359,16 @@ export default function PartnersPage() {
 
                       {/* Ownership Percentage */}
                       <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1.5">
-                          <span className="text-sm font-headline font-semibold text-white tabular-nums">
+                        <div className="flex flex-col gap-2">
+                          <span className="text-sm font-mono font-semibold text-white tabular-nums">
                             {partner.ownershipPercentage.toFixed(1)}%
                           </span>
-                          <div className="h-1 w-24 overflow-hidden rounded-full bg-zinc-800/80">
+                          <div
+                            className="relative h-[3px] w-32 overflow-hidden rounded-full bg-zinc-900 ring-1 ring-inset ring-zinc-800/80"
+                            title={`${partner.ownershipPercentage.toFixed(2)}%`}
+                          >
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] transition-all duration-500"
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.55)] transition-all duration-700 ease-out"
                               style={{
                                 width: `${Math.max(0, Math.min(100, partner.ownershipPercentage))}%`,
                               }}
