@@ -10,6 +10,7 @@ import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
+import { tradeProfit } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
 import type { Trade } from "@/types";
 
@@ -449,7 +450,7 @@ function TradeSection({
   const valueLabelAr = isResult ? "النتيجة" : "العلاوة";
   const valueLabelEn = isResult ? "Result" : "Premium";
   const hasActions = onEdit || onDelete;
-  const colCount = hasActions ? 8 : 7;
+  const colCount = hasActions ? 9 : 8;
 
   return (
     <section className="mb-8 overflow-hidden rounded-2xl bg-surface-container">
@@ -478,6 +479,7 @@ function TradeSection({
               <th className="px-4 py-3 text-start">
                 {valueLabelAr} ({valueLabelEn})
               </th>
+              <th className="px-4 py-3 text-start">إجمالي الربح (Total PnL)</th>
               <th className="px-4 py-3 text-start">تاريخ الانتهاء</th>
               <th className="px-4 py-3 text-start">التاريخ</th>
               {hasActions && <th className="px-4 py-3 text-start w-20" />}
@@ -510,6 +512,8 @@ function TradeSection({
                     ? "text-primary"
                     : "text-secondary"
                   : "text-primary";
+                const pnl = tradeProfit(trade);
+                const pnlPositive = pnl >= 0;
                 return (
                   <tr
                     key={trade.id}
@@ -534,6 +538,15 @@ function TradeSection({
                     <td className={`px-4 py-3 font-mono ${valueClass}`}>
                       {isResult && valueRaw >= 0 ? "+" : ""}
                       {formatCurrency(valueRaw)}
+                    </td>
+                    <td
+                      className={`px-4 py-3 font-mono font-semibold ${
+                        pnlPositive ? "text-emerald-500" : "text-rose-500"
+                      }`}
+                      title="Premium × Quantity"
+                    >
+                      {pnlPositive ? "+" : ""}
+                      {formatCurrency(pnl)}
                     </td>
                     <td className="px-4 py-3 text-on-surface-variant">
                       {formatExpiration(trade)}

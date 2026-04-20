@@ -21,7 +21,7 @@ function isManagerPartner(p: Partner): boolean {
 // Realized (or upfront-collected) P&L of a trade.
 // Short options: credit = premium * quantity. `quantity` already stores
 // total shares, so no *100 multiplier.
-function tradeProfit(t: Trade): number {
+export function tradeProfit(t: Trade): number {
   const isShortOption = t.type === "Sell Put" || t.type === "Sell Call";
   if (isShortOption && t.status === "open") {
     return Number(t.premium) * Number(t.quantity);
