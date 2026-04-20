@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
+import { EditPartnerDialog } from "@/components/ui/edit-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { Sparkline } from "@/components/ui/sparkline";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
@@ -27,6 +28,7 @@ export default function PartnersPage() {
     totalAssets,
     deletePartner,
     addPartner,
+    updatePartner,
     refetch,
   } = usePartners();
   const { totalProfit: fundGrossProfit } = useTrades();
@@ -37,6 +39,7 @@ export default function PartnersPage() {
   const [deleting, setDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
+  const [editTarget, setEditTarget] = useState<Partner | null>(null);
 
   // Auto-dismiss success notification
   useEffect(() => {
@@ -64,6 +67,14 @@ export default function PartnersPage() {
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
         onSubmit={addPartner}
+      />
+
+      {/* Edit Partner Dialog */}
+      <EditPartnerDialog
+        open={editTarget !== null}
+        partner={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSubmit={updatePartner}
       />
 
       {/* Withdrawal Dialog */}
@@ -352,6 +363,13 @@ export default function PartnersPage() {
                     {/* Actions */}
                     <td className="px-6 py-4 text-left">
                       <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => setEditTarget(partner)}
+                          className="p-1.5 rounded-sm border border-white/5 text-on-surface-variant/60 hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors"
+                          title="تعديل بيانات الشريك"
+                        >
+                          <Icon name="edit" className="!text-base" />
+                        </button>
                         <button
                           onClick={() => setWithdrawTarget(partner)}
                           className="text-[10px] px-3 py-1.5 rounded-sm border border-secondary/20 text-secondary/80 hover:text-secondary hover:border-secondary/40 hover:bg-secondary/5 transition-colors uppercase tracking-widest font-bold flex items-center gap-1"

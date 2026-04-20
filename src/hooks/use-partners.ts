@@ -183,6 +183,54 @@ export function usePartners() {
     [fetchPartners]
   );
 
+  const updatePartner = useCallback(
+    async (
+      id: string,
+      payload: {
+        name: string;
+        managementFeePercent: number;
+        entryDate: string; // YYYY-MM-DD
+      }
+    ) => {
+      setError(null);
+
+      const updatePayload = {
+        name: payload.name,
+        managementFeePercent: Number(payload.managementFeePercent),
+        entry_date: payload.entryDate,
+      };
+
+      const { error: updateError } = await supabase
+        .from("partners")
+        .update(updatePayload)
+        .eq("id", id);
+
+      if (updateError) {
+        console.error("Supabase Update Error (partners):", updateError);
+        setError(updateError.message);
+        throw updateError;
+      }
+
+      // Mirror into local state so the UI reflects changes instantly,
+      // even if the refetch below is rate-limited or delayed.
+      setPartners((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                name: updatePayload.name,
+                managementFeeRate: updatePayload.managementFeePercent,
+                entryDate: updatePayload.entry_date,
+              }
+            : p
+        )
+      );
+
+      await fetchPartners();
+    },
+    [fetchPartners]
+  );
+
   // Use currentBalance (the live working balance) for ownership math; fall
   // back to totalBalance if currentBalance was never populated.
   const totalAssets = partners.reduce(
@@ -190,5 +238,14 @@ export function usePartners() {
     0
   );
 
-  return { partners, loading, error, totalAssets, deletePartner, addPartner, refetch: fetchPartners };
+  return {
+    partners,
+    loading,
+    error,
+    totalAssets,
+    deletePartner,
+    addPartner,
+    updatePartner,
+    refetch: fetchPartners,
+  };
 }
