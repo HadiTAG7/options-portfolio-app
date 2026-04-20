@@ -99,6 +99,10 @@ export function useTrades() {
     console.log("Fetched Trades:", trades, tradesError);
 
     if (tradesError) {
+      // Only fall back to seed data when the DB is genuinely unreachable
+      // (missing table, network error, RLS policy rejection). Mutations
+      // still attempt real inserts regardless — we never silently swallow
+      // a write into local-only state when the user added something.
       console.error("[useTrades] trades fetch failed:", tradesError);
       setError(`trades: ${tradesError.message}`);
       setTradesList(seedTrades);
@@ -107,9 +111,12 @@ export function useTrades() {
       setTradesList(trades.map(rowToTrade));
       setUsingSeedData(false);
     } else {
-      console.warn("[useTrades] Supabase returned 0 trades — using seed data");
-      setTradesList(seedTrades);
-      setUsingSeedData(true);
+      // Empty DB is a legitimate state — do NOT auto-populate with seed
+      // rows. That was causing user-added trades to "disappear" on
+      // refresh because the empty-fetch → seed-mode flip hid them.
+      console.log("[useTrades] trades table is empty — showing empty state");
+      setTradesList([]);
+      setUsingSeedData(false);
     }
 
     // --- Active Stocks ---
@@ -126,10 +133,11 @@ export function useTrades() {
     } else if (activeStocks && activeStocks.length > 0) {
       stocks = activeStocks.map(rowToActiveStock);
     } else {
-      console.warn(
-        "[useTrades] Supabase returned 0 active_stocks — using seed data"
-      );
-      stocks = seedActiveStocks;
+      // Empty active_stocks table = empty list. Do not reintroduce
+      // seeds on empty result — that was causing user-added stocks
+      // to disappear after refresh.
+      console.log("[useTrades] active_stocks table is empty");
+      stocks = [];
     }
     setActiveStocksList(stocks);
 
@@ -303,29 +311,31 @@ export function useTrades() {
 
       // ----- Stock -----
       if (payload.type === "Stock") {
-        if (!usingSeedData) {
-          const { data, error: insertError } = await supabase
-            .from("active_stocks")
-            .insert({
-              ticker,
-              quantity: payload.quantity,
-              purchasePrice: payload.price,
-              purchaseDate: payload.date,
-            })
-            .select()
-            .single();
+        // ALWAYS try the Supabase insert first — even in seed mode —
+        // so the row actually persists. Only fall back to local-only
+        // state if the DB rejects it (missing table, RLS, offline).
+        const stockPayload = {
+          ticker,
+          quantity: payload.quantity,
+          purchasePrice: payload.price,
+          purchaseDate: payload.date,
+        };
+        console.log("[addTrade] active_stocks insert payload:", stockPayload);
 
-          if (insertError) {
-            console.error("[useTrades] addTrade stock insert failed:", insertError);
-            setError(insertError.message);
-            throw insertError;
-          }
+        const { data, error: insertError } = await supabase
+          .from("active_stocks")
+          .insert(stockPayload)
+          .select()
+          .single();
 
-          const newStock = rowToActiveStock(data as ActiveStockRow);
-          setActiveStocksList((prev) => [...prev, newStock]);
-          void enrichWithLivePrices([newStock]);
-        } else {
-          // Seed mode — local-only row
+        if (insertError) {
+          console.error(
+            "[addTrade] active_stocks insert FAILED — row will only live in local state:",
+            insertError
+          );
+          setError(`Stock insert rejected by Supabase: ${insertError.message}`);
+          // Local-only fallback so the UI still shows the row, but
+          // warn the user loudly via setError that it won't persist.
           const newStock: ActiveStock = {
             id: crypto.randomUUID(),
             ticker,
@@ -337,7 +347,13 @@ export function useTrades() {
           };
           setActiveStocksList((prev) => [...prev, newStock]);
           void enrichWithLivePrices([newStock]);
+          throw insertError;
         }
+
+        console.log("[addTrade] active_stocks insert succeeded:", data);
+        const newStock = rowToActiveStock(data as ActiveStockRow);
+        setActiveStocksList((prev) => [...prev, newStock]);
+        void enrichWithLivePrices([newStock]);
         return;
       }
 
@@ -353,21 +369,23 @@ export function useTrades() {
         status: "open" as const,
       };
 
-      if (!usingSeedData) {
-        const { data, error: insertError } = await supabase
-          .from("trades")
-          .insert(insertRow)
-          .select()
-          .single();
+      // ALWAYS attempt the Supabase insert first — even in seed mode —
+      // so the trade actually persists across refreshes. Only fall
+      // back to a local-only row if the DB rejects the insert.
+      console.log("[addTrade] trades insert payload:", insertRow);
 
-        if (insertError) {
-          console.error("[useTrades] addTrade option insert failed:", insertError);
-          setError(insertError.message);
-          throw insertError;
-        }
+      const { data, error: insertError } = await supabase
+        .from("trades")
+        .insert(insertRow)
+        .select()
+        .single();
 
-        setTradesList((prev) => [rowToTrade(data as TradeRow), ...prev]);
-      } else {
+      if (insertError) {
+        console.error(
+          "[addTrade] trades insert FAILED — row will only live in local state:",
+          insertError
+        );
+        setError(`Trade insert rejected by Supabase: ${insertError.message}`);
         const newTrade: Trade = {
           id: crypto.randomUUID(),
           ticker,
@@ -382,9 +400,13 @@ export function useTrades() {
           autoClosed: false,
         };
         setTradesList((prev) => [newTrade, ...prev]);
+        throw insertError;
       }
+
+      console.log("[addTrade] trades insert succeeded:", data);
+      setTradesList((prev) => [rowToTrade(data as TradeRow), ...prev]);
     },
-    [usingSeedData, enrichWithLivePrices]
+    [enrichWithLivePrices]
   );
 
   const updateTrade = useCallback(
