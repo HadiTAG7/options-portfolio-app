@@ -226,8 +226,9 @@ export default function PartnersPage() {
                 <th className="px-6 py-4 font-medium">الاسم والتعريف</th>
                 <th className="px-6 py-4 font-medium">الرصيد الكلي</th>
                 <th className="px-6 py-4 font-medium">نسبة الملكية</th>
-                <th className="px-6 py-4 font-medium">صافي الربح</th>
+                <th className="px-6 py-4 font-medium">إجمالي الربح</th>
                 <th className="px-6 py-4 font-medium">رسوم الإدارة</th>
+                <th className="px-6 py-4 font-medium">الأرباح المتبقية</th>
                 <th className="px-6 py-4 font-medium">الأداء</th>
                 <th className="px-6 py-4 font-medium text-left">إجراءات</th>
               </tr>
@@ -236,16 +237,16 @@ export default function PartnersPage() {
               {/* Loading State */}
               {loading && (
                 <>
-                  <TableRowSkeleton cols={7} />
-                  <TableRowSkeleton cols={7} />
-                  <TableRowSkeleton cols={7} />
+                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={8} />
                 </>
               )}
 
               {/* Empty State */}
               {!loading && partners.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <Icon
                       name="group_off"
                       className="!text-5xl text-on-surface-variant/30 mb-3 block mx-auto"
@@ -331,7 +332,41 @@ export default function PartnersPage() {
                       </div>
                     </td>
 
-                    {/* Net Profit */}
+                    {/* 1 · Gross Profit — organic share before fees */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-mono font-bold text-white">
+                        {profit.grossProfit >= 0 ? "+" : ""}
+                        {formatCurrency(profit.grossProfit)}
+                      </span>
+                    </td>
+
+                    {/* 2 · Management Fee — red (LP paid) or green (GP collected) */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span
+                          className={`text-sm font-mono font-bold ${
+                            profit.isManager
+                              ? "text-emerald-500"
+                              : "text-rose-500"
+                          }`}
+                          title={
+                            profit.isManager
+                              ? "الرسوم المحصّلة من جميع الشركاء المحدودين"
+                              : `رسوم الإدارة بنسبة ${partner.managementFeeRate.toFixed(2)}%`
+                          }
+                        >
+                          {profit.isManager ? "+" : "-"}
+                          {formatCurrency(Math.abs(profit.feeAmount))}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/60">
+                          {profit.isManager
+                            ? "محصّلة (GP)"
+                            : `مدفوعة · ${partner.managementFeeRate.toFixed(0)}%`}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* 3 · Remaining Profit — gross ∓ fee flow */}
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span
@@ -344,36 +379,12 @@ export default function PartnersPage() {
                         </span>
                         <span
                           className={`text-[10px] font-bold ${
-                            profitPositive ? "text-primary/70" : "text-secondary/70"
+                            profitPositive
+                              ? "text-primary/70"
+                              : "text-secondary/70"
                           }`}
                         >
                           {formatPercent(profit.returnPct)}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Management Fee — $ amount, not % */}
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span
-                          className={`text-sm font-mono font-bold ${
-                            profit.isManager
-                              ? "text-primary"
-                              : "text-on-surface-variant"
-                          }`}
-                          title={
-                            profit.isManager
-                              ? `الرسوم المحصّلة من جميع الشركاء المحدودين`
-                              : `رسوم الإدارة بنسبة ${partner.managementFeeRate.toFixed(2)}%`
-                          }
-                        >
-                          {profit.isManager && profit.feeAmount > 0 ? "+" : ""}
-                          {formatCurrency(profit.feeAmount)}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/60">
-                          {profit.isManager
-                            ? "محصّلة (GP)"
-                            : `مدفوعة · ${partner.managementFeeRate.toFixed(0)}%`}
                         </span>
                       </div>
                     </td>
