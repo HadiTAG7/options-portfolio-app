@@ -83,6 +83,7 @@ export function useTrades() {
     );
 
     const prices = await fetchLivePrices(stocks.map((s) => s.ticker));
+    console.log("[enrichWithLivePrices] Finnhub results:", prices);
 
     setActiveStocksList((prev) =>
       prev.map((s) => ({
@@ -101,25 +102,34 @@ export function useTrades() {
       .map((s) => {
         const px = prices[s.ticker.toUpperCase()];
         if (typeof px !== "number" || !Number.isFinite(px) || px <= 0) return null;
-        return { id: s.id, price: px };
+        return { id: s.id, ticker: s.ticker, price: px };
       })
-      .filter((x): x is { id: string; price: number } => x !== null);
+      .filter((x): x is { id: string; ticker: string; price: number } => x !== null);
+
+    console.log("[enrichWithLivePrices] Will persist prices for:", writes.map((w) => `${w.ticker}=$${w.price}`));
 
     if (writes.length > 0) {
       await Promise.all(
-        writes.map(async ({ id, price }) => {
-          const { error: upErr } = await supabase
+        writes.map(async ({ id, ticker, price }) => {
+          const { error: upErr, status } = await supabase
             .from("active_stocks")
             .update({ currentPrice: price, currentPriceUpdatedAt: nowIso })
             .eq("id", id);
           if (upErr) {
-            console.warn(
-              `[enrichWithLivePrices] failed to persist price for ${id}:`,
+            console.error(
+              `[enrichWithLivePrices] Supabase update FAILED for ${ticker} (${id}):`,
               upErr
+            );
+          } else {
+            console.log(
+              `[enrichWithLivePrices] Supabase update OK for ${ticker} (${id}), status:`,
+              status
             );
           }
         })
       );
+    } else {
+      console.warn("[enrichWithLivePrices] No valid prices to persist — all null/zero from Finnhub");
     }
   }, []);
 

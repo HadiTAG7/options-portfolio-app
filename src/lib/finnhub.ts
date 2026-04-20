@@ -22,10 +22,16 @@ export interface FinnhubQuote {
 
 export async function fetchLivePrice(ticker: string): Promise<number | null> {
   const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+  console.log("[finnhub] API Key present:", !!apiKey);
   if (!apiKey) {
     console.warn(
       "[finnhub] NEXT_PUBLIC_FINNHUB_API_KEY is not set — live prices disabled"
     );
+    if (typeof window !== "undefined") {
+      window.alert(
+        "Finnhub API key is missing. Add NEXT_PUBLIC_FINNHUB_API_KEY to .env.local and restart the dev server."
+      );
+    }
     return null;
   }
 
@@ -33,19 +39,33 @@ export async function fetchLivePrice(ticker: string): Promise<number | null> {
   if (!symbol) return null;
 
   const url = `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
+  console.log("[finnhub] Requesting:", url.replace(apiKey, "***"));
 
   try {
     const res = await fetch(url, { cache: "no-store" });
+    console.log("[finnhub]", symbol, "HTTP status:", res.status);
     if (!res.ok) {
-      console.error(`[finnhub] ${symbol} HTTP ${res.status}`);
+      const errorBody = await res.text();
+      console.error(`[finnhub] ${symbol} HTTP ${res.status} body:`, errorBody);
+      if (typeof window !== "undefined") {
+        window.alert(
+          `Finnhub API error for ${symbol}: HTTP ${res.status}\n${errorBody}`
+        );
+      }
       return null;
     }
     const quote = (await res.json()) as FinnhubQuote;
-    // Finnhub returns c=0 for unknown/invalid symbols
-    if (!Number.isFinite(quote.c) || quote.c === 0) return null;
+    console.log("[finnhub]", symbol, "raw response:", JSON.stringify(quote));
+    if (!Number.isFinite(quote.c) || quote.c === 0) {
+      console.warn("[finnhub]", symbol, "returned c=0 or invalid — symbol may not exist on Finnhub");
+      return null;
+    }
     return quote.c;
   } catch (err) {
     console.error(`[finnhub] ${symbol} fetch failed:`, err);
+    if (typeof window !== "undefined") {
+      window.alert(`Finnhub network error for ${symbol}: ${err}`);
+    }
     return null;
   }
 }
