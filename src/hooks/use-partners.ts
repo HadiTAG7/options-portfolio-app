@@ -145,7 +145,10 @@ export function usePartners() {
       const today = nowIso.split("T")[0];
 
       try {
-        // --- 1. Insert partner with full camelCase + snake_case payload ---
+        // --- 1a. Insert partner with the guaranteed (snake_case) columns ---
+        // These have existed since the initial schema, so this insert will
+        // succeed even if the new camelCase columns are missing from the
+        // PostgREST schema cache.
         const { error: insertError } = await supabase.from("partners").insert({
           id,
           name: trimmedName,
@@ -156,21 +159,54 @@ export function usePartners() {
           management_fee_rate: 1.25,
           performance_24h: 0,
           performance_trend: "up" as const,
-          isAdmin: false,
-          totalDeposits: capital,
-          totalWithdrawals: 0,
-          currentBalance: capital,
-          totalNetProfit: 0,
-          managementFeesPaid: 0,
-          managementFeePercent: 20,
-          baseCapital: capital,
-          balanceHistory: [{ date: nowIso, balance: capital }],
         });
 
         if (insertError) {
           console.error("Supabase Insert Error:", insertError);
           setError(insertError.message);
           throw insertError;
+        }
+
+        // --- 1b. Populate the camelCase columns in a follow-up update ---
+        // If any of these columns don't exist yet in the schema cache, the
+        // update will fail — log it but don't throw, the partner row itself
+        // is already created.
+        try {
+          const { error: updateError } = await supabase
+            .from("partners")
+            .update({
+              isAdmin: false,
+              totalDeposits: capital,
+              totalWithdrawals: 0,
+              currentBalance: capital,
+              totalNetProfit: 0,
+              managementFeesPaid: 0,
+              managementFeePercent: 20,
+              baseCapital: capital,
+              balanceHistory: [{ date: nowIso, balance: capital }],
+            })
+            .eq("id", id);
+
+          if (updateError) {
+            console.error(
+              "Supabase Insert Error (camelCase columns, non-fatal):",
+              updateError
+            );
+            if (
+              updateError.message.includes("column") &&
+              updateError.message.includes("schema cache")
+            ) {
+              console.warn(
+                "Run supabase/migrations/004_ensure_partner_columns.sql and " +
+                  "NOTIFY pgrst, 'reload schema'; to populate the new columns."
+              );
+            }
+          }
+        } catch (updateCatchErr) {
+          console.error(
+            "Supabase Insert Error (camelCase columns threw):",
+            updateCatchErr
+          );
         }
 
         // --- 2. Log the initial deposit (non-fatal on failure) ---
