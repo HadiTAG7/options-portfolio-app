@@ -13,7 +13,7 @@ export default function PartnerDetailPage() {
   const partnerId = params?.id ?? "";
 
   const { partners, loading: partnersLoading, totalAssets } = usePartners();
-  const { sellPuts, sellCalls, loading: tradesLoading } = useTrades();
+  const { sellPuts, sellCalls, activeStocks, loading: tradesLoading } = useTrades();
 
   const partner = useMemo(
     () => partners.find((p) => p.id === partnerId),
@@ -28,15 +28,29 @@ export default function PartnerDetailPage() {
     return (partner.currentBalance / totalAssets) * 100;
   }, [partner, totalAssets]);
 
-  // Partner's fractional share of every open option position.
-  // Market value = premium * quantity. `quantity` already stores total
-  // shares (100, 200, ...), so there's no extra *100 multiplier.
+  // Partner's fractional share of every open fund position.
+  // Includes active stock holdings + open option positions (Sell Put / Sell Call).
+  // `quantity` already stores total shares (100, 200, ...) for options.
   const fractionalAssets = useMemo(() => {
     if (!partner) return [];
     const share = ownershipPct / 100;
 
-    // Real open options derived from live trades
-    const realAssets = [...sellPuts, ...sellCalls].map((t) => {
+    // Active stock holdings — market value uses live price when available
+    const stockAssets = activeStocks.map((s) => {
+      const price = s.currentPrice ?? s.purchasePrice;
+      const globalMarketValue = price * s.quantity;
+      return {
+        id: s.id,
+        symbol: s.ticker,
+        type: "Stock" as const,
+        totalQuantity: s.quantity,
+        partnerQuantity: s.quantity * share,
+        partnerMarketValue: globalMarketValue * share,
+      };
+    });
+
+    // Open option positions — market value = premium × quantity
+    const optionAssets = [...sellPuts, ...sellCalls].map((t) => {
       const globalMarketValue = Number(t.premium) * Number(t.quantity);
       return {
         id: t.id,
@@ -48,26 +62,8 @@ export default function PartnerDetailPage() {
       };
     });
 
-    // Mock fractional holdings — Shariah-compliant ETFs + covered call options.
-    // Illustrates how ownershipPct (e.g. 43.07%) maps onto fund-level positions.
-    // totalFundValue is expressed in USD for each line (ETF: shares × price;
-    // Covered call: contracts × premium-per-contract).
-    const mockAssets = [
-      { id: "mock-spus", symbol: "SPUS", type: "ETF", totalQuantity: 2500, totalFundValue: 2500 * 48.5 },
-      { id: "mock-hlal", symbol: "HLAL", type: "ETF", totalQuantity: 1800, totalFundValue: 1800 * 60.25 },
-      { id: "mock-aapl-cc", symbol: "AAPL 245C", type: "Covered Call", totalQuantity: 10, totalFundValue: 10 * 350 },
-      { id: "mock-msft-cc", symbol: "MSFT 450C", type: "Covered Call", totalQuantity: 5, totalFundValue: 5 * 420 },
-    ].map((a) => ({
-      id: a.id,
-      symbol: a.symbol,
-      type: a.type,
-      totalQuantity: a.totalQuantity,
-      partnerQuantity: a.totalQuantity * share,
-      partnerMarketValue: a.totalFundValue * share,
-    }));
-
-    return [...realAssets, ...mockAssets];
-  }, [partner, ownershipPct, sellPuts, sellCalls]);
+    return [...stockAssets, ...optionAssets];
+  }, [partner, ownershipPct, sellPuts, sellCalls, activeStocks]);
 
   const loading = partnersLoading || tradesLoading;
 
