@@ -7,6 +7,7 @@ import { TableRowSkeleton } from "@/components/ui/skeleton";
 import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
 import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
 import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
 import { useTrades } from "@/hooks/use-trades";
@@ -47,12 +48,23 @@ export default function TradesPage() {
     openCount,
     updateTrade,
     addTrade,
+    deleteTrade,
     toast,
     dismissToast,
   } = useTrades();
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
+
+  async function handleDeleteTrade() {
+    if (!deletingTrade) return;
+    try {
+      await deleteTrade(deletingTrade.id);
+    } finally {
+      setDeletingTrade(null);
+    }
+  }
 
   async function handleEditTrade(id: string, payload: TradeEditPayload) {
     await updateTrade(id, payload);
@@ -283,6 +295,7 @@ export default function TradesPage() {
         loading={loading}
         valueColumn="premium"
         onEdit={setEditingTrade}
+        onDelete={setDeletingTrade}
       />
 
       <TradeSection
@@ -294,6 +307,7 @@ export default function TradesPage() {
         loading={loading}
         valueColumn="premium"
         onEdit={setEditingTrade}
+        onDelete={setDeletingTrade}
       />
 
       <TradeSection
@@ -304,6 +318,7 @@ export default function TradesPage() {
         trades={closedOptions}
         loading={loading}
         valueColumn="result"
+        onDelete={setDeletingTrade}
       />
 
       <TradeSection
@@ -314,6 +329,7 @@ export default function TradesPage() {
         trades={stockSells}
         loading={loading}
         valueColumn="result"
+        onDelete={setDeletingTrade}
       />
 
       {/* Empty state for entire ledger */}
@@ -345,6 +361,17 @@ export default function TradesPage() {
         trade={editingTrade}
         onClose={() => setEditingTrade(null)}
         onSubmit={handleEditTrade}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deletingTrade !== null}
+        title="حذف الصفقة"
+        description={`هل أنت متأكد من حذف صفقة ${deletingTrade?.ticker ?? ""} (${deletingTrade?.type ?? ""}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`}
+        confirmLabel="تأكيد الحذف"
+        cancelLabel="إلغاء"
+        onConfirm={handleDeleteTrade}
+        onCancel={() => setDeletingTrade(null)}
       />
 
       {/* Auto-expiration toast */}
@@ -406,6 +433,7 @@ function TradeSection({
   loading,
   valueColumn,
   onEdit,
+  onDelete,
 }: {
   title: string;
   subtitle: string;
@@ -415,11 +443,13 @@ function TradeSection({
   loading: boolean;
   valueColumn: "premium" | "result";
   onEdit?: (trade: Trade) => void;
+  onDelete?: (trade: Trade) => void;
 }) {
   const isResult = valueColumn === "result";
   const valueLabelAr = isResult ? "النتيجة" : "العلاوة";
   const valueLabelEn = isResult ? "Result" : "Premium";
-  const colCount = onEdit ? 8 : 7;
+  const hasActions = onEdit || onDelete;
+  const colCount = hasActions ? 8 : 7;
 
   return (
     <section className="mb-8 overflow-hidden rounded-2xl bg-surface-container">
@@ -450,7 +480,7 @@ function TradeSection({
               </th>
               <th className="px-4 py-3 text-start">تاريخ الانتهاء</th>
               <th className="px-4 py-3 text-start">التاريخ</th>
-              {onEdit && <th className="px-4 py-3 text-start w-12" />}
+              {hasActions && <th className="px-4 py-3 text-start w-20" />}
             </tr>
           </thead>
           <tbody>
@@ -511,15 +541,28 @@ function TradeSection({
                     <td className="px-4 py-3 text-on-surface-variant">
                       {trade.date}
                     </td>
-                    {onEdit && (
+                    {hasActions && (
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => onEdit(trade)}
-                          className="p-1.5 rounded-md text-on-surface-variant/50 hover:text-primary hover:bg-primary/10 transition-all"
-                          title="تعديل الصفقة"
-                        >
-                          <Icon name="edit" className="!text-base" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {onEdit && (
+                            <button
+                              onClick={() => onEdit(trade)}
+                              className="p-1.5 rounded-md text-on-surface-variant/50 hover:text-primary hover:bg-primary/10 transition-all"
+                              title="تعديل الصفقة"
+                            >
+                              <Icon name="edit" className="!text-base" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              onClick={() => onDelete(trade)}
+                              className="p-1.5 rounded-md text-on-surface-variant/50 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
+                              title="حذف الصفقة"
+                            >
+                              <Icon name="delete" className="!text-base" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

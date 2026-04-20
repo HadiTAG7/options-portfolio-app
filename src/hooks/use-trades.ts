@@ -453,6 +453,28 @@ export function useTrades() {
     [fetchTradesData, usingSeedData]
   );
 
+  const deleteTrade = useCallback(
+    async (id: string) => {
+      setError(null);
+
+      if (!usingSeedData) {
+        const { error: deleteError } = await supabase
+          .from("trades")
+          .delete()
+          .eq("id", id);
+
+        if (deleteError) {
+          console.error("[deleteTrade] Supabase delete failed:", deleteError);
+          setError(deleteError.message);
+          throw deleteError;
+        }
+      }
+
+      setTradesList((prev) => prev.filter((t) => t.id !== id));
+    },
+    [usingSeedData]
+  );
+
   // Only OPEN option positions show up in the active tables
   const sellPuts = useMemo(
     () =>
@@ -514,6 +536,7 @@ export function useTrades() {
     openCount,
     updateTrade,
     addTrade,
+    deleteTrade,
     toast,
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,
