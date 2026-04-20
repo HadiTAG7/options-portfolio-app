@@ -112,41 +112,94 @@ export function usePartners() {
     async (name: string, initialCapital: number) => {
       setError(null);
 
+      const trimmedName = name.trim();
+      const capital = Number(initialCapital);
+
+      if (!trimmedName) {
+        const msg = "يرجى إدخال اسم الشريك";
+        setError(msg);
+        throw new Error(msg);
+      }
+      if (!Number.isFinite(capital) || capital <= 0) {
+        const msg = "يرجى إدخال مبلغ صحيح أكبر من صفر";
+        setError(msg);
+        throw new Error(msg);
+      }
+
       // Generate initials from name (first letter of each word, max 2)
-      const initials = name
-        .trim()
+      const initials = trimmedName
         .split(/\s+/)
         .map((w) => w[0])
         .join("")
         .slice(0, 2)
         .toUpperCase();
 
-      // Generate a unique partner code
+      // Unique id (crypto.randomUUID where available, short fallback otherwise)
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
       const code = `K-${Math.floor(10000 + Math.random() * 90000)}`;
+      const nowIso = new Date().toISOString();
+      const today = nowIso.split("T")[0];
 
-      const { error: insertError } = await supabase.from("partners").insert({
-        name: name.trim(),
-        code,
-        initials,
-        total_balance: initialCapital,
-        ownership_percentage: 0, // will be recalculated
-        management_fee_rate: 1.25,
-        performance_24h: 0,
-        performance_trend: "up" as const,
-      });
+      try {
+        // --- 1. Insert partner with full camelCase + snake_case payload ---
+        const { error: insertError } = await supabase.from("partners").insert({
+          id,
+          name: trimmedName,
+          code,
+          initials,
+          total_balance: capital,
+          ownership_percentage: 0, // recalculated by RPC below
+          management_fee_rate: 1.25,
+          performance_24h: 0,
+          performance_trend: "up" as const,
+          isAdmin: false,
+          totalDeposits: capital,
+          totalWithdrawals: 0,
+          currentBalance: capital,
+          totalNetProfit: 0,
+          managementFeesPaid: 0,
+          managementFeePercent: 20,
+          baseCapital: capital,
+          balanceHistory: [{ date: nowIso, balance: capital }],
+        });
 
-      if (insertError) {
-        setError(insertError.message);
-        throw insertError;
+        if (insertError) {
+          console.error("Supabase Insert Error:", insertError);
+          setError(insertError.message);
+          throw insertError;
+        }
+
+        // --- 2. Log the initial deposit (non-fatal on failure) ---
+        const { error: txError } = await supabase.from("transactions").insert({
+          investorId: id,
+          amount: capital,
+          type: "Deposit" as const,
+          date: today,
+        });
+
+        if (txError) {
+          console.error("Supabase Insert Error (transactions):", txError);
+          // don't throw — partner was created successfully
+        }
+
+        // --- 3. Recalculate ownership server-side ---
+        const { error: rpcError } = await supabase.rpc(
+          "recalculate_ownership"
+        );
+        if (rpcError) {
+          console.error("Supabase RPC Error:", rpcError);
+        }
+
+        // --- 4. Refresh local state ---
+        await fetchPartners();
+      } catch (err) {
+        console.error("Supabase Insert Error:", err);
+        throw err;
       }
-
-      // Recalculate ownership percentages for all partners
-      const { error: rpcError } = await supabase.rpc("recalculate_ownership");
-      if (rpcError) {
-        setError(rpcError.message);
-      }
-
-      await fetchPartners();
     },
     [fetchPartners]
   );

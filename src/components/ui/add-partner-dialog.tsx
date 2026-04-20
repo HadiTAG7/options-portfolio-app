@@ -58,8 +58,27 @@ export function AddPartnerDialog({ open, onClose, onSubmit }: AddPartnerDialogPr
     try {
       await onSubmit(trimmedName, numericCapital);
       onClose();
-    } catch {
-      setError("فشل في إضافة الشريك. يرجى المحاولة مرة أخرى.");
+    } catch (err: unknown) {
+      console.error("[AddPartnerDialog] Submission error:", err);
+      const supabaseMsg =
+        err && typeof err === "object" && "message" in err
+          ? (err as { message: string }).message
+          : null;
+
+      if (supabaseMsg?.includes("permission")) {
+        setError("ليس لديك صلاحية لإضافة شريك. تحقق من سياسات RLS في Supabase.");
+      } else if (
+        supabaseMsg?.includes("column") &&
+        supabaseMsg?.includes("schema cache")
+      ) {
+        setError(
+          "أحد الأعمدة مفقود في قاعدة البيانات. يرجى تشغيل ملفات الهجرة."
+        );
+      } else if (supabaseMsg?.includes("duplicate key")) {
+        setError("رمز الشريك مستخدم مسبقًا. يرجى المحاولة مرة أخرى.");
+      } else {
+        setError(supabaseMsg || "فشل في إضافة الشريك. يرجى المحاولة مرة أخرى.");
+      }
     } finally {
       setSubmitting(false);
     }
