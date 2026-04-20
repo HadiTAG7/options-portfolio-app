@@ -41,6 +41,7 @@ export function useTrades() {
   const [activeStocksList, setActiveStocksList] = useState<ActiveStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usingSeedData, setUsingSeedData] = useState(false);
 
   const enrichWithLivePrices = useCallback(async (stocks: ActiveStock[]) => {
     if (stocks.length === 0) return;
@@ -77,11 +78,14 @@ export function useTrades() {
       console.error("[useTrades] trades fetch failed:", tradesError);
       setError(`trades: ${tradesError.message}`);
       setTradesList(seedTrades);
+      setUsingSeedData(true);
     } else if (trades && trades.length > 0) {
       setTradesList(trades.map(rowToTrade));
+      setUsingSeedData(false);
     } else {
       console.warn("[useTrades] Supabase returned 0 trades — using seed data");
       setTradesList(seedTrades);
+      setUsingSeedData(true);
     }
 
     // --- Active Stocks ---
@@ -118,20 +122,33 @@ export function useTrades() {
   const updateTrade = useCallback(
     async (
       id: string,
-      payload: { quantity: number; strike: number; expiration: string; premium: number }
+      payload: {
+        quantity: number;
+        strike: number;
+        expiration: string;
+        premium: number;
+        date: string;
+      }
     ) => {
       setError(null);
 
+      const updatePayload = {
+        quantity: Number(payload.quantity),
+        strike: Number(payload.strike),
+        premium: Number(payload.premium),
+        expiration: payload.expiration,
+        date: payload.date,
+      };
+
+      console.log("[updateTrade] id:", id, "payload:", updatePayload);
+
       try {
-        const { error: updateError } = await supabase
+        const { error: updateError, status, statusText } = await supabase
           .from("trades")
-          .update({
-            quantity: payload.quantity,
-            strike: payload.strike,
-            expiration: payload.expiration,
-            premium: payload.premium,
-          })
+          .update(updatePayload)
           .eq("id", id);
+
+        console.log("[updateTrade] response:", status, statusText, updateError);
 
         if (updateError) {
           console.error("Supabase Update Error (trades):", updateError);
@@ -139,13 +156,33 @@ export function useTrades() {
           throw updateError;
         }
 
-        await fetchTradesData();
+        // Update local state immediately so UI reflects changes
+        setTradesList((prev) =>
+          prev.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  quantity: updatePayload.quantity,
+                  strike: updatePayload.strike,
+                  premium: updatePayload.premium,
+                  expiration: updatePayload.expiration,
+                  date: updatePayload.date,
+                }
+              : t
+          )
+        );
+
+        // Only refetch from Supabase if the data came from the DB;
+        // otherwise refetch would overwrite with stale seed data.
+        if (!usingSeedData) {
+          await fetchTradesData();
+        }
       } catch (err) {
         console.error("Supabase Update Error:", err);
         throw err;
       }
     },
-    [fetchTradesData]
+    [fetchTradesData, usingSeedData]
   );
 
   const sellPuts = useMemo(

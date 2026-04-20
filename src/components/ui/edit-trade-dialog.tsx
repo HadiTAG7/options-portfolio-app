@@ -9,6 +9,7 @@ export interface TradeEditPayload {
   strike: number;
   expiration: string;
   premium: number;
+  date: string;
 }
 
 interface EditTradeDialogProps {
@@ -82,6 +83,7 @@ export function EditTradeDialog({
         strike: s,
         expiration: expiration.trim(),
         premium: p,
+        date: trade.date,
       });
       onClose();
     } catch (err: unknown) {
