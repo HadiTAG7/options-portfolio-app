@@ -10,7 +10,12 @@ import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { Sparkline } from "@/components/ui/sparkline";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
+import {
+  computeFundBreakdown,
+  computePartnerProfit,
+} from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
+import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
 import type { Partner } from "@/types";
 
@@ -24,6 +29,8 @@ export default function PartnersPage() {
     addPartner,
     refetch,
   } = usePartners();
+  const { totalProfit: fundGrossProfit } = useTrades();
+  const fundBreakdown = computeFundBreakdown(partners, totalAssets);
   const { handleWithdrawal, notification, clearNotification } =
     usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
@@ -115,7 +122,10 @@ export default function PartnersPage() {
         ) : (
           <>
             {/* Total Partner Assets */}
-            <div className="md:col-span-2 bg-surface-container p-6 rounded-sm border-r-2 border-primary glow-primary flex flex-col justify-between h-32 relative overflow-hidden">
+            <div
+              className="md:col-span-2 bg-surface-container p-6 rounded-sm border-r-2 border-primary glow-primary flex flex-col justify-between h-32 relative overflow-hidden group"
+              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المحققة: ${formatCurrency(fundBreakdown.generatedProfit)}`}
+            >
               <div className="absolute -right-4 -top-4 opacity-5">
                 <Icon name="account_balance_wallet" className="!text-8xl" />
               </div>
@@ -125,6 +135,25 @@ export default function PartnersPage() {
               <div className="flex items-baseline gap-3">
                 <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
                   {formatCurrency(totalAssets)}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-[10px] mt-1">
+                <span className="text-on-surface-variant">
+                  <span className="opacity-60">رأس المال:</span>{" "}
+                  <span className="text-white font-mono">
+                    {formatCurrency(fundBreakdown.originalCapital)}
+                  </span>
+                </span>
+                <span
+                  className={`font-mono font-bold ${
+                    fundBreakdown.generatedProfit >= 0
+                      ? "text-primary"
+                      : "text-secondary"
+                  }`}
+                >
+                  <span className="opacity-60 font-normal">أرباح:</span>{" "}
+                  {fundBreakdown.generatedProfit >= 0 ? "+" : ""}
+                  {formatCurrency(fundBreakdown.generatedProfit)}
                 </span>
               </div>
             </div>
@@ -182,6 +211,7 @@ export default function PartnersPage() {
                 <th className="px-6 py-4 font-medium">الاسم والتعريف</th>
                 <th className="px-6 py-4 font-medium">الرصيد الكلي</th>
                 <th className="px-6 py-4 font-medium">نسبة الملكية</th>
+                <th className="px-6 py-4 font-medium">صافي الربح</th>
                 <th className="px-6 py-4 font-medium">رسوم الإدارة</th>
                 <th className="px-6 py-4 font-medium">الأداء</th>
                 <th className="px-6 py-4 font-medium text-left">إجراءات</th>
@@ -191,16 +221,16 @@ export default function PartnersPage() {
               {/* Loading State */}
               {loading && (
                 <>
-                  <TableRowSkeleton cols={6} />
-                  <TableRowSkeleton cols={6} />
-                  <TableRowSkeleton cols={6} />
+                  <TableRowSkeleton cols={7} />
+                  <TableRowSkeleton cols={7} />
+                  <TableRowSkeleton cols={7} />
                 </>
               )}
 
               {/* Empty State */}
               {!loading && partners.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <Icon
                       name="group_off"
                       className="!text-5xl text-on-surface-variant/30 mb-3 block mx-auto"
@@ -217,7 +247,14 @@ export default function PartnersPage() {
 
               {/* Data Rows */}
               {!loading &&
-                partners.map((partner) => (
+                partners.map((partner) => {
+                  const profit = computePartnerProfit(
+                    partner,
+                    totalAssets,
+                    fundGrossProfit
+                  );
+                  const profitPositive = profit.netProfit >= 0;
+                  return (
                   <tr
                     key={partner.id}
                     className="hover:bg-white/[0.02] transition-colors"
@@ -276,6 +313,27 @@ export default function PartnersPage() {
                       </div>
                     </td>
 
+                    {/* Net Profit */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span
+                          className={`text-sm font-headline font-bold font-mono ${
+                            profitPositive ? "text-primary" : "text-secondary"
+                          }`}
+                        >
+                          {profitPositive ? "+" : ""}
+                          {formatCurrency(profit.netProfit)}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold ${
+                            profitPositive ? "text-primary/70" : "text-secondary/70"
+                          }`}
+                        >
+                          {formatPercent(profit.returnPct)}
+                        </span>
+                      </div>
+                    </td>
+
                     {/* Management Fee */}
                     <td className="px-6 py-4 text-sm font-headline font-medium text-on-surface-variant">
                       {partner.managementFeeRate.toFixed(2)}%
@@ -324,7 +382,8 @@ export default function PartnersPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
             </tbody>
           </table>
         </div>

@@ -3,7 +3,11 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
-import { formatWholeNumber, formatCompactCurrency } from "@/lib/utils";
+import { formatWholeNumber, formatCompactCurrency, formatCurrency } from "@/lib/utils";
+import {
+  computeFundBreakdown,
+  MANAGEMENT_FEE_RATE,
+} from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import {
@@ -16,6 +20,8 @@ export default function DashboardPage() {
   const { totalProfit, openCount, loading: tradesLoading } = useTrades();
 
   const loading = partnersLoading || tradesLoading;
+  const fundBreakdown = computeFundBreakdown(partners, totalAssets);
+  const netProfitAfterFee = totalProfit * (1 - MANAGEMENT_FEE_RATE);
 
   return (
     <AppShell>
@@ -31,7 +37,10 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Total AUM */}
-            <div className="bg-surface-container p-6 rounded-sm border-r-2 border-primary glow-primary flex flex-col justify-between h-32 relative overflow-hidden">
+            <div
+              className="bg-surface-container p-6 rounded-sm border-r-2 border-primary glow-primary flex flex-col justify-between h-32 relative overflow-hidden"
+              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المحققة: ${formatCurrency(fundBreakdown.generatedProfit)}`}
+            >
               <div className="absolute -right-4 -top-4 opacity-5">
                 <Icon name="account_balance" className="!text-8xl" />
               </div>
@@ -42,25 +51,60 @@ export default function DashboardPage() {
                 <span className="text-3xl font-headline font-light tracking-tighter text-on-surface">
                   {formatWholeNumber(totalAssets)}
                 </span>
-                <span className="text-[10px] text-primary font-bold">
-                  +12%
+                <span
+                  className={`text-[10px] font-bold ${
+                    fundBreakdown.generatedProfit >= 0
+                      ? "text-primary"
+                      : "text-secondary"
+                  }`}
+                >
+                  {fundBreakdown.generatedProfit >= 0 ? "+" : ""}
+                  {fundBreakdown.generatedProfitPct.toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-[9px]">
+                <span className="text-on-surface-variant">
+                  <span className="opacity-60">رأس المال:</span>{" "}
+                  <span className="text-white font-mono">
+                    {formatCompactCurrency(fundBreakdown.originalCapital)}
+                  </span>
+                </span>
+                <span
+                  className={`font-mono font-bold ${
+                    fundBreakdown.generatedProfit >= 0
+                      ? "text-primary"
+                      : "text-secondary"
+                  }`}
+                >
+                  <span className="opacity-60 font-normal">أرباح:</span>{" "}
+                  {fundBreakdown.generatedProfit >= 0 ? "+" : ""}
+                  {formatCompactCurrency(fundBreakdown.generatedProfit)}
                 </span>
               </div>
             </div>
 
             {/* Total Profits */}
-            <div className="bg-surface-container p-6 rounded-sm border-r-2 border-primary flex flex-col justify-between h-32 relative overflow-hidden">
+            <div
+              className="bg-surface-container p-6 rounded-sm border-r-2 border-primary flex flex-col justify-between h-32 relative overflow-hidden"
+              title={`صافي بعد رسوم الإدارة ${(MANAGEMENT_FEE_RATE * 100).toFixed(0)}%: ${formatCurrency(netProfitAfterFee)}`}
+            >
               <div className="absolute -right-4 -top-4 opacity-10 text-primary">
                 <Icon name="trending_up" className="!text-8xl" />
               </div>
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-                مجموع الأرباح (Total Profits)
+                مجموع الأرباح (Gross / Net)
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-headline font-bold tracking-tighter text-primary">
                   {formatWholeNumber(totalProfit)}
                 </span>
                 <span className="text-[10px] text-primary font-bold">▲</span>
+              </div>
+              <div className="text-[9px] text-on-surface-variant">
+                <span className="opacity-60">صافي بعد الرسوم:</span>{" "}
+                <span className="text-white font-mono font-bold">
+                  {formatCompactCurrency(netProfitAfterFee)}
+                </span>
               </div>
             </div>
 
