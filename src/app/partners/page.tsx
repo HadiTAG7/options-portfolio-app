@@ -42,6 +42,18 @@ export default function PartnersPage() {
     () => computePartnerProfits(partners, trades),
     [partners, trades]
   );
+  // Fund-level total profit = sum of all trade PnL (before fee
+  // redistribution — fees are internal transfers, so gross sums to the
+  // same total). This replaces the old balance-minus-deposits fallback
+  // so the header card matches the per-partner table rows.
+  const fundTotalProfit = useMemo(
+    () =>
+      Object.values(profitByPartner).reduce(
+        (sum, p) => sum + p.grossProfit,
+        0
+      ),
+    [profitByPartner]
+  );
   const { handleWithdrawal, capitalizeProfits, notification, clearNotification } =
     usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
@@ -73,7 +85,7 @@ export default function PartnersPage() {
     await capitalizeProfits(partner, refetch);
   }
 
-  const generatedPositive = fundBreakdown.generatedProfit >= 0;
+  const generatedPositive = fundTotalProfit >= 0;
 
   return (
     <AppShell>
@@ -156,7 +168,7 @@ export default function PartnersPage() {
             {/* Total Partner Assets */}
             <div
               className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]"
-              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المحققة: ${formatCurrency(fundBreakdown.generatedProfit)}`}
+              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المحققة من الصفقات: ${formatCurrency(fundTotalProfit)}`}
             >
               <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl transition-opacity duration-300 group-hover:bg-emerald-500/20" />
               <div className="pointer-events-none absolute -right-4 -top-4 text-zinc-800/40">
@@ -185,7 +197,7 @@ export default function PartnersPage() {
                   >
                     <span className="opacity-70 font-normal">أرباح:</span>{" "}
                     {generatedPositive ? "+" : ""}
-                    {formatCurrency(fundBreakdown.generatedProfit)}
+                    {formatCurrency(fundTotalProfit)}
                   </span>
                 </div>
               </div>
