@@ -6,6 +6,7 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
+  Target,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -13,7 +14,6 @@ import { Icon } from "@/components/ui/icon";
 import {
   formatWholeNumber,
   formatCompactCurrency,
-  formatCurrency,
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
@@ -28,7 +28,13 @@ import {
 
 export default function DashboardPage() {
   const { partners, totalAssets, loading: partnersLoading } = usePartners();
-  const { totalProfit, openCount, loading: tradesLoading } = useTrades();
+  const {
+    totalProfit,
+    openCount,
+    potentialTargetProfit,
+    projectedPortfolioValue,
+    loading: tradesLoading,
+  } = useTrades();
 
   const loading = partnersLoading || tradesLoading;
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
@@ -38,13 +44,19 @@ export default function DashboardPage() {
     fundBreakdown.originalCapital > 0
       ? (totalProfit / fundBreakdown.originalCapital) * 100
       : 0;
+  const potentialPositive = potentialTargetProfit >= 0;
+  const potentialReturnPct =
+    fundBreakdown.originalCapital > 0
+      ? (potentialTargetProfit / fundBreakdown.originalCapital) * 100
+      : 0;
 
   return (
     <AppShell>
-      {/* ═══════ 3 Hero Cards ═══════ */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+      {/* ═══════ Hero Cards ═══════ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
         {loading ? (
           <>
+            <CardSkeleton />
             <CardSkeleton />
             <CardSkeleton />
             <CardSkeleton />
@@ -136,6 +148,51 @@ export default function DashboardPage() {
                   <span className="text-zinc-600">|</span>
                   <span className="text-zinc-500 font-mono tabular-nums">
                     {(MANAGEMENT_FEE_RATE * 100).toFixed(0)}% fee
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Projected Portfolio Value ── */}
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.14]" />
+              <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
+                <Target size={72} strokeWidth={1} />
+              </div>
+              <div className="relative flex flex-col gap-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-400/20">
+                    <Target size={18} className="text-cyan-300" />
+                  </div>
+                  <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">
+                    القيمة المستهدفة · Projected Value
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-4xl font-headline font-light tracking-tight text-cyan-200 font-mono tabular-nums">
+                    {formatWholeNumber(projectedPortfolioValue)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-[10px]">
+                  <span className="text-zinc-500">
+                    <span className="opacity-70">الربح المحتمل:</span>{" "}
+                    <span
+                      className={`font-mono tabular-nums font-bold ${
+                        potentialPositive ? "text-cyan-300" : "text-rose-400"
+                      }`}
+                    >
+                      {potentialPositive ? "+" : ""}
+                      {formatCompactCurrency(potentialTargetProfit)}
+                    </span>
+                  </span>
+                  <span className="text-zinc-600">|</span>
+                  <span
+                    className={`font-mono tabular-nums font-bold ${
+                      potentialPositive ? "text-cyan-300" : "text-rose-400"
+                    }`}
+                  >
+                    {potentialPositive ? "+" : ""}
+                    {potentialReturnPct.toFixed(1)}%
                   </span>
                 </div>
               </div>

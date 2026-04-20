@@ -22,13 +22,15 @@ import { AppShell } from "@/components/layout/app-shell";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
 import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
 import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
+import { EditStockDialog } from "@/components/ui/edit-stock-dialog";
+import type { StockEditPayload } from "@/components/ui/edit-stock-dialog";
 import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
 import { tradeProfit } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
-import type { Trade } from "@/types";
+import type { Trade, ActiveStock } from "@/types";
 
 function typeBadgeClass(type: string): string {
   switch (type) {
@@ -73,6 +75,7 @@ export default function TradesPage() {
     totalProfit,
     openCount,
     updateTrade,
+    updateStock,
     addTrade,
     deleteTrade,
     toast,
@@ -82,6 +85,7 @@ export default function TradesPage() {
   } = useTrades();
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [editingStock, setEditingStock] = useState<ActiveStock | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const pricesRefreshing = activeStocks.some((s) => s.priceLoading);
@@ -104,6 +108,10 @@ export default function TradesPage() {
 
   async function handleEditTrade(id: string, payload: TradeEditPayload) {
     await updateTrade(id, payload);
+  }
+
+  async function handleEditStock(id: string, payload: StockEditPayload) {
+    await updateStock(id, payload);
   }
 
   return (
@@ -239,21 +247,25 @@ export default function TradesPage() {
                 <th className="px-4 py-3 text-start font-semibold">Current</th>
                 <th className="px-4 py-3 text-start font-semibold">Unrealized P&amp;L</th>
                 <th className="px-4 py-3 text-start font-semibold">Target</th>
+                <th className="px-4 py-3 text-start font-semibold">
+                  Potential Profit
+                </th>
                 <th className="px-4 py-3 text-start font-semibold">Cost Basis</th>
                 <th className="px-4 py-3 text-start font-semibold">Date</th>
+                <th className="px-4 py-3 w-12 text-start font-semibold" />
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <>
-                  <TableRowSkeleton cols={8} />
-                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={10} />
+                  <TableRowSkeleton cols={10} />
                 </>
               )}
 
               {!loading && activeStocks.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
+                  <td colSpan={10} className="px-4 py-16 text-center">
                     <PackageOpen
                       size={36}
                       className="mx-auto mb-2 text-zinc-700"
@@ -288,6 +300,12 @@ export default function TradesPage() {
                     : pnlNegative
                       ? "text-rose-400"
                       : "text-zinc-500";
+                  const hasTarget = stock.targetSellPrice > 0;
+                  const potential = hasTarget
+                    ? (stock.targetSellPrice - stock.purchasePrice) *
+                      stock.quantity
+                    : 0;
+                  const potentialPositive = potential >= 0;
                   const zebra = idx % 2 === 0 ? "bg-transparent" : "bg-zinc-900/30";
                   return (
                     <tr
@@ -354,9 +372,26 @@ export default function TradesPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono tabular-nums">
-                        {stock.targetSellPrice > 0 ? (
+                        {hasTarget ? (
                           <span className="text-cyan-300">
                             {formatCurrency(stock.targetSellPrice)}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono tabular-nums">
+                        {hasTarget ? (
+                          <span
+                            className={`font-semibold ${
+                              potentialPositive
+                                ? "text-cyan-300"
+                                : "text-rose-400"
+                            }`}
+                            title="(Target − Buy) × Qty"
+                          >
+                            {potentialPositive ? "+" : ""}
+                            {formatCurrency(potential)}
                           </span>
                         ) : (
                           <span className="text-zinc-600">—</span>
@@ -367,6 +402,16 @@ export default function TradesPage() {
                       </td>
                       <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-500">
                         {stock.purchaseDate || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setEditingStock(stock)}
+                          className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                          title="تعديل المركز"
+                          aria-label={`Edit ${stock.ticker}`}
+                        >
+                          <Pencil size={12} />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -445,6 +490,13 @@ export default function TradesPage() {
         trade={editingTrade}
         onClose={() => setEditingTrade(null)}
         onSubmit={handleEditTrade}
+      />
+
+      <EditStockDialog
+        open={editingStock !== null}
+        stock={editingStock}
+        onClose={() => setEditingStock(null)}
+        onSubmit={handleEditStock}
       />
 
       <ConfirmDialog

@@ -537,6 +537,62 @@ export function useTrades() {
     [fetchTradesData, usingSeedData]
   );
 
+  const updateStock = useCallback(
+    async (
+      id: string,
+      payload: {
+        quantity: number;
+        purchasePrice: number;
+        targetSellPrice: number;
+        purchaseDate: string;
+      }
+    ) => {
+      setError(null);
+
+      const updatePayload = {
+        quantity: Number(payload.quantity),
+        purchasePrice: Number(payload.purchasePrice),
+        targetSellPrice: Number(payload.targetSellPrice),
+        purchaseDate: payload.purchaseDate,
+      };
+
+      console.log("[updateStock] id:", id, "payload:", updatePayload);
+
+      const { error: updateError, status, statusText } = await supabase
+        .from("active_stocks")
+        .update(updatePayload)
+        .eq("id", id);
+
+      console.log("[updateStock] response:", status, statusText, updateError);
+
+      if (updateError) {
+        console.error("Supabase Update Error (active_stocks):", updateError);
+        setError(updateError.message);
+        throw updateError;
+      }
+
+      // Mirror the change into local state immediately so the UI updates
+      // without waiting on a full refetch. costBasis is derived, so we
+      // recompute it here to keep it consistent with the new qty/price.
+      setActiveStocksList((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                quantity: updatePayload.quantity,
+                purchasePrice: updatePayload.purchasePrice,
+                targetSellPrice: updatePayload.targetSellPrice,
+                purchaseDate: updatePayload.purchaseDate,
+                costBasis:
+                  updatePayload.quantity * updatePayload.purchasePrice,
+              }
+            : s
+        )
+      );
+    },
+    []
+  );
+
   const deleteTrade = useCallback(
     async (id: string) => {
       setError(null);
@@ -620,6 +676,32 @@ export function useTrades() {
       }, 0),
     [activeStocksList]
   );
+  // Potential profit if every active stock hits its user-set target price.
+  //   Σ (targetSellPrice − purchasePrice) × quantity
+  // Rows without a target (target <= 0) contribute 0 so the number is
+  // honest and doesn't punish positions the user hasn't priced yet.
+  const potentialTargetProfit = useMemo(
+    () =>
+      activeStocksList.reduce((sum, s) => {
+        const tgt = Number(s.targetSellPrice) || 0;
+        if (tgt <= 0) return sum;
+        return sum + (tgt - s.purchasePrice) * s.quantity;
+      }, 0),
+    [activeStocksList]
+  );
+  // Projected portfolio value = cost basis of every active stock priced
+  // at its target. Same zero-target rule as potentialTargetProfit — rows
+  // without a target fall back to their cost basis so we don't pretend
+  // they vanish.
+  const projectedPortfolioValue = useMemo(
+    () =>
+      activeStocksList.reduce((sum, s) => {
+        const tgt = Number(s.targetSellPrice) || 0;
+        const exitPrice = tgt > 0 ? tgt : s.purchasePrice;
+        return sum + exitPrice * s.quantity;
+      }, 0),
+    [activeStocksList]
+  );
   // Global total profit combines all three pools the user sees in the UI:
   //   1. Unrealized stock P&L (trading pit)
   //   2. Realized P&L (closed options + stock sells)
@@ -644,8 +726,11 @@ export function useTrades() {
     totalResult,
     totalProfit,
     unrealizedStockPnL,
+    potentialTargetProfit,
+    projectedPortfolioValue,
     openCount,
     updateTrade,
+    updateStock,
     addTrade,
     deleteTrade,
     toast,
