@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
@@ -13,7 +13,7 @@ import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import {
   computeFundBreakdown,
-  computePartnerProfit,
+  computePartnerProfits,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
@@ -33,6 +33,10 @@ export default function PartnersPage() {
   } = usePartners();
   const { totalProfit: fundGrossProfit } = useTrades();
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
+  const profitByPartner = useMemo(
+    () => computePartnerProfits(partners, totalAssets, fundGrossProfit),
+    [partners, totalAssets, fundGrossProfit]
+  );
   const { handleWithdrawal, notification, clearNotification } =
     usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
@@ -259,11 +263,14 @@ export default function PartnersPage() {
               {/* Data Rows */}
               {!loading &&
                 partners.map((partner) => {
-                  const profit = computePartnerProfit(
-                    partner,
-                    totalAssets,
-                    fundGrossProfit
-                  );
+                  const profit = profitByPartner[partner.id] ?? {
+                    ownershipPct: 0,
+                    grossProfit: 0,
+                    feeAmount: 0,
+                    isManager: false,
+                    netProfit: 0,
+                    returnPct: 0,
+                  };
                   const profitPositive = profit.netProfit >= 0;
                   return (
                   <tr
@@ -345,9 +352,30 @@ export default function PartnersPage() {
                       </div>
                     </td>
 
-                    {/* Management Fee */}
-                    <td className="px-6 py-4 text-sm font-headline font-medium text-on-surface-variant">
-                      {partner.managementFeeRate.toFixed(2)}%
+                    {/* Management Fee — $ amount, not % */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span
+                          className={`text-sm font-mono font-bold ${
+                            profit.isManager
+                              ? "text-primary"
+                              : "text-on-surface-variant"
+                          }`}
+                          title={
+                            profit.isManager
+                              ? `الرسوم المحصّلة من جميع الشركاء المحدودين`
+                              : `رسوم الإدارة بنسبة ${partner.managementFeeRate.toFixed(2)}%`
+                          }
+                        >
+                          {profit.isManager && profit.feeAmount > 0 ? "+" : ""}
+                          {formatCurrency(profit.feeAmount)}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/60">
+                          {profit.isManager
+                            ? "محصّلة (GP)"
+                            : `مدفوعة · ${partner.managementFeeRate.toFixed(0)}%`}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Sparkline */}
