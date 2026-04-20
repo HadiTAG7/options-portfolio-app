@@ -29,12 +29,13 @@ export default function PartnerDetailPage() {
   }, [partner, totalAssets]);
 
   // Partner's fractional share of every open option position.
-  // Market value = premium * quantity * 100 (short options credit).
+  // Market value = premium * quantity. `quantity` already stores total
+  // shares (100, 200, ...), so there's no extra *100 multiplier.
   const fractionalAssets = useMemo(() => {
     if (!partner) return [];
     const share = ownershipPct / 100;
     return [...sellPuts, ...sellCalls].map((t) => {
-      const globalMarketValue = Number(t.premium) * Number(t.quantity) * 100;
+      const globalMarketValue = Number(t.premium) * Number(t.quantity);
       return {
         id: t.id,
         symbol: t.ticker,

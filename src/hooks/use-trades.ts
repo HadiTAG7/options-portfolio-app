@@ -156,9 +156,11 @@ export function useTrades() {
         expired.map((t) => `${t.ticker} ${t.type} @ ${t.expiration}`)
       );
 
-      // Short options expiring OTM: profit = premium * quantity * 100
+      // Short options expiring OTM: profit = premium * quantity.
+      // `quantity` already stores total shares (100, 200, ...), not # of
+      // contracts, so we must NOT multiply by 100 again.
       const computeResult = (t: Trade) =>
-        Number(t.premium) * Number(t.quantity) * 100;
+        Number(t.premium) * Number(t.quantity);
 
       if (!usingSeedData) {
         // Per-row updates because each expired trade has a different result.
@@ -228,6 +230,63 @@ export function useTrades() {
       }
     })();
   }, [loading, tradesList, expirationRan, checkAndCloseExpiredTrades]);
+
+  // One-shot heal for a historical bug where auto-closed option results
+  // were saved as premium * quantity * 100 (off by 100x). If the stored
+  // `result` matches the inflated value within a cent, divide it by 100
+  // and persist the corrected figure. Idempotent: once rows look sane,
+  // this effect becomes a no-op.
+  const [healRan, setHealRan] = useState(false);
+  useEffect(() => {
+    if (loading || healRan) return;
+    if (tradesList.length === 0) return;
+
+    const inflated = tradesList.filter((t) => {
+      if (t.status !== "closed") return false;
+      if (t.type !== "Sell Put" && t.type !== "Sell Call") return false;
+      const correct = Number(t.premium) * Number(t.quantity);
+      const stored = Number(t.result);
+      if (!Number.isFinite(correct) || correct === 0) return false;
+      return Math.abs(stored - correct * 100) < 0.5;
+    });
+
+    if (inflated.length === 0) {
+      setHealRan(true);
+      return;
+    }
+
+    setHealRan(true);
+    void (async () => {
+      const fixes = inflated.map((t) => ({
+        id: t.id,
+        result: Number(t.premium) * Number(t.quantity),
+      }));
+
+      if (!usingSeedData) {
+        await Promise.all(
+          fixes.map(async ({ id, result }) => {
+            const { error: upErr } = await supabase
+              .from("trades")
+              .update({ result })
+              .eq("id", id);
+            if (upErr) {
+              console.error(`[useTrades] heal failed for ${id}:`, upErr);
+            }
+          })
+        );
+      }
+
+      const fixMap = new Map(fixes.map((f) => [f.id, f.result]));
+      setTradesList((prev) =>
+        prev.map((t) =>
+          fixMap.has(t.id) ? { ...t, result: fixMap.get(t.id)! } : t
+        )
+      );
+      setToast(
+        `Corrected ${fixes.length} inflated option result${fixes.length === 1 ? "" : "s"}.`
+      );
+    })();
+  }, [loading, tradesList, healRan, usingSeedData]);
 
   const updateTrade = useCallback(
     async (
