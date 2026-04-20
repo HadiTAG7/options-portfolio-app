@@ -74,6 +74,8 @@ export interface Greeks {
 
 export type TradeType = "Sell Call" | "Sell Put" | "Stock Sell";
 
+export type TradeStatus = "open" | "closed";
+
 export interface Trade {
   id: string;
   ticker: string;
@@ -84,6 +86,8 @@ export interface Trade {
   result: number;
   expiration: string; // empty string for Stock Sell rows
   date: string;
+  status: TradeStatus;
+  autoClosed: boolean;
 }
 
 // ============================================================

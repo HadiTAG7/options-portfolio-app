@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
 import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
 import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
+import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
 import { useTrades } from "@/hooks/use-trades";
 import type { Trade } from "@/types";
@@ -35,6 +36,7 @@ export default function TradesPage() {
     sellCalls,
     sellPuts,
     stockSells,
+    closedOptions,
     activeStocks,
     loading,
     error,
@@ -43,6 +45,8 @@ export default function TradesPage() {
     totalProfit,
     openCount,
     updateTrade,
+    toast,
+    dismissToast,
   } = useTrades();
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
@@ -287,6 +291,16 @@ export default function TradesPage() {
       />
 
       <TradeSection
+        title="الخيارات المنتهية"
+        subtitle="Expired Options (Auto-Closed)"
+        icon="event_busy"
+        iconColor="text-emerald-500"
+        trades={closedOptions}
+        loading={loading}
+        valueColumn="result"
+      />
+
+      <TradeSection
         title="مبيعات الأسهم المغلقة"
         subtitle="Closed Stock Sells"
         icon="check_circle"
@@ -319,6 +333,9 @@ export default function TradesPage() {
         onClose={() => setEditingTrade(null)}
         onSubmit={handleEditTrade}
       />
+
+      {/* Auto-expiration toast */}
+      <Toast message={toast} tone="success" onDismiss={dismissToast} />
 
       {/* FAB */}
       <button className="fixed bottom-8 left-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-lg transition hover:bg-primary/90">

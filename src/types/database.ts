@@ -72,6 +72,8 @@ export interface Database {
           result: number;
           expiration: string;
           date: string;
+          status: "open" | "closed";
+          autoClosed: boolean;
         };
         Insert: {
           id?: string;
@@ -83,6 +85,8 @@ export interface Database {
           result?: number;
           expiration?: string;
           date: string;
+          status?: "open" | "closed";
+          autoClosed?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];

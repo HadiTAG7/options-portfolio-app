@@ -11,6 +11,8 @@ export const seedTrades: Trade[] = [
     result: -336,
     expiration: "",
     date: "2026-04-17",
+    status: "closed",
+    autoClosed: false,
   },
   {
     id: "8h3k1fmlx",
@@ -22,6 +24,8 @@ export const seedTrades: Trade[] = [
     result: 300,
     expiration: "",
     date: "2026-04-17",
+    status: "closed",
+    autoClosed: false,
   },
   {
     id: "tmw78800c",
@@ -33,6 +37,8 @@ export const seedTrades: Trade[] = [
     result: 1500,
     expiration: "",
     date: "2026-04-17",
+    status: "closed",
+    autoClosed: false,
   },
   {
     id: "9dyn629z3",
@@ -44,6 +50,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "cvazc5yko",
@@ -55,6 +63,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "etwsjftjz",
@@ -66,6 +76,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "futalmupp",
@@ -77,6 +89,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "cf325t1zb",
@@ -88,6 +102,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "iptj5s4r9",
@@ -99,6 +115,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "jb69ter43",
@@ -110,6 +128,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "pju2k6aia",
@@ -121,6 +141,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-03-23",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "sqjcg4837",
@@ -132,6 +154,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
   {
     id: "tgmbua29z",
@@ -143,6 +167,8 @@ export const seedTrades: Trade[] = [
     result: 0,
     expiration: "2026-04-17",
     date: "2026-03-23",
+    status: "open",
+    autoClosed: false,
   },
 ];
 
