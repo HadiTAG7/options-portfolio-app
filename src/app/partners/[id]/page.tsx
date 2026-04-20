@@ -113,6 +113,20 @@ export default function PartnerDetailPage() {
         </div>
       </div>
 
+      {/* Eligibility disclaimer */}
+      <div className="mb-6 flex items-start gap-3 p-4 rounded-sm bg-surface-container-low border border-white/5 border-r-2 border-r-tertiary/60">
+        <Icon name="info" className="text-tertiary !text-base mt-0.5" />
+        <div className="text-[11px] leading-relaxed text-on-surface-variant">
+          <span className="font-bold text-on-surface">ملاحظة مهمة: </span>
+          يتم احتساب أرباح الشريك فقط على الصفقات التي أُغلقت{" "}
+          <span className="font-bold text-on-surface">
+            بعد تاريخ انضمامه للصندوق
+          </span>
+          . الصفقات التي انتهت قبل ذلك التاريخ لا تُدرج في حصته — هذا لضمان
+          عدالة التوزيع بين جميع الشركاء.
+        </div>
+      </div>
+
       {/* Bento Grid */}
       <div className="grid grid-cols-12 gap-6">
         {/* Main Equity Card */}

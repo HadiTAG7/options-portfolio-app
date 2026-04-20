@@ -31,11 +31,11 @@ export default function PartnersPage() {
     updatePartner,
     refetch,
   } = usePartners();
-  const { totalProfit: fundGrossProfit } = useTrades();
+  const { trades } = useTrades();
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
   const profitByPartner = useMemo(
-    () => computePartnerProfits(partners, totalAssets, fundGrossProfit),
-    [partners, totalAssets, fundGrossProfit]
+    () => computePartnerProfits(partners, trades),
+    [partners, trades]
   );
   const { handleWithdrawal, notification, clearNotification } =
     usePartnersStore();
