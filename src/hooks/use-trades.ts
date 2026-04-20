@@ -585,29 +585,26 @@ export function useTrades() {
     [tradesList]
   );
 
-  // Collected premium on OPEN short options, using the same per-trade
-  // PnL formula (tradeProfit) that powers the Total PnL column in the
-  // trades table. `quantity` already stores total shares (100, 200, …)
-  // per the codebase convention, so tradeProfit = premium * quantity
-  // without any extra *100 multiplier.
+  // Total premium = sum of tradeProfit() for EVERY Sell Put / Sell Call
+  // row, open or closed. tradeProfit returns premium * quantity for
+  // open options and the locked-in `result` for closed ones — i.e. the
+  // same number rendered in the per-row "Total PnL" column. Dropping
+  // the status filter is what restores the $7,509 the user sees when
+  // they eyeball-sum the option rows in the trades table.
   const totalPremium = useMemo(
     () =>
       tradesList
-        .filter(
-          (t) =>
-            (t.type === "Sell Put" || t.type === "Sell Call") &&
-            t.status === "open"
-        )
+        .filter((t) => t.type === "Sell Put" || t.type === "Sell Call")
         .reduce((sum, t) => sum + tradeProfit(t), 0),
     [tradesList]
   );
-  // Realized result: locked-in P&L from closed option positions plus
-  // any Stock Sell rows (which by design are always closed).
+  // Realized result = locked-in P&L from Stock Sell rows ONLY. Closed
+  // option results are already counted in totalPremium above (via
+  // tradeProfit), so including closedOptions here would double-count
+  // every expired Sell Put / Sell Call.
   const totalResult = useMemo(
-    () =>
-      stockSells.reduce((sum, t) => sum + Number(t.result || 0), 0) +
-      closedOptions.reduce((sum, t) => sum + Number(t.result || 0), 0),
-    [stockSells, closedOptions]
+    () => stockSells.reduce((sum, t) => sum + Number(t.result || 0), 0),
+    [stockSells]
   );
   // Unrealized mark-to-market P&L on the active stock book.
   //   (currentPrice − purchasePrice) × quantity
