@@ -115,6 +115,39 @@ export function useTrades() {
     fetchTradesData();
   }, [fetchTradesData]);
 
+  const updateTrade = useCallback(
+    async (
+      id: string,
+      payload: { quantity: number; strike: number; expiration: string; premium: number }
+    ) => {
+      setError(null);
+
+      try {
+        const { error: updateError } = await supabase
+          .from("trades")
+          .update({
+            quantity: payload.quantity,
+            strike: payload.strike,
+            expiration: payload.expiration,
+            premium: payload.premium,
+          })
+          .eq("id", id);
+
+        if (updateError) {
+          console.error("Supabase Update Error (trades):", updateError);
+          setError(updateError.message);
+          throw updateError;
+        }
+
+        await fetchTradesData();
+      } catch (err) {
+        console.error("Supabase Update Error:", err);
+        throw err;
+      }
+    },
+    [fetchTradesData]
+  );
+
   const sellPuts = useMemo(
     () => tradesList.filter((t) => t.type === "Sell Put"),
     [tradesList]
@@ -154,6 +187,7 @@ export function useTrades() {
     totalResult,
     totalProfit,
     openCount,
+    updateTrade,
     refetch: fetchTradesData,
   };
 }

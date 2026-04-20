@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
+import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
+import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
 import { formatCurrency } from "@/lib/utils";
 import { useTrades } from "@/hooks/use-trades";
 import type { Trade } from "@/types";
@@ -39,7 +42,14 @@ export default function TradesPage() {
     totalResult,
     totalProfit,
     openCount,
+    updateTrade,
   } = useTrades();
+
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+
+  async function handleEditTrade(id: string, payload: TradeEditPayload) {
+    await updateTrade(id, payload);
+  }
 
   return (
     <AppShell>
@@ -262,6 +272,7 @@ export default function TradesPage() {
         trades={sellPuts}
         loading={loading}
         valueColumn="premium"
+        onEdit={setEditingTrade}
       />
 
       <TradeSection
@@ -272,6 +283,7 @@ export default function TradesPage() {
         trades={sellCalls}
         loading={loading}
         valueColumn="premium"
+        onEdit={setEditingTrade}
       />
 
       <TradeSection
@@ -299,6 +311,14 @@ export default function TradesPage() {
           </p>
         </div>
       )}
+
+      {/* Edit Trade Dialog */}
+      <EditTradeDialog
+        open={editingTrade !== null}
+        trade={editingTrade}
+        onClose={() => setEditingTrade(null)}
+        onSubmit={handleEditTrade}
+      />
 
       {/* FAB */}
       <button className="fixed bottom-8 left-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-lg transition hover:bg-primary/90">
@@ -355,6 +375,7 @@ function TradeSection({
   trades,
   loading,
   valueColumn,
+  onEdit,
 }: {
   title: string;
   subtitle: string;
@@ -363,10 +384,12 @@ function TradeSection({
   trades: Trade[];
   loading: boolean;
   valueColumn: "premium" | "result";
+  onEdit?: (trade: Trade) => void;
 }) {
   const isResult = valueColumn === "result";
   const valueLabelAr = isResult ? "النتيجة" : "العلاوة";
   const valueLabelEn = isResult ? "Result" : "Premium";
+  const colCount = onEdit ? 8 : 7;
 
   return (
     <section className="mb-8 overflow-hidden rounded-2xl bg-surface-container">
@@ -397,20 +420,21 @@ function TradeSection({
               </th>
               <th className="px-4 py-3 text-start">تاريخ الانتهاء</th>
               <th className="px-4 py-3 text-start">التاريخ</th>
+              {onEdit && <th className="px-4 py-3 text-start w-12" />}
             </tr>
           </thead>
           <tbody>
             {loading && (
               <>
-                <TableRowSkeleton cols={7} />
-                <TableRowSkeleton cols={7} />
+                <TableRowSkeleton cols={colCount} />
+                <TableRowSkeleton cols={colCount} />
               </>
             )}
 
             {!loading && trades.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={colCount}
                   className="px-4 py-8 text-center text-xs text-on-surface-variant"
                 >
                   لا توجد صفقات من هذا النوع
@@ -457,6 +481,17 @@ function TradeSection({
                     <td className="px-4 py-3 text-on-surface-variant">
                       {trade.date}
                     </td>
+                    {onEdit && (
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => onEdit(trade)}
+                          className="p-1.5 rounded-md text-on-surface-variant/50 hover:text-primary hover:bg-primary/10 transition-all"
+                          title="تعديل الصفقة"
+                        >
+                          <Icon name="edit" className="!text-base" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
