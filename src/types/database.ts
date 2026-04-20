@@ -13,8 +13,8 @@ export interface Database {
         Row: {
           id: string;
           name: string;
-          code: string;
-          initials: string;
+          code: string | null;
+          initials: string | null;
           avatar_url: string | null;
           total_balance: number;
           ownership_percentage: number;
@@ -37,10 +37,16 @@ export interface Database {
         Insert: {
           id?: string;
           name: string;
-          code: string;
-          initials: string;
+          total_balance?: number;
+          currentBalance?: number;
+          totalDeposits?: number;
+          baseCapital?: number;
+          managementFeePercent?: number | null;
+          balanceHistory?: BalanceHistoryEntry[];
+          isAdmin?: boolean;
+          code?: string | null;
+          initials?: string | null;
           avatar_url?: string | null;
-          total_balance: number;
           ownership_percentage?: number;
           management_fee_rate?: number;
           performance_24h?: number;
@@ -48,15 +54,9 @@ export interface Database {
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
-          isAdmin?: boolean;
-          totalDeposits?: number;
           totalWithdrawals?: number;
-          currentBalance?: number;
           totalNetProfit?: number;
           managementFeesPaid?: number;
-          managementFeePercent?: number | null;
-          baseCapital?: number;
-          balanceHistory?: BalanceHistoryEntry[];
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];

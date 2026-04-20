@@ -15,8 +15,8 @@ function rowToPartner(row: PartnerRow): Partner {
   return {
     id: row.id,
     name: row.name,
-    code: row.code,
-    initials: row.initials,
+    code: row.code ?? "",
+    initials: row.initials ?? "",
     avatarUrl: row.avatar_url ?? undefined,
     totalBalance: safeNumber(row.total_balance),
     ownershipPercentage: safeNumber(row.ownership_percentage),

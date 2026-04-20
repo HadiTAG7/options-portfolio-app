@@ -17,8 +17,8 @@ function rowToPartner(row: PartnerRow): Partner {
   return {
     id: row.id,
     name: row.name,
-    code: row.code,
-    initials: row.initials,
+    code: row.code ?? "",
+    initials: row.initials ?? "",
     avatarUrl: row.avatar_url ?? undefined,
     totalBalance: safeNumber(row.total_balance),
     ownershipPercentage: safeNumber(row.ownership_percentage),
@@ -126,40 +126,26 @@ export function usePartners() {
         throw new Error(msg);
       }
 
-      // Generate initials from name (first letter of each word, max 2)
-      const initials = trimmedName
-        .split(/\s+/)
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-
-      // Unique id (crypto.randomUUID where available, short fallback otherwise)
-      const id =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-      const code = `K-${Math.floor(10000 + Math.random() * 90000)}`;
       const nowIso = new Date().toISOString();
       const today = nowIso.split("T")[0];
 
       try {
-        // --- 1a. Insert partner with the guaranteed (snake_case) columns ---
-        // These have existed since the initial schema, so this insert will
-        // succeed even if the new camelCase columns are missing from the
-        // PostgREST schema cache.
-        const { error: insertError } = await supabase.from("partners").insert({
-          id,
+        const payload = {
           name: trimmedName,
-          code,
-          initials,
+          currentBalance: capital,
+          totalDeposits: capital,
+          baseCapital: capital,
           total_balance: capital,
-          ownership_percentage: 0, // recalculated by RPC below
-          management_fee_rate: 1.25,
-          performance_24h: 0,
-          performance_trend: "up" as const,
-        });
+          managementFeePercent: 20,
+          balanceHistory: [{ date: nowIso, balance: capital }],
+          isAdmin: false,
+        };
+
+        console.log("Supabase insert payload:", JSON.stringify(payload));
+
+        const { error: insertError } = await supabase
+          .from("partners")
+          .insert(payload);
 
         if (insertError) {
           console.error("Supabase Insert Error:", insertError);
@@ -167,51 +153,9 @@ export function usePartners() {
           throw insertError;
         }
 
-        // --- 1b. Populate the camelCase columns in a follow-up update ---
-        // If any of these columns don't exist yet in the schema cache, the
-        // update will fail — log it but don't throw, the partner row itself
-        // is already created.
-        try {
-          const { error: updateError } = await supabase
-            .from("partners")
-            .update({
-              isAdmin: false,
-              totalDeposits: capital,
-              totalWithdrawals: 0,
-              currentBalance: capital,
-              totalNetProfit: 0,
-              managementFeesPaid: 0,
-              managementFeePercent: 20,
-              baseCapital: capital,
-              balanceHistory: [{ date: nowIso, balance: capital }],
-            })
-            .eq("id", id);
-
-          if (updateError) {
-            console.error(
-              "Supabase Insert Error (camelCase columns, non-fatal):",
-              updateError
-            );
-            if (
-              updateError.message.includes("column") &&
-              updateError.message.includes("schema cache")
-            ) {
-              console.warn(
-                "Run supabase/migrations/004_ensure_partner_columns.sql and " +
-                  "NOTIFY pgrst, 'reload schema'; to populate the new columns."
-              );
-            }
-          }
-        } catch (updateCatchErr) {
-          console.error(
-            "Supabase Insert Error (camelCase columns threw):",
-            updateCatchErr
-          );
-        }
-
-        // --- 2. Log the initial deposit (non-fatal on failure) ---
+        // Log the initial deposit (non-fatal)
         const { error: txError } = await supabase.from("transactions").insert({
-          investorId: id,
+          investorId: payload.name,
           amount: capital,
           type: "Deposit" as const,
           date: today,
@@ -219,10 +163,9 @@ export function usePartners() {
 
         if (txError) {
           console.error("Supabase Insert Error (transactions):", txError);
-          // don't throw — partner was created successfully
         }
 
-        // --- 3. Recalculate ownership server-side ---
+        // Recalculate ownership server-side (non-fatal)
         const { error: rpcError } = await supabase.rpc(
           "recalculate_ownership"
         );
@@ -230,7 +173,6 @@ export function usePartners() {
           console.error("Supabase RPC Error:", rpcError);
         }
 
-        // --- 4. Refresh local state ---
         await fetchPartners();
       } catch (err) {
         console.error("Supabase Insert Error:", err);
