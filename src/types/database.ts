@@ -22,6 +22,7 @@ export interface Database {
           performance_24h: number;
           performance_trend: "up" | "down";
           joined_at: string;
+          entry_date: string | null;
           created_at: string;
           updated_at: string;
           isAdmin: boolean;
@@ -52,6 +53,7 @@ export interface Database {
           performance_24h?: number;
           performance_trend?: "up" | "down";
           joined_at?: string;
+          entry_date?: string | null;
           created_at?: string;
           updated_at?: string;
           totalWithdrawals?: number;

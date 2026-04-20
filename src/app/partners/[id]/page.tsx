@@ -93,6 +93,15 @@ export default function PartnerDetailPage() {
           <p className="text-sm text-on-surface-variant mt-1">
             عرض تحليلي للحصة النسبية في المحفظة النشطة
           </p>
+          {partner.entryDate && (
+            <p className="text-[10px] text-on-surface-variant/70 mt-2 flex items-center gap-1.5">
+              <Icon name="event" className="!text-sm" />
+              تاريخ الانضمام:{" "}
+              <span className="font-mono text-on-surface">
+                {partner.entryDate}
+              </span>
+            </p>
+          )}
         </div>
         <div className="bg-surface-container-highest px-6 py-4 border-r-4 border-primary rounded-sm">
           <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-1">

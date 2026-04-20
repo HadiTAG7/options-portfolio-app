@@ -19,6 +19,7 @@ export interface Partner {
   performance24h: number; // percentage change
   performanceTrend: "up" | "down";
   joinedAt: string;
+  entryDate: string | null; // date the partner entered the fund (YYYY-MM-DD)
   isAdmin: boolean;
   totalDeposits: number;
   totalWithdrawals: number;

@@ -24,6 +24,7 @@ function rowToPartner(row: PartnerRow): Partner {
     performance24h: safeNumber(row.performance_24h),
     performanceTrend: row.performance_trend ?? "up",
     joinedAt: row.joined_at,
+    entryDate: row.entry_date ?? null,
     isAdmin: row.isAdmin ?? false,
     totalDeposits: safeNumber(row.totalDeposits),
     totalWithdrawals: safeNumber(row.totalWithdrawals),
