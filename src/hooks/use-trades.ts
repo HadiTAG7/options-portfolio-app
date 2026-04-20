@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { safeNumber } from "@/lib/utils";
 import { fetchLivePrices } from "@/lib/finnhub";
+import { tradeProfit } from "@/lib/partner-profit";
 import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
@@ -584,6 +585,11 @@ export function useTrades() {
     [tradesList]
   );
 
+  // Collected premium on OPEN short options, using the same per-trade
+  // PnL formula (tradeProfit) that powers the Total PnL column in the
+  // trades table. `quantity` already stores total shares (100, 200, …)
+  // per the codebase convention, so tradeProfit = premium * quantity
+  // without any extra *100 multiplier.
   const totalPremium = useMemo(
     () =>
       tradesList
@@ -592,16 +598,36 @@ export function useTrades() {
             (t.type === "Sell Put" || t.type === "Sell Call") &&
             t.status === "open"
         )
-        .reduce((sum, t) => sum + Number(t.premium || 0), 0),
+        .reduce((sum, t) => sum + tradeProfit(t), 0),
     [tradesList]
   );
+  // Realized result: locked-in P&L from closed option positions plus
+  // any Stock Sell rows (which by design are always closed).
   const totalResult = useMemo(
     () =>
       stockSells.reduce((sum, t) => sum + Number(t.result || 0), 0) +
       closedOptions.reduce((sum, t) => sum + Number(t.result || 0), 0),
     [stockSells, closedOptions]
   );
-  const totalProfit = totalPremium + totalResult;
+  // Unrealized mark-to-market P&L on the active stock book.
+  //   (currentPrice − purchasePrice) × quantity
+  // Rows without a live quote contribute 0 so the total stays honest.
+  const unrealizedStockPnL = useMemo(
+    () =>
+      activeStocksList.reduce((sum, s) => {
+        const px = s.currentPrice;
+        if (typeof px !== "number" || !Number.isFinite(px) || px <= 0) {
+          return sum;
+        }
+        return sum + (px - s.purchasePrice) * s.quantity;
+      }, 0),
+    [activeStocksList]
+  );
+  // Global total profit combines all three pools the user sees in the UI:
+  //   1. Unrealized stock P&L (trading pit)
+  //   2. Realized P&L (closed options + stock sells)
+  //   3. Collected premium on still-open short options
+  const totalProfit = totalPremium + totalResult + unrealizedStockPnL;
   const openCount = sellPuts.length + sellCalls.length;
 
   const refreshPrices = useCallback(async () => {
@@ -620,6 +646,7 @@ export function useTrades() {
     totalPremium,
     totalResult,
     totalProfit,
+    unrealizedStockPnL,
     openCount,
     updateTrade,
     addTrade,
