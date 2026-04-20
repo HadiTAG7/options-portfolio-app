@@ -2,18 +2,19 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { BookOpen } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
 import { EditPartnerDialog } from "@/components/ui/edit-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
-import { Sparkline } from "@/components/ui/sparkline";
+import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import {
   computeFundBreakdown,
-  computePartnerProfits,
+  computePortfolioDistribution,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
@@ -31,29 +32,21 @@ export default function PartnersPage() {
     updatePartner,
     refetch,
   } = usePartners();
-  const { trades } = useTrades();
+  const { totalProfit } = useTrades();
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
-  // Distribute every trade's PnL (premium × quantity for open options,
-  // stored result for closed) across eligible partners — where a partner
-  // is eligible only if their entry_date is <= the trade's close date.
-  // GP/LP fee flow is applied on top. This makes the table react live
-  // to new trades without any manual balance edits.
-  const profitByPartner = useMemo(
-    () => computePartnerProfits(partners, trades),
-    [partners, trades]
+  // Distribute the single fund-wide `totalProfit` (realized + unrealized
+  // + collected premium) across partners by ownership %, then apply the
+  // 20% GP/LP performance-fee transfer. Recomputing on every totalProfit
+  // change makes the table react live to new trades AND live price
+  // refreshes — the "data persistence" the Phase-2 spec asked for.
+  const distributionByPartner = useMemo(
+    () => computePortfolioDistribution(partners, totalProfit),
+    [partners, totalProfit]
   );
-  // Fund-level total profit = sum of all trade PnL (before fee
-  // redistribution — fees are internal transfers, so gross sums to the
-  // same total). This replaces the old balance-minus-deposits fallback
-  // so the header card matches the per-partner table rows.
-  const fundTotalProfit = useMemo(
-    () =>
-      Object.values(profitByPartner).reduce(
-        (sum, p) => sum + p.grossProfit,
-        0
-      ),
-    [profitByPartner]
-  );
+  // Fund-level total profit drives the header card. Using the single
+  // `totalProfit` number keeps this page in lockstep with the trades
+  // page summary cards — when one moves, both move.
+  const fundTotalProfit = totalProfit;
   const { handleWithdrawal, capitalizeProfits, notification, clearNotification } =
     usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
@@ -61,6 +54,7 @@ export default function PartnersPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
   const [editTarget, setEditTarget] = useState<Partner | null>(null);
+  const [ledgerTarget, setLedgerTarget] = useState<Partner | null>(null);
 
   // Auto-dismiss success notification
   useEffect(() => {
@@ -110,12 +104,26 @@ export default function PartnersPage() {
         partner={withdrawTarget}
         remainingProfit={
           withdrawTarget
-            ? (profitByPartner[withdrawTarget.id]?.netProfit ?? 0)
+            ? (distributionByPartner[withdrawTarget.id]?.netProfit ?? 0)
             : 0
         }
         onClose={() => setWithdrawTarget(null)}
         onSubmit={onWithdraw}
         onCapitalize={onCapitalize}
+      />
+
+      {/* Partner Ledger Dialog — GP/LP distribution breakdown */}
+      <PartnerLedgerDialog
+        open={ledgerTarget !== null}
+        partner={ledgerTarget}
+        distribution={
+          ledgerTarget
+            ? (distributionByPartner[ledgerTarget.id] ?? null)
+            : null
+        }
+        totalProfit={fundTotalProfit}
+        partners={partners}
+        onClose={() => setLedgerTarget(null)}
       />
 
       {/* Confirmation Dialog */}
@@ -267,12 +275,19 @@ export default function PartnersPage() {
             <thead className="sticky top-0 z-10">
               <tr className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] bg-zinc-950/80 backdrop-blur">
                 <th className="px-6 py-4 font-semibold">الاسم والتعريف</th>
-                <th className="px-6 py-4 font-semibold">الرصيد الكلي</th>
+                <th className="px-6 py-4 font-semibold">
+                  الاستثمار · Investment
+                </th>
                 <th className="px-6 py-4 font-semibold">نسبة الملكية</th>
-                <th className="px-6 py-4 font-semibold">إجمالي الربح</th>
-                <th className="px-6 py-4 font-semibold">رسوم الإدارة</th>
-                <th className="px-6 py-4 font-semibold">الأرباح المتبقية</th>
-                <th className="px-6 py-4 font-semibold">الأداء</th>
+                <th className="px-6 py-4 font-semibold">
+                  إجمالي الربح · Gross
+                </th>
+                <th className="px-6 py-4 font-semibold">
+                  رسوم الأداء · Fees
+                </th>
+                <th className="px-6 py-4 font-semibold">
+                  صافي الربح · Net
+                </th>
                 <th className="px-6 py-4 font-semibold text-left">إجراءات</th>
               </tr>
             </thead>
@@ -280,16 +295,16 @@ export default function PartnersPage() {
               {/* Loading State */}
               {loading && (
                 <>
-                  <TableRowSkeleton cols={8} />
-                  <TableRowSkeleton cols={8} />
-                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={7} />
+                  <TableRowSkeleton cols={7} />
+                  <TableRowSkeleton cols={7} />
                 </>
               )}
 
               {/* Empty State */}
               {!loading && partners.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-20 text-center">
+                  <td colSpan={7} className="px-6 py-20 text-center">
                     <Icon
                       name="group_off"
                       className="!text-5xl text-zinc-700 mb-3 block mx-auto"
@@ -307,16 +322,19 @@ export default function PartnersPage() {
               {/* Data Rows */}
               {!loading &&
                 partners.map((partner) => {
-                  const profit = profitByPartner[partner.id] ?? {
+                  const dist = distributionByPartner[partner.id] ?? {
+                    partnerId: partner.id,
+                    investment: 0,
                     ownershipPct: 0,
                     grossProfit: 0,
+                    feeRatePct: 0,
                     feeAmount: 0,
-                    isManager: false,
                     netProfit: 0,
+                    isManager: false,
                     returnPct: 0,
+                    collectedFromLps: [],
                   };
-                  const profitPositive = profit.netProfit >= 0;
-                  const perfPositive = partner.performance24h >= 0;
+                  const profitPositive = dist.netProfit >= 0;
                   return (
                     <tr
                       key={partner.id}
@@ -329,8 +347,16 @@ export default function PartnersPage() {
                             {partner.initials}
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-sm text-white font-semibold">
+                            <span className="flex items-center gap-1.5 text-sm text-white font-semibold">
                               {partner.name}
+                              {dist.isManager && (
+                                <span
+                                  className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-amber-300"
+                                  title="General Partner · المدير العام"
+                                >
+                                  GP
+                                </span>
+                              )}
                             </span>
                             <span className="text-[10px] text-zinc-500 font-mono tracking-wider">
                               {partner.code}
@@ -339,85 +365,74 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Balance */}
+                      {/* Investment */}
                       <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-headline font-semibold text-white font-mono tabular-nums">
-                            {formatCurrency(
-                              partner.currentBalance || partner.totalBalance
-                            )}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold tabular-nums ${
-                              perfPositive ? "text-emerald-400" : "text-rose-400"
-                            }`}
-                          >
-                            {formatPercent(partner.performance24h)}
-                          </span>
-                        </div>
+                        <span className="text-sm font-headline font-semibold text-white font-mono tabular-nums">
+                          {formatCurrency(dist.investment)}
+                        </span>
                       </td>
 
                       {/* Ownership Percentage */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
                           <span className="text-sm font-mono font-semibold text-white tabular-nums">
-                            {partner.ownershipPercentage.toFixed(1)}%
+                            {dist.ownershipPct.toFixed(1)}%
                           </span>
                           <div
                             className="relative h-[3px] w-32 overflow-hidden rounded-full bg-zinc-900 ring-1 ring-inset ring-zinc-800/80"
-                            title={`${partner.ownershipPercentage.toFixed(2)}%`}
+                            title={`${dist.ownershipPct.toFixed(2)}%`}
                           >
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.55)] transition-all duration-700 ease-out"
                               style={{
-                                width: `${Math.max(0, Math.min(100, partner.ownershipPercentage))}%`,
+                                width: `${Math.max(0, Math.min(100, dist.ownershipPct))}%`,
                               }}
                             />
                           </div>
                         </div>
                       </td>
 
-                      {/* 1 · Gross Profit — organic share before fees */}
+                      {/* Gross Profit — share before fees */}
                       <td className="px-6 py-4">
                         <span
                           className={`text-sm font-mono tabular-nums font-bold ${
-                            profit.grossProfit >= 0
+                            dist.grossProfit >= 0
                               ? "text-white"
                               : "text-rose-400"
                           }`}
                         >
-                          {profit.grossProfit >= 0 ? "+" : ""}
-                          {formatCurrency(profit.grossProfit)}
+                          {dist.grossProfit >= 0 ? "+" : ""}
+                          {formatCurrency(dist.grossProfit)}
                         </span>
                       </td>
 
-                      {/* 2 · Management Fee — red (LP paid) or green (GP collected) */}
+                      {/* Fees Deducted — red (LP paid) or amber (GP collected) */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span
                             className={`text-sm font-mono tabular-nums font-bold ${
-                              profit.isManager
-                                ? "text-emerald-400"
+                              dist.isManager
+                                ? "text-amber-300"
                                 : "text-rose-400"
                             }`}
                             title={
-                              profit.isManager
+                              dist.isManager
                                 ? "الرسوم المحصّلة من جميع الشركاء المحدودين"
-                                : `رسوم الإدارة بنسبة ${partner.managementFeeRate.toFixed(2)}%`
+                                : `رسوم الأداء بنسبة ${dist.feeRatePct.toFixed(2)}%`
                             }
                           >
-                            {profit.isManager ? "+" : "-"}
-                            {formatCurrency(Math.abs(profit.feeAmount))}
+                            {dist.isManager ? "+" : "-"}
+                            {formatCurrency(Math.abs(dist.feeAmount))}
                           </span>
                           <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
-                            {profit.isManager
+                            {dist.isManager
                               ? "محصّلة (GP)"
-                              : `مدفوعة · ${partner.managementFeeRate.toFixed(0)}%`}
+                              : `مدفوعة · ${dist.feeRatePct.toFixed(0)}%`}
                           </span>
                         </div>
                       </td>
 
-                      {/* 3 · Remaining Profit — gross ∓ fee flow */}
+                      {/* Net Profit — what the partner actually earns */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span
@@ -428,7 +443,7 @@ export default function PartnersPage() {
                             }`}
                           >
                             {profitPositive ? "+" : ""}
-                            {formatCurrency(profit.netProfit)}
+                            {formatCurrency(dist.netProfit)}
                           </span>
                           <span
                             className={`text-[10px] font-bold tabular-nums ${
@@ -437,22 +452,22 @@ export default function PartnersPage() {
                                 : "text-rose-400/70"
                             }`}
                           >
-                            {formatPercent(profit.returnPct)}
+                            {formatPercent(dist.returnPct)}
                           </span>
                         </div>
-                      </td>
-
-                      {/* Sparkline */}
-                      <td className="px-6 py-4">
-                        <Sparkline
-                          data={partner.balanceHistory}
-                          fallbackTrend={perfPositive ? "up" : "down"}
-                        />
                       </td>
 
                       {/* Actions */}
                       <td className="px-6 py-4 text-left">
                         <div className="flex items-center gap-1.5 justify-end">
+                          <button
+                            onClick={() => setLedgerTarget(partner)}
+                            className="flex items-center gap-1 rounded-md border border-cyan-400/25 bg-cyan-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300 transition-all duration-200 hover:scale-[1.03] hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-200"
+                            title="عرض كشف الحساب"
+                          >
+                            <BookOpen size={11} />
+                            View Ledger
+                          </button>
                           <button
                             onClick={() => setEditTarget(partner)}
                             className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-400"
@@ -475,7 +490,7 @@ export default function PartnersPage() {
                             href={`/partners/${partner.id}`}
                             className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
                           >
-                            عرض التفاصيل
+                            التفاصيل
                           </Link>
                           <button
                             onClick={() => setDeleteTarget(partner)}

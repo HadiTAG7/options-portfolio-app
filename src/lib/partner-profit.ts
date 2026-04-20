@@ -214,6 +214,125 @@ export function computeCurrentCycleProfits(
   return result;
 }
 
+// Per-partner slice of a single fund-wide profit pool.
+//   Investment        = money the partner put in (totalDeposits, falling
+//                       back to currentBalance when deposits aren't tracked)
+//   grossProfit       = ownershipPct × totalProfit  — the partner's share
+//                       of the fund's combined realized + unrealized PnL
+//                       before the GP/LP fee transfer
+//   feeAmount         = |fee|. LPs see this as "deducted", the GP sees it
+//                       as "collected". The sign is encoded by isManager.
+//   netProfit         = LP: gross − fee, GP: gross + Σ(LP fees)
+//   isManager         = true iff this partner is the General Partner
+//                       (detected by isAdmin or legacy name "المدير")
+//   returnPct         = netProfit / investment × 100
+export interface PartnerDistribution {
+  partnerId: string;
+  investment: number;
+  ownershipPct: number;
+  grossProfit: number;
+  feeRatePct: number;
+  feeAmount: number;
+  netProfit: number;
+  isManager: boolean;
+  returnPct: number;
+  // For the GP only: which LP each collected fee came from. Empty for LPs.
+  collectedFromLps: { partnerId: string; amount: number }[];
+}
+
+// Distribute a single fund-wide profit number (`totalProfit`) across the
+// partners in proportion to their currentBalance share, then apply the
+// GP/LP 20% performance-fee transfer.
+//
+// - LP share    = ownership × totalProfit
+// - LP fee      = max(0, LP share) × feeRate   ← losses don't refund fees
+// - LP net      = LP share − LP fee
+// - GP net      = GP share + Σ(LP fees)
+//
+// This is intentionally simpler than computePartnerProfits (which runs
+// per-trade entry-date eligibility). Here we take a single profit total
+// — matching what the user sees in the trades-page summary cards — and
+// split it by today's ownership, so the Partners table reacts live to
+// every price refresh and new trade.
+export function computePortfolioDistribution(
+  partners: Partner[],
+  totalProfit: number
+): Record<string, PartnerDistribution> {
+  const managerId = partners.find(isManagerPartner)?.id ?? null;
+
+  const totalCapital = partners.reduce(
+    (sum, p) => sum + (Number(p.currentBalance) || 0),
+    0
+  );
+
+  // First pass: gross share + LP fee per partner.
+  const grossById: Record<string, number> = {};
+  const ownershipById: Record<string, number> = {};
+  const lpFeeById: Record<string, number> = {};
+  let totalLpFees = 0;
+
+  for (const p of partners) {
+    const ownership =
+      totalCapital > 0
+        ? (Number(p.currentBalance) || 0) / totalCapital
+        : 0;
+    const gross = ownership * totalProfit;
+    grossById[p.id] = gross;
+    ownershipById[p.id] = ownership;
+  }
+
+  for (const p of partners) {
+    if (p.id === managerId) continue;
+    const feeRate = (Number(p.managementFeeRate) || 0) / 100;
+    // Performance fee only on positive profit — losses don't generate a
+    // fee refund to the LP (the GP isn't on the hook for losses).
+    const gross = grossById[p.id];
+    const fee = gross > 0 ? gross * feeRate : 0;
+    lpFeeById[p.id] = fee;
+    totalLpFees += fee;
+  }
+
+  const result: Record<string, PartnerDistribution> = {};
+  for (const p of partners) {
+    const isManager = p.id === managerId;
+    const gross = grossById[p.id];
+    const investment =
+      Number(p.totalDeposits) || Number(p.currentBalance) || 0;
+    const feeRatePct = Number(p.managementFeeRate) || 0;
+
+    let feeAmount: number;
+    let netProfit: number;
+    let collectedFromLps: PartnerDistribution["collectedFromLps"] = [];
+    if (isManager) {
+      feeAmount = totalLpFees;
+      netProfit = gross + totalLpFees;
+      collectedFromLps = partners
+        .filter((lp) => lp.id !== managerId && (lpFeeById[lp.id] ?? 0) > 0)
+        .map((lp) => ({ partnerId: lp.id, amount: lpFeeById[lp.id] ?? 0 }));
+    } else {
+      feeAmount = lpFeeById[p.id] ?? 0;
+      netProfit = gross - feeAmount;
+    }
+
+    const returnPct = investment > 0 ? (netProfit / investment) * 100 : 0;
+
+    result[p.id] = {
+      partnerId: p.id,
+      investment,
+      ownershipPct: ownershipById[p.id] * 100,
+      grossProfit: gross,
+      feeRatePct,
+      feeAmount,
+      netProfit,
+      isManager,
+      returnPct,
+      collectedFromLps,
+    };
+  }
+
+  return result;
+}
+
 export interface FundBreakdown {
   originalCapital: number;
   generatedProfit: number;
