@@ -101,6 +101,8 @@ export interface Database {
           purchasePrice: number;
           targetSellPrice: number;
           purchaseDate: string;
+          currentPrice: number | null;
+          currentPriceUpdatedAt: string | null;
         };
         Insert: {
           id?: string;
@@ -109,6 +111,8 @@ export interface Database {
           purchasePrice: number;
           targetSellPrice?: number;
           purchaseDate?: string;
+          currentPrice?: number | null;
+          currentPriceUpdatedAt?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["active_stocks"]["Insert"]>;
         Relationships: [];

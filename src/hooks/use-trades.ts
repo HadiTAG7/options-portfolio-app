@@ -48,6 +48,10 @@ function isExpiredOption(trade: Trade, now: Date = new Date()): boolean {
 function rowToActiveStock(row: ActiveStockRow): ActiveStock {
   const qty = safeNumber(row.quantity);
   const price = safeNumber(row.purchasePrice);
+  const cached =
+    typeof row.currentPrice === "number" && Number.isFinite(row.currentPrice)
+      ? row.currentPrice
+      : null;
   return {
     id: row.id,
     ticker: row.ticker,
@@ -56,6 +60,9 @@ function rowToActiveStock(row: ActiveStockRow): ActiveStock {
     targetSellPrice: safeNumber(row.targetSellPrice),
     purchaseDate: row.purchaseDate ?? "",
     costBasis: qty * price,
+    // Hydrate with the last price persisted in the DB so the P&L column
+    // is populated instantly on page load; the live refresh overwrites it.
+    currentPrice: cached,
   };
 }
 
@@ -80,10 +87,40 @@ export function useTrades() {
     setActiveStocksList((prev) =>
       prev.map((s) => ({
         ...s,
-        currentPrice: prices[s.ticker.toUpperCase()] ?? null,
+        currentPrice: prices[s.ticker.toUpperCase()] ?? s.currentPrice ?? null,
         priceLoading: false,
       }))
     );
+
+    // Persist the freshly fetched quotes back to Supabase so a refresh
+    // shows the last known price without waiting on Finnhub. Only write
+    // rows where we actually got a finite, positive price — don't clobber
+    // a good cached price with null when the API rate-limits or errors.
+    const nowIso = new Date().toISOString();
+    const writes = stocks
+      .map((s) => {
+        const px = prices[s.ticker.toUpperCase()];
+        if (typeof px !== "number" || !Number.isFinite(px) || px <= 0) return null;
+        return { id: s.id, price: px };
+      })
+      .filter((x): x is { id: string; price: number } => x !== null);
+
+    if (writes.length > 0) {
+      await Promise.all(
+        writes.map(async ({ id, price }) => {
+          const { error: upErr } = await supabase
+            .from("active_stocks")
+            .update({ currentPrice: price, currentPriceUpdatedAt: nowIso })
+            .eq("id", id);
+          if (upErr) {
+            console.warn(
+              `[enrichWithLivePrices] failed to persist price for ${id}:`,
+              upErr
+            );
+          }
+        })
+      );
+    }
   }, []);
 
   const fetchTradesData = useCallback(async () => {
@@ -543,6 +580,10 @@ export function useTrades() {
   const totalProfit = totalPremium + totalResult;
   const openCount = sellPuts.length + sellCalls.length;
 
+  const refreshPrices = useCallback(async () => {
+    await enrichWithLivePrices(activeStocksList);
+  }, [activeStocksList, enrichWithLivePrices]);
+
   return {
     trades: tradesList,
     sellCalls,
@@ -562,5 +603,6 @@ export function useTrades() {
     toast,
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,
+    refreshPrices,
   };
 }

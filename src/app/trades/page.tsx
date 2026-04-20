@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
@@ -52,11 +53,13 @@ export default function TradesPage() {
     deleteTrade,
     toast,
     dismissToast,
+    refreshPrices,
   } = useTrades();
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
+  const pricesRefreshing = activeStocks.some((s) => s.priceLoading);
 
   async function handleDeleteTrade() {
     if (!deletingTrade) return;
@@ -151,6 +154,19 @@ export default function TradesPage() {
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary">
               {activeStocks.length} holdings
             </span>
+            <button
+              type="button"
+              onClick={() => void refreshPrices()}
+              disabled={pricesRefreshing || activeStocks.length === 0}
+              title="Refresh Prices"
+              aria-label="Refresh Prices"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-on-surface-variant/70 transition hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RefreshCw
+                size={14}
+                className={pricesRefreshing ? "animate-spin" : ""}
+              />
+            </button>
           </div>
           <span className="text-xs text-on-surface-variant">
             Current Holdings
