@@ -34,7 +34,9 @@ export default function PartnerDetailPage() {
   const fractionalAssets = useMemo(() => {
     if (!partner) return [];
     const share = ownershipPct / 100;
-    return [...sellPuts, ...sellCalls].map((t) => {
+
+    // Real open options derived from live trades
+    const realAssets = [...sellPuts, ...sellCalls].map((t) => {
       const globalMarketValue = Number(t.premium) * Number(t.quantity);
       return {
         id: t.id,
@@ -45,6 +47,26 @@ export default function PartnerDetailPage() {
         partnerMarketValue: globalMarketValue * share,
       };
     });
+
+    // Mock fractional holdings — Shariah-compliant ETFs + covered call options.
+    // Illustrates how ownershipPct (e.g. 43.07%) maps onto fund-level positions.
+    // totalFundValue is expressed in USD for each line (ETF: shares × price;
+    // Covered call: contracts × premium-per-contract).
+    const mockAssets = [
+      { id: "mock-spus", symbol: "SPUS", type: "ETF", totalQuantity: 2500, totalFundValue: 2500 * 48.5 },
+      { id: "mock-hlal", symbol: "HLAL", type: "ETF", totalQuantity: 1800, totalFundValue: 1800 * 60.25 },
+      { id: "mock-aapl-cc", symbol: "AAPL 245C", type: "Covered Call", totalQuantity: 10, totalFundValue: 10 * 350 },
+      { id: "mock-msft-cc", symbol: "MSFT 450C", type: "Covered Call", totalQuantity: 5, totalFundValue: 5 * 420 },
+    ].map((a) => ({
+      id: a.id,
+      symbol: a.symbol,
+      type: a.type,
+      totalQuantity: a.totalQuantity,
+      partnerQuantity: a.totalQuantity * share,
+      partnerMarketValue: a.totalFundValue * share,
+    }));
+
+    return [...realAssets, ...mockAssets];
   }, [partner, ownershipPct, sellPuts, sellCalls]);
 
   const loading = partnersLoading || tradesLoading;
@@ -245,7 +267,15 @@ export default function PartnerDetailPage() {
                       {asset.symbol}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-[10px] px-2 py-0.5 rounded-sm border font-bold uppercase border-tertiary text-tertiary">
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-sm border font-bold uppercase ${
+                          asset.type === "ETF"
+                            ? "border-tertiary text-tertiary"
+                            : asset.type === "Covered Call" || asset.type === "Call"
+                              ? "border-primary/50 text-primary"
+                              : "border-secondary/50 text-secondary"
+                        }`}
+                      >
                         {asset.type}
                       </span>
                     </td>
