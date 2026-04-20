@@ -288,6 +288,105 @@ export function useTrades() {
     })();
   }, [loading, tradesList, healRan, usingSeedData]);
 
+  const addTrade = useCallback(
+    async (payload: {
+      type: "Stock" | "Sell Call" | "Sell Put";
+      ticker: string;
+      quantity: number;
+      price: number; // purchasePrice for Stock, premium for options
+      strike?: number;
+      expiration?: string;
+      date: string;
+    }) => {
+      setError(null);
+      const ticker = payload.ticker.trim().toUpperCase();
+
+      // ----- Stock -----
+      if (payload.type === "Stock") {
+        if (!usingSeedData) {
+          const { data, error: insertError } = await supabase
+            .from("active_stocks")
+            .insert({
+              ticker,
+              quantity: payload.quantity,
+              purchasePrice: payload.price,
+              purchaseDate: payload.date,
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error("[useTrades] addTrade stock insert failed:", insertError);
+            setError(insertError.message);
+            throw insertError;
+          }
+
+          const newStock = rowToActiveStock(data as ActiveStockRow);
+          setActiveStocksList((prev) => [...prev, newStock]);
+          void enrichWithLivePrices([newStock]);
+        } else {
+          // Seed mode — local-only row
+          const newStock: ActiveStock = {
+            id: crypto.randomUUID(),
+            ticker,
+            quantity: payload.quantity,
+            purchasePrice: payload.price,
+            targetSellPrice: 0,
+            purchaseDate: payload.date,
+            costBasis: payload.quantity * payload.price,
+          };
+          setActiveStocksList((prev) => [...prev, newStock]);
+          void enrichWithLivePrices([newStock]);
+        }
+        return;
+      }
+
+      // ----- Sell Call / Sell Put -----
+      const insertRow = {
+        ticker,
+        type: payload.type,
+        quantity: payload.quantity,
+        premium: payload.price,
+        strike: payload.strike ?? 0,
+        expiration: payload.expiration ?? "",
+        date: payload.date,
+        status: "open" as const,
+      };
+
+      if (!usingSeedData) {
+        const { data, error: insertError } = await supabase
+          .from("trades")
+          .insert(insertRow)
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("[useTrades] addTrade option insert failed:", insertError);
+          setError(insertError.message);
+          throw insertError;
+        }
+
+        setTradesList((prev) => [rowToTrade(data as TradeRow), ...prev]);
+      } else {
+        const newTrade: Trade = {
+          id: crypto.randomUUID(),
+          ticker,
+          type: payload.type,
+          quantity: payload.quantity,
+          premium: payload.price,
+          strike: payload.strike ?? 0,
+          result: 0,
+          expiration: payload.expiration ?? "",
+          date: payload.date,
+          status: "open",
+          autoClosed: false,
+        };
+        setTradesList((prev) => [newTrade, ...prev]);
+      }
+    },
+    [usingSeedData, enrichWithLivePrices]
+  );
+
   const updateTrade = useCallback(
     async (
       id: string,
@@ -414,6 +513,7 @@ export function useTrades() {
     totalProfit,
     openCount,
     updateTrade,
+    addTrade,
     toast,
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,

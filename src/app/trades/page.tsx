@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
 import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
 import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
+import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
 import { useTrades } from "@/hooks/use-trades";
@@ -45,11 +46,13 @@ export default function TradesPage() {
     totalProfit,
     openCount,
     updateTrade,
+    addTrade,
     toast,
     dismissToast,
   } = useTrades();
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   async function handleEditTrade(id: string, payload: TradeEditPayload) {
     await updateTrade(id, payload);
@@ -73,7 +76,10 @@ export default function TradesPage() {
             <button className="rounded-lg bg-surface-container px-4 py-2 text-sm text-on-surface-variant transition hover:bg-surface-container-high">
               تصدير CSV
             </button>
-            <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary transition hover:bg-primary/90">
+            <button
+              onClick={() => setAddDialogOpen(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary transition hover:bg-primary/90"
+            >
               <Icon name="add" className="text-base" />
               صفقة جديدة
             </button>
@@ -325,6 +331,13 @@ export default function TradesPage() {
           </p>
         </div>
       )}
+
+      {/* Add Trade Dialog */}
+      <AddTradeDialog
+        open={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
+        onSubmit={addTrade}
+      />
 
       {/* Edit Trade Dialog */}
       <EditTradeDialog
