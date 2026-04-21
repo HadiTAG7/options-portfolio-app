@@ -15,7 +15,7 @@ export interface PartnerProfit {
   returnPct: number; // netProfit / totalDeposits * 100
 }
 
-function isManagerPartner(p: Partner): boolean {
+export function isManagerPartner(p: Partner): boolean {
   return p.isAdmin === true || p.name?.trim() === "المدير";
 }
 

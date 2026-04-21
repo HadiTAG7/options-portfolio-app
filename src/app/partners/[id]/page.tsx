@@ -5,8 +5,32 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/utils";
+import { isManagerPartner } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
+
+// GP/LP performance fee. Must match the distribution engine.
+const PERFORMANCE_FEE = 0.2;
+
+// Partner's take-home share of a dollar amount X after the 20% GP fee.
+//  - LP: gets their ownership slice × 80%
+//  - GP: gets their own slice at 100% + 20% skimmed from every LP
+function partnerNetOf(total: number, partnerShare: number, isGP: boolean): number {
+  if (isGP) {
+    return total * (partnerShare + PERFORMANCE_FEE * (1 - partnerShare));
+  }
+  return total * partnerShare * (1 - PERFORMANCE_FEE);
+}
+
+// Format "$120 | 15 Nov" from a strike and an ISO-ish expiry string.
+function formatExpiry(expiry: string): string {
+  if (!expiry) return "—";
+  const d = new Date(expiry);
+  if (Number.isNaN(d.getTime())) return expiry;
+  const day = d.getDate();
+  const month = d.toLocaleString("en-US", { month: "short" });
+  return `${day} ${month}`;
+}
 
 export default function PartnerDetailPage() {
   const params = useParams<{ id: string }>();
@@ -28,42 +52,78 @@ export default function PartnerDetailPage() {
     return (partner.currentBalance / totalAssets) * 100;
   }, [partner, totalAssets]);
 
-  // Partner's fractional share of every open fund position.
-  // Includes active stock holdings + open option positions (Sell Put / Sell Call).
-  // `quantity` already stores total shares (100, 200, ...) for options.
-  const fractionalAssets = useMemo(() => {
+  const isGP = partner ? isManagerPartner(partner) : false;
+
+  // Open option positions with partner-specific net metrics.
+  // Uses intrinsic value (underlying spot − strike) as the unrealized-P&L
+  // proxy since we don't ingest live option prices.
+  const optionPositions = useMemo(() => {
     if (!partner) return [];
     const share = ownershipPct / 100;
 
-    // Active stock holdings — market value uses live price when available
-    const stockAssets = activeStocks.map((s) => {
+    // Index active stock prices by ticker for underlying lookup.
+    const spotByTicker: Record<string, number> = {};
+    for (const s of activeStocks) {
+      const px = s.currentPrice ?? s.purchasePrice;
+      if (Number.isFinite(px) && px > 0) {
+        spotByTicker[s.ticker.toUpperCase()] = px;
+      }
+    }
+
+    return [...sellPuts, ...sellCalls].map((t) => {
+      const premium = Number(t.premium) || 0;
+      const qty = Number(t.quantity) || 0; // total shares, not contracts
+      const totalPremium = premium * qty;
+      const isPut = t.type === "Sell Put";
+      const spot = spotByTicker[t.ticker.toUpperCase()] ?? null;
+
+      // Intrinsic value of the short option per share. If we don't have
+      // a spot for the underlying we can't compute intrinsic — treat as
+      // zero (unrealized P&L falls back to the full collected premium).
+      let intrinsicPerShare = 0;
+      if (spot !== null) {
+        intrinsicPerShare = isPut
+          ? Math.max(0, Number(t.strike) - spot)
+          : Math.max(0, spot - Number(t.strike));
+      }
+      const globalUnrealized = (premium - intrinsicPerShare) * qty;
+
+      const partnerNetPremium = partnerNetOf(totalPremium, share, isGP);
+      const partnerNetUnrealized = partnerNetOf(globalUnrealized, share, isGP);
+
+      return {
+        id: t.id,
+        ticker: t.ticker,
+        type: t.type,
+        strike: Number(t.strike) || 0,
+        expiration: t.expiration,
+        premium,
+        contracts: qty > 0 ? qty / 100 : 0,
+        totalPremium,
+        partnerNetPremium,
+        spot,
+        globalUnrealized,
+        partnerNetUnrealized,
+      };
+    });
+  }, [partner, ownershipPct, sellPuts, sellCalls, activeStocks, isGP]);
+
+  // Stock holdings — unchanged structure, shown in its own table.
+  const stockPositions = useMemo(() => {
+    if (!partner) return [];
+    const share = ownershipPct / 100;
+    return activeStocks.map((s) => {
       const price = s.currentPrice ?? s.purchasePrice;
       const globalMarketValue = price * s.quantity;
       return {
         id: s.id,
-        symbol: s.ticker,
-        type: "Stock" as const,
+        ticker: s.ticker,
         totalQuantity: s.quantity,
         partnerQuantity: s.quantity * share,
         partnerMarketValue: globalMarketValue * share,
       };
     });
-
-    // Open option positions — market value = premium × quantity
-    const optionAssets = [...sellPuts, ...sellCalls].map((t) => {
-      const globalMarketValue = Number(t.premium) * Number(t.quantity);
-      return {
-        id: t.id,
-        symbol: t.ticker,
-        type: t.type,
-        totalQuantity: t.quantity,
-        partnerQuantity: t.quantity * share,
-        partnerMarketValue: globalMarketValue * share,
-      };
-    });
-
-    return [...stockAssets, ...optionAssets];
-  }, [partner, ownershipPct, sellPuts, sellCalls, activeStocks]);
+  }, [partner, ownershipPct, activeStocks]);
 
   const loading = partnersLoading || tradesLoading;
 
@@ -211,21 +271,159 @@ export default function PartnerDetailPage() {
           </div>
         </div>
 
-        {/* Fractional Assets Table */}
+        {/* Active Options Table — option-specific per-partner metrics */}
         <div className="col-span-12 bg-surface-container rounded-sm border border-white/5 overflow-hidden">
           <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-surface-container-high">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-                توزيع الأصول النشطة ({ownershipPct.toFixed(2)}%)
+                عقود الخيارات النشطة ({ownershipPct.toFixed(2)}%)
               </h2>
               <span className="rounded-full bg-tertiary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-tertiary">
-                {fractionalAssets.length} positions
+                {optionPositions.length} positions
               </span>
+              {isGP && (
+                <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-300">
+                  GP · صافي بعد 20٪ رسوم الأداء من جميع الشركاء
+                </span>
+              )}
+              {!isGP && (
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
+                  LP · صافي بعد رسوم الأداء 20٪
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-4 text-[10px] text-on-surface-variant">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-tertiary inline-block" />
-                عقود خيارات نشطة
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-right">
+              <thead>
+                <tr className="text-[10px] text-on-surface-variant uppercase tracking-widest bg-surface-container-low">
+                  <th className="px-4 py-3 font-medium">الرمز</th>
+                  <th className="px-4 py-3 font-medium">النوع</th>
+                  <th className="px-4 py-3 font-medium">
+                    Strike · الانتهاء
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    عقود · Contracts
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    البريميوم · Entry
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    إجمالي البريميوم
+                  </th>
+                  <th className="px-4 py-3 font-medium text-emerald-400/80">
+                    صافي بريميوم الشريك
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    ربح/خسارة غير محققة
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {optionPositions.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center">
+                      <Icon
+                        name="layers_clear"
+                        className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+                      />
+                      <p className="text-sm text-on-surface-variant">
+                        لا توجد عقود خيارات نشطة
+                      </p>
+                    </td>
+                  </tr>
+                )}
+                {optionPositions.map((opt) => {
+                  const pnlPositive = opt.partnerNetUnrealized >= 0;
+                  const isPut = opt.type === "Sell Put";
+                  return (
+                    <tr
+                      key={opt.id}
+                      className="hover:bg-white/[0.02] transition-colors"
+                    >
+                      <td className="px-4 py-3 text-sm font-bold text-white font-mono">
+                        {opt.ticker}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-sm border font-bold uppercase ${
+                            isPut
+                              ? "border-secondary/50 text-secondary"
+                              : "border-primary/50 text-primary"
+                          }`}
+                        >
+                          {opt.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-white tabular-nums">
+                            ${opt.strike.toLocaleString()}
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant/70 tabular-nums">
+                            {formatExpiry(opt.expiration)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-on-surface-variant font-mono tabular-nums">
+                        {opt.contracts.toFixed(opt.contracts % 1 === 0 ? 0 : 2)}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-white tabular-nums">
+                            ${opt.premium.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant/60 tabular-nums">
+                            per share
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-on-surface-variant font-mono tabular-nums">
+                        {formatCurrency(opt.totalPremium)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-headline font-bold text-emerald-400 font-mono tabular-nums drop-shadow-[0_0_6px_rgba(52,211,153,0.35)]">
+                          {formatCurrency(opt.partnerNetPremium)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <div className="flex flex-col gap-0.5">
+                          <span
+                            className={`text-xs font-bold tabular-nums ${
+                              pnlPositive ? "text-emerald-400" : "text-rose-400"
+                            }`}
+                          >
+                            {pnlPositive ? "+" : ""}
+                            {formatCurrency(opt.partnerNetUnrealized)}
+                          </span>
+                          {opt.spot !== null ? (
+                            <span className="text-[10px] text-on-surface-variant/60 tabular-nums">
+                              spot ${opt.spot.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-on-surface-variant/40">
+                              لا يوجد سعر مرجعي
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Stock Holdings Table — partner share of open stock positions */}
+        <div className="col-span-12 bg-surface-container rounded-sm border border-white/5 overflow-hidden">
+          <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-surface-container-high">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
+                الأسهم المحتفظ بها
+              </h2>
+              <span className="rounded-full bg-tertiary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-tertiary">
+                {stockPositions.length} positions
               </span>
             </div>
           </div>
@@ -233,56 +431,42 @@ export default function PartnerDetailPage() {
             <table className="w-full text-right">
               <thead>
                 <tr className="text-[10px] text-on-surface-variant uppercase tracking-widest bg-surface-container-low">
-                  <th className="px-6 py-4 font-medium">الرمز</th>
-                  <th className="px-6 py-4 font-medium">النوع</th>
-                  <th className="px-6 py-4 font-medium">إجمالي الكمية</th>
-                  <th className="px-6 py-4 font-medium">حصة الشريك</th>
-                  <th className="px-6 py-4 font-medium">القيمة السوقية</th>
+                  <th className="px-4 py-3 font-medium">الرمز</th>
+                  <th className="px-4 py-3 font-medium">إجمالي الكمية</th>
+                  <th className="px-4 py-3 font-medium">حصة الشريك</th>
+                  <th className="px-4 py-3 font-medium">القيمة السوقية</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {fractionalAssets.length === 0 && (
+                {stockPositions.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center">
+                    <td colSpan={4} className="px-6 py-12 text-center">
                       <Icon
                         name="layers_clear"
                         className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
                       />
                       <p className="text-sm text-on-surface-variant">
-                        لا توجد مراكز نشطة في المحفظة
+                        لا توجد أسهم نشطة
                       </p>
                     </td>
                   </tr>
                 )}
-                {fractionalAssets.map((asset) => (
+                {stockPositions.map((stk) => (
                   <tr
-                    key={asset.id}
+                    key={stk.id}
                     className="hover:bg-white/[0.02] transition-colors"
                   >
-                    <td className="px-6 py-4 text-sm font-bold text-white font-mono">
-                      {asset.symbol}
+                    <td className="px-4 py-3 text-sm font-bold text-white font-mono">
+                      {stk.ticker}
                     </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-sm border font-bold uppercase ${
-                          asset.type === "ETF"
-                            ? "border-tertiary text-tertiary"
-                            : asset.type === "Covered Call" || asset.type === "Call"
-                              ? "border-primary/50 text-primary"
-                              : "border-secondary/50 text-secondary"
-                        }`}
-                      >
-                        {asset.type}
-                      </span>
+                    <td className="px-4 py-3 text-xs text-on-surface-variant font-mono tabular-nums">
+                      {stk.totalQuantity.toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 text-sm text-on-surface-variant font-mono">
-                      {asset.totalQuantity.toLocaleString()}
+                    <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
+                      {stk.partnerQuantity.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-white font-medium font-mono">
-                      {asset.partnerQuantity.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-headline text-white font-mono">
-                      {formatCurrency(asset.partnerMarketValue)}
+                    <td className="px-4 py-3 text-sm text-white font-mono tabular-nums">
+                      {formatCurrency(stk.partnerMarketValue)}
                     </td>
                   </tr>
                 ))}
