@@ -78,14 +78,16 @@ export default function PartnersPage() {
   }
 
   async function onCapitalize(partner: Partner) {
-    await capitalizeProfits(partner, refetch);
+    const netProfit = distributionByPartner[partner.id]?.netProfit ?? 0;
+    await capitalizeProfits(partner, netProfit, refetch);
   }
 
   async function handleCapitalizeConfirm() {
     if (!capitalizeTarget) return;
+    const netProfit = distributionByPartner[capitalizeTarget.id]?.netProfit ?? 0;
     setCapitalizing(true);
     try {
-      await capitalizeProfits(capitalizeTarget, refetch);
+      await capitalizeProfits(capitalizeTarget, netProfit, refetch);
       setCapitalizeTarget(null);
     } catch {
       // error surfaced via notification

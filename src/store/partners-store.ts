@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
-import { safeNumber } from "@/lib/utils";
+import { safeNumber, formatCurrency } from "@/lib/utils";
 import type { Partner } from "@/types";
 import type { PartnerRow, BalanceHistoryEntry } from "@/types/database";
 
@@ -69,6 +69,7 @@ interface PartnersState {
   ) => Promise<void>;
   capitalizeProfits: (
     partner: Partner,
+    netProfitAmount: number,
     onDone?: () => Promise<void>
   ) => Promise<void>;
   clearNotification: () => void;
@@ -262,31 +263,43 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     await get().fetchPartners();
   },
 
-  // Capitalize a partner's profits: reset their cost basis so that
-  // currentBalance == totalDeposits == baseCapital, which makes their
-  // "apparent profit" (currentBalance − baseCapital) exactly $0 going
-  // forward. No cash leaves the fund.
+  // Capitalize ("fix") a partner's profits: add the trade-based net
+  // profit to their balance and cost basis, then stamp a settlement
+  // date so the distribution engine stops crediting old trades.
   capitalizeProfits: async (
     partner: Partner,
+    netProfitAmount: number,
     onDone?: () => Promise<void>
   ) => {
     set({ error: null, notification: null });
 
-    const currentBalance = safeNumber(partner.currentBalance);
-    if (currentBalance <= 0) {
-      const msg = "لا يوجد رصيد لتثبيته";
+    if (netProfitAmount <= 0) {
+      const msg = "لا توجد أرباح للتثبيت";
       set({ notification: { type: "error", message: msg } });
       throw new Error(msg);
     }
 
-    const { error: updateError } = await supabase
+    const oldBalance = safeNumber(partner.currentBalance);
+    const oldTotalBalance = safeNumber(partner.totalBalance);
+    const newBalance = oldBalance + netProfitAmount;
+    const settlementDate = new Date().toISOString();
+
+    console.log("[capitalizeProfits] Partner:", partner.name, partner.id);
+    console.log("[capitalizeProfits] Net profit to capitalize:", netProfitAmount);
+    console.log("[capitalizeProfits] Balance:", oldBalance, "→", newBalance);
+
+    const { data, error: updateError } = await supabase
       .from("partners")
       .update({
-        totalDeposits: currentBalance,
-        baseCapital: currentBalance,
-        last_settlement_date: new Date().toISOString(),
+        currentBalance: newBalance,
+        total_balance: oldTotalBalance + netProfitAmount,
+        totalDeposits: newBalance,
+        baseCapital: newBalance,
+        last_settlement_date: settlementDate,
       })
-      .eq("id", partner.id);
+      .eq("id", partner.id)
+      .select()
+      .single();
 
     if (updateError) {
       console.error("[capitalizeProfits] update failed:", updateError);
@@ -295,20 +308,34 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         userMsg =
           "ليس لديك صلاحية لتثبيت الأرباح. تحقق من سياسات RLS في Supabase.";
       } else if (
-        updateError.message.includes("column") &&
+        updateError.message.includes("column") ||
         updateError.message.includes("schema cache")
       ) {
         userMsg =
-          "أحد الأعمدة مفقود في قاعدة البيانات. يرجى تشغيل ملفات الهجرة.";
+          "أحد الأعمدة مفقود في قاعدة البيانات. يرجى تشغيل ملفات الهجرة وإعادة تحميل مخطط PostgREST.";
       }
       set({ notification: { type: "error", message: userMsg } });
       throw updateError;
     }
 
+    if (!data) {
+      console.error("[capitalizeProfits] Update returned no data — RLS may be blocking the write");
+      const msg =
+        "لم يتم تحديث أي سجل. تحقق من صلاحيات RLS في Supabase أو أن الشريك موجود.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    console.log("[capitalizeProfits] Success. Updated row:", {
+      currentBalance: data.currentBalance,
+      totalDeposits: data.totalDeposits,
+      last_settlement_date: data.last_settlement_date,
+    });
+
     set({
       notification: {
         type: "success",
-        message: "تم تثبيت الأرباح وإضافتها لرأس المال بنجاح",
+        message: `تم تثبيت أرباح ${partner.name} (${formatCurrency(netProfitAmount)}) وإضافتها لرأس المال`,
       },
     });
 
