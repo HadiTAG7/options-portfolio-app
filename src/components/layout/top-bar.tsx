@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import {
   Bell,
   Calendar,
@@ -9,8 +10,10 @@ import {
   Search,
   Wallet,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
+import { useTrades } from "@/hooks/use-trades";
+import { usePartners } from "@/hooks/use-partners";
 
 const NAV_TABS: { href: string; label: string }[] = [
   { href: "/markets", label: "الأسواق" },
@@ -21,6 +24,33 @@ const NAV_TABS: { href: string; label: string }[] = [
 export function TopBar() {
   const { collapsed } = useSidebar();
   const pathname = usePathname();
+  const { activeStocks, sellPuts, totalProfit, loading: tradesLoading } = useTrades();
+  const { partners, loading: partnersLoading } = usePartners();
+
+  const loading = tradesLoading || partnersLoading;
+
+  const availableBalance = useMemo(() => {
+    // Total Fund Equity = partner deposits + accumulated profit
+    const totalDeposits = partners.reduce(
+      (sum, p) => sum + (Number(p.currentBalance) || 0),
+      0
+    );
+    const fundEquity = totalDeposits + totalProfit;
+
+    // Capital Deployed = cost basis of all active stock positions
+    const deployed = activeStocks.reduce(
+      (sum, s) => sum + s.purchasePrice * s.quantity,
+      0
+    );
+
+    // Cash-Secured Put collateral = strike × quantity for open puts
+    const putCollateral = sellPuts.reduce(
+      (sum, t) => sum + Number(t.strike) * Number(t.quantity),
+      0
+    );
+
+    return fundEquity - deployed - putCollateral;
+  }, [partners, totalProfit, activeStocks, sellPuts]);
 
   return (
     <header
@@ -62,9 +92,20 @@ export function TopBar() {
           <span className="text-[9px] font-semibold text-zinc-500 normal-case tracking-[0.12em]">
             الرصيد المتاح
           </span>
-          <span className="font-mono text-[13px] font-bold tabular-nums text-emerald-400 tracking-tight shadow-[0_0_8px_rgba(16,185,129,0.3)]">
-            $42,905.12
-          </span>
+          {loading ? (
+            <span className="inline-block h-4 w-20 animate-pulse rounded bg-zinc-800" />
+          ) : (
+            <span
+              className={cn(
+                "font-mono text-[13px] font-bold tabular-nums tracking-tight",
+                availableBalance >= 0
+                  ? "text-emerald-400"
+                  : "text-rose-400"
+              )}
+            >
+              {formatCurrency(availableBalance)}
+            </span>
+          )}
         </div>
 
         {/* Icon Actions */}
