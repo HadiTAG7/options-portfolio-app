@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@/components/ui/icon";
 
 const DAY_LABELS_AR = ["أحد", "إثن", "ثلا", "أرب", "خمي", "جمع", "سبت"];
@@ -64,7 +65,58 @@ export function DatePicker({
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(parsed?.y ?? today.getFullYear());
   const [viewMonth, setViewMonth] = useState(parsed?.m ?? today.getMonth());
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const recomputeCoords = useCallback(() => {
+    const trig = triggerRef.current;
+    if (!trig) return;
+    const rect = trig.getBoundingClientRect();
+    const popoverWidth = 288; // w-72
+    const viewportPadding = 8;
+
+    // Try placing below. If it would overflow vertically, place above.
+    const popoverHeight = 320; // approximate; real height clipped by our max
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placeAbove =
+      spaceBelow < popoverHeight + viewportPadding &&
+      rect.top > popoverHeight + viewportPadding;
+
+    const top = placeAbove
+      ? Math.max(viewportPadding, rect.top - popoverHeight - 6)
+      : rect.bottom + 6;
+
+    // Align the popover's right edge with the trigger's right edge (RTL-friendly),
+    // but keep it inside the viewport.
+    let left = rect.right - popoverWidth;
+    if (left < viewportPadding) left = viewportPadding;
+    if (left + popoverWidth > window.innerWidth - viewportPadding) {
+      left = window.innerWidth - viewportPadding - popoverWidth;
+    }
+
+    setCoords({ top, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    recomputeCoords();
+    function handleResize() {
+      recomputeCoords();
+    }
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleResize, true);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleResize, true);
+    };
+  }, [open, recomputeCoords]);
 
   // Sync the calendar view when value changes externally.
   useEffect(() => {
@@ -76,16 +128,14 @@ export function DatePicker({
 
   const close = useCallback(() => setOpen(false), []);
 
-  // Close on outside click.
+  // Close on outside click. The popover is portalled, so check both refs.
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        close();
-      }
+      const target = e.target as Node;
+      const inTrigger = containerRef.current?.contains(target);
+      const inPopover = popoverRef.current?.contains(target);
+      if (!inTrigger && !inPopover) close();
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -153,27 +203,37 @@ export function DatePicker({
     <div ref={containerRef} className="relative" id={id}>
       {/* Trigger input */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         className={`w-full flex items-center justify-between bg-surface-container-low border rounded-sm px-4 py-3 text-sm font-mono outline-none transition-all disabled:opacity-50 ${
           open
-            ? "border-emerald-500/50 ring-1 ring-emerald-500"
-            : "border-white/10 hover:border-white/20"
+            ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+            : "border-white/10 hover:border-emerald-500/40"
         } ${displayText ? "text-white" : "text-on-surface-variant/40"}`}
       >
         <span>{displayText || placeholder}</span>
         <Icon
           name="calendar_month"
           className={`!text-lg transition-colors ${
-            open ? "text-emerald-400" : "text-on-surface-variant/60"
+            open ? "text-emerald-400" : "text-emerald-500/80"
           }`}
         />
       </button>
 
-      {/* Calendar dropdown */}
-      {open && (
-        <div className="absolute z-50 mt-1.5 w-72 rounded-sm border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+      {/* Calendar dropdown — portalled to escape modal overflow */}
+      {open && mounted && coords &&
+        createPortal(
+        <div
+          ref={popoverRef}
+          style={{
+            position: "fixed",
+            top: coords.top,
+            left: coords.left,
+          }}
+          className="z-[200] w-72 rounded-md border border-emerald-500/20 bg-zinc-900 shadow-2xl shadow-black/70 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+        >
           {/* Month / Year header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/5 bg-zinc-950/80">
             <button
@@ -224,10 +284,10 @@ export function DatePicker({
                   onClick={() => selectDay(day)}
                   className={`relative h-8 w-full rounded-sm text-xs font-mono transition-all duration-100 ${
                     isSelected
-                      ? "bg-emerald-500 text-zinc-950 font-bold shadow-[0_0_12px_rgba(52,211,153,0.4)]"
+                      ? "bg-emerald-500 text-black font-bold shadow-[0_0_12px_rgba(52,211,153,0.4)]"
                       : isToday
                         ? "bg-emerald-500/10 text-emerald-400 font-bold ring-1 ring-inset ring-emerald-500/30"
-                        : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                        : "text-gray-200 hover:bg-zinc-800 hover:text-white"
                   }`}
                 >
                   {day}
@@ -258,7 +318,8 @@ export function DatePicker({
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
