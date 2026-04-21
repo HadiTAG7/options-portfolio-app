@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Bell,
   Calendar,
@@ -10,8 +12,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
 
+const NAV_TABS: { href: string; label: string }[] = [
+  { href: "/markets", label: "الأسواق" },
+  { href: "/trades", label: "المحفظة" },
+  { href: "/partners", label: "التحليلات" },
+];
+
 export function TopBar() {
   const { collapsed } = useSidebar();
+  const pathname = usePathname();
 
   return (
     <header
@@ -36,9 +45,14 @@ export function TopBar() {
 
         {/* Nav Tabs */}
         <nav className="hidden md:flex items-center gap-1">
-          <NavTab label="الأسواق" active={false} />
-          <NavTab label="المحفظة" active={true} />
-          <NavTab label="التحليلات" active={false} />
+          {NAV_TABS.map((tab) => (
+            <NavTab
+              key={tab.href}
+              href={tab.href}
+              label={tab.label}
+              active={pathname === tab.href || (tab.href !== "/" && pathname.startsWith(tab.href))}
+            />
+          ))}
         </nav>
       </div>
 
@@ -79,10 +93,10 @@ export function TopBar() {
   );
 }
 
-function NavTab({ label, active }: { label: string; active: boolean }) {
+function NavTab({ href, label, active }: { href: string; label: string; active: boolean }) {
   return (
-    <a
-      href="#"
+    <Link
+      href={href}
       className={cn(
         "relative px-3 py-2 text-[10px] font-bold tracking-[0.14em] transition-colors duration-200",
         active
@@ -94,7 +108,7 @@ function NavTab({ label, active }: { label: string; active: boolean }) {
       {active && (
         <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-4/5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
       )}
-    </a>
+    </Link>
   );
 }
 
