@@ -24,16 +24,16 @@ import {
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
-import {
-  monthlySummaries,
-  portfolioDistribution,
-} from "@/data/mock-data";
+import { monthlySummaries } from "@/data/mock-data";
 import type { Trade } from "@/types";
 
 export default function DashboardPage() {
   const { partners, totalAssets, loading: partnersLoading } = usePartners();
   const {
     trades,
+    activeStocks,
+    sellPuts,
+    sellCalls,
     totalProfit,
     openCount,
     potentialTargetProfit,
@@ -93,6 +93,61 @@ export default function DashboardPage() {
       return { key, label: monthLabel, value: cumulative, monthly: buckets[key] };
     });
   }, [trades]);
+
+  // ── Portfolio allocation by ticker ──
+  const allocationData = useMemo(() => {
+    const buckets: Record<string, number> = {};
+
+    // Active stocks: use live price if available, fall back to cost basis
+    for (const s of activeStocks) {
+      const price =
+        typeof s.currentPrice === "number" && Number.isFinite(s.currentPrice) && s.currentPrice > 0
+          ? s.currentPrice
+          : s.purchasePrice;
+      const val = price * s.quantity;
+      const key = s.ticker.toUpperCase();
+      buckets[key] = (buckets[key] ?? 0) + val;
+    }
+
+    // Open option contracts: collateral value (strike × qty)
+    for (const t of [...sellPuts, ...sellCalls]) {
+      const val = Number(t.strike) * Number(t.quantity);
+      if (val <= 0) continue;
+      const key = t.ticker.toUpperCase();
+      buckets[key] = (buckets[key] ?? 0) + val;
+    }
+
+    const entries = Object.entries(buckets)
+      .map(([ticker, value]) => ({ ticker, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const total = entries.reduce((s, e) => s + e.value, 0);
+    if (total === 0) return { slices: [] as AllocSlice[], total: 0 };
+
+    // Top 5 tickers + "Others" bucket
+    const MAX_SLICES = 5;
+    const top = entries.slice(0, MAX_SLICES);
+    const rest = entries.slice(MAX_SLICES);
+    const othersValue = rest.reduce((s, e) => s + e.value, 0);
+
+    const slices: AllocSlice[] = top.map((e, i) => ({
+      ticker: e.ticker,
+      value: e.value,
+      pct: (e.value / total) * 100,
+      color: ALLOC_COLORS[i % ALLOC_COLORS.length],
+    }));
+
+    if (othersValue > 0) {
+      slices.push({
+        ticker: "Others",
+        value: othersValue,
+        pct: (othersValue / total) * 100,
+        color: ALLOC_COLORS[MAX_SLICES % ALLOC_COLORS.length],
+      });
+    }
+
+    return { slices, total };
+  }, [activeStocks, sellPuts, sellCalls]);
 
   return (
     <AppShell>
@@ -280,61 +335,12 @@ export default function DashboardPage() {
         {/* Profit Growth Chart */}
         <CumulativePnLChart data={cumulativeData} loading={loading} />
 
-        {/* Portfolio Distribution */}
-        <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm flex flex-col justify-between">
-          <div>
-            <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
-              توزيع المحفظة
-            </h2>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-[0.22em] mt-2 font-semibold">
-              Portfolio Distribution
-            </p>
-          </div>
-          <div className="relative flex items-center justify-center py-10">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="h-56 w-56 rounded-full bg-emerald-500/5 blur-3xl" />
-            </div>
-            <div className="relative w-48 h-48 rounded-full border-[12px] border-emerald-500/25 flex items-center justify-center">
-              <div
-                className="absolute inset-[-12px] rounded-full border-[12px] border-cyan-500/50"
-                style={{ clipPath: "polygon(50% 50%, 0 0, 100% 0, 100% 30%)" }}
-              />
-              <div
-                className="absolute inset-[-12px] rounded-full border-[12px] border-rose-500/60"
-                style={{
-                  clipPath: "polygon(50% 50%, 100% 30%, 100% 60%)",
-                }}
-              />
-              <div className="text-center">
-                <span className="block text-3xl font-headline font-black text-white tracking-tight tabular-nums">
-                  {loading ? "..." : formatCompactCurrency(totalAssets)}
-                </span>
-                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">
-                  Total Equity
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            {portfolioDistribution.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between text-xs rounded-md px-2 py-1.5 hover:bg-white/[0.03] transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className={`w-2 h-2 bg-${item.color} rounded-full`} />
-                  <span className="text-zinc-400">
-                    {item.labelAr}{" "}
-                    <span className="text-zinc-600">({item.label})</span>
-                  </span>
-                </div>
-                <span className="font-bold text-white tabular-nums font-mono">
-                  {item.percentage}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Portfolio Composition */}
+        <PortfolioComposition
+          slices={allocationData.slices}
+          total={allocationData.total}
+          loading={loading}
+        />
       </div>
 
       {/* ═══════ Monthly Summary ═══════ */}
@@ -650,4 +656,190 @@ function niceStep(range: number, targetTicks: number): number {
   if (residual <= 3) return 2 * mag;
   if (residual <= 7) return 5 * mag;
   return 10 * mag;
+}
+
+// ── Dynamic Portfolio Composition Donut ──
+
+const ALLOC_COLORS = [
+  "#10b981", // emerald
+  "#22d3ee", // cyan
+  "#f59e0b", // amber
+  "#8b5cf6", // violet
+  "#ef4444", // rose
+  "#6b7280", // gray (Others)
+];
+
+interface AllocSlice {
+  ticker: string;
+  value: number;
+  pct: number;
+  color: string;
+}
+
+function PortfolioComposition({
+  slices,
+  total,
+  loading,
+}: {
+  slices: AllocSlice[];
+  total: number;
+  loading: boolean;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
+  const SIZE = 180;
+  const STROKE = 24;
+  const RADIUS = (SIZE - STROKE) / 2;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  const CX = SIZE / 2;
+  const CY = SIZE / 2;
+
+  // Build arc segments
+  const arcs = useMemo(() => {
+    let offset = 0;
+    return slices.map((s) => {
+      const len = (s.pct / 100) * CIRCUMFERENCE;
+      const gap = slices.length > 1 ? 3 : 0;
+      const arc = { ...s, dashoffset: -offset, dashlen: Math.max(0, len - gap) };
+      offset += len;
+      return arc;
+    });
+  }, [slices, CIRCUMFERENCE]);
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm flex flex-col">
+      <div className="mb-4">
+        <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
+          توزيع المحفظة
+        </h2>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-[0.22em] mt-2 font-semibold">
+          Portfolio Composition · By Ticker
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center py-12">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+        </div>
+      ) : slices.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-12">
+          <Activity size={28} className="text-zinc-800" />
+          <p className="text-xs text-zinc-600">No active positions yet</p>
+        </div>
+      ) : (
+        <>
+          {/* Donut Chart */}
+          <div className="relative flex items-center justify-center py-6">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-48 w-48 rounded-full bg-emerald-500/5 blur-3xl" />
+            </div>
+            <svg
+              width={SIZE}
+              height={SIZE}
+              viewBox={`0 0 ${SIZE} ${SIZE}`}
+              className="relative -rotate-90"
+            >
+              {/* Background ring */}
+              <circle
+                cx={CX}
+                cy={CY}
+                r={RADIUS}
+                fill="none"
+                stroke="#18181b"
+                strokeWidth={STROKE}
+              />
+              {/* Data arcs */}
+              {arcs.map((arc, i) => (
+                <circle
+                  key={arc.ticker}
+                  cx={CX}
+                  cy={CY}
+                  r={RADIUS}
+                  fill="none"
+                  stroke={arc.color}
+                  strokeWidth={hovered === i ? STROKE + 4 : STROKE}
+                  strokeDasharray={`${arc.dashlen} ${CIRCUMFERENCE - arc.dashlen}`}
+                  strokeDashoffset={arc.dashoffset}
+                  strokeLinecap="round"
+                  opacity={hovered !== null && hovered !== i ? 0.35 : 1}
+                  className="transition-all duration-200"
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
+                  style={{ cursor: "pointer" }}
+                />
+              ))}
+            </svg>
+            {/* Center label */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                {hovered !== null && slices[hovered] ? (
+                  <>
+                    <span
+                      className="block font-mono text-[13px] font-bold tracking-wider"
+                      style={{ color: slices[hovered].color }}
+                    >
+                      {slices[hovered].ticker}
+                    </span>
+                    <span className="block font-mono text-lg font-black text-white tabular-nums">
+                      {formatCompactCurrency(slices[hovered].value)}
+                    </span>
+                    <span
+                      className="block font-mono text-[10px] tabular-nums"
+                      style={{ color: slices[hovered].color }}
+                    >
+                      {slices[hovered].pct.toFixed(1)}%
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="block text-2xl font-headline font-black text-white tracking-tight tabular-nums">
+                      {formatCompactCurrency(total)}
+                    </span>
+                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-semibold">
+                      Deployed
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="space-y-1.5 mt-auto">
+            {slices.map((s, i) => (
+              <div
+                key={s.ticker}
+                className={`flex items-center justify-between text-xs rounded-md px-2.5 py-1.5 transition-all duration-150 cursor-default ${
+                  hovered === i ? "bg-white/[0.05]" : "hover:bg-white/[0.03]"
+                }`}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shadow-[0_0_6px]"
+                    style={{ backgroundColor: s.color, boxShadow: `0 0 6px ${s.color}60` }}
+                  />
+                  <span className="font-mono text-[11px] font-bold tracking-wider text-zinc-300">
+                    {s.ticker}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[10px] tabular-nums text-zinc-500">
+                    {formatCompactCurrency(s.value)}
+                  </span>
+                  <span
+                    className="font-mono text-[11px] font-bold tabular-nums"
+                    style={{ color: s.color }}
+                  >
+                    {s.pct.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
