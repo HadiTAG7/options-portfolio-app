@@ -89,6 +89,15 @@ export function computePartnerProfits(
   const grossById: Record<string, number> = {};
   for (const p of partners) grossById[p.id] = 0;
 
+  // Global fixed ownership — never changes per-trade.
+  // A partner's share of any trade is always (their capital / total fund capital).
+  // If they're ineligible (already settled), their slice simply vanishes —
+  // it does NOT get redistributed to the remaining partners.
+  const totalCapital = partners.reduce(
+    (sum, p) => sum + (Number(p.currentBalance) || 0),
+    0
+  );
+
   for (const t of trades) {
     const profit = tradeProfit(t);
     if (profit === 0) continue;
@@ -97,15 +106,11 @@ export function computePartnerProfits(
     if (!closeDate) continue;
     const profitDate = tradeProfitDate(t) ?? closeDate;
 
-    const eligible = partners.filter((p) => isEligible(p, closeDate, profitDate));
-    const totalEligibleCapital = eligible.reduce(
-      (sum, p) => sum + (Number(p.currentBalance) || 0),
-      0
-    );
-    if (totalEligibleCapital <= 0) continue;
+    if (totalCapital <= 0) continue;
 
-    for (const p of eligible) {
-      const share = (Number(p.currentBalance) || 0) / totalEligibleCapital;
+    for (const p of partners) {
+      if (!isEligible(p, closeDate, profitDate)) continue;
+      const share = (Number(p.currentBalance) || 0) / totalCapital;
       grossById[p.id] += profit * share;
     }
   }
@@ -119,11 +124,6 @@ export function computePartnerProfits(
     lpFeeById[p.id] = fee;
     totalLpFees += fee;
   }
-
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
-    0
-  );
 
   const result: Record<string, PartnerProfit> = {};
   for (const p of partners) {
@@ -364,6 +364,14 @@ export function computePartnerDistributionFromTrades(
   const grossById: Record<string, number> = {};
   for (const p of partners) grossById[p.id] = 0;
 
+  // Global fixed ownership — a partner's share of every trade is locked
+  // to (their capital / total fund capital). Settled partners are simply
+  // skipped; their slice evaporates instead of being redistributed.
+  const totalCapital = partners.reduce(
+    (sum, p) => sum + (Number(p.currentBalance) || 0),
+    0
+  );
+
   for (const t of trades) {
     const profit = tradeProfit(t);
     if (profit === 0) continue;
@@ -372,15 +380,11 @@ export function computePartnerDistributionFromTrades(
     if (!closeDate) continue;
     const profitDate = tradeProfitDate(t) ?? closeDate;
 
-    const eligible = partners.filter((p) => isEligible(p, closeDate, profitDate));
-    const totalEligibleCapital = eligible.reduce(
-      (sum, p) => sum + (Number(p.currentBalance) || 0),
-      0
-    );
-    if (totalEligibleCapital <= 0) continue;
+    if (totalCapital <= 0) continue;
 
-    for (const p of eligible) {
-      const share = (Number(p.currentBalance) || 0) / totalEligibleCapital;
+    for (const p of partners) {
+      if (!isEligible(p, closeDate, profitDate)) continue;
+      const share = (Number(p.currentBalance) || 0) / totalCapital;
       grossById[p.id] += profit * share;
     }
   }
@@ -395,11 +399,6 @@ export function computePartnerDistributionFromTrades(
     lpFeeById[p.id] = fee;
     totalLpFees += fee;
   }
-
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
-    0
-  );
 
   const result: Record<string, PartnerDistribution> = {};
   for (const p of partners) {
