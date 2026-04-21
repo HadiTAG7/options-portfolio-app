@@ -352,3 +352,25 @@ export function computeFundBreakdown(
     originalCapital > 0 ? (generatedProfit / originalCapital) * 100 : 0;
   return { originalCapital, generatedProfit, generatedProfitPct };
 }
+
+// Total GP fee collected from LPs only (the GP pays no fee on their own share).
+// Mirrors the fee loop inside computePortfolioDistribution but returns a single
+// number for use in summary cards and the monthly ledger.
+export function computeGpFeeTotal(
+  partners: Partner[],
+  totalProfit: number
+): number {
+  if (totalProfit <= 0) return 0;
+  const managerId = partners.find(isManagerPartner)?.id ?? null;
+  const totalCapital = partners.reduce(
+    (sum, p) => sum + (Number(p.currentBalance) || 0),
+    0
+  );
+  if (totalCapital <= 0) return 0;
+  return partners.reduce((sum, p) => {
+    if (p.id === managerId) return sum;
+    const ownership = (Number(p.currentBalance) || 0) / totalCapital;
+    const feeRate = (Number(p.managementFeeRate) || 0) / 100;
+    return sum + ownership * totalProfit * feeRate;
+  }, 0);
+}

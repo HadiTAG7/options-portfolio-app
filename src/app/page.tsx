@@ -20,6 +20,7 @@ import {
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
+  computeGpFeeTotal,
   computePortfolioDistribution,
   tradeProfit,
   MANAGEMENT_FEE_RATE,
@@ -44,7 +45,8 @@ export default function DashboardPage() {
 
   const loading = partnersLoading || tradesLoading;
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
-  const netProfitAfterFee = totalProfit * (1 - MANAGEMENT_FEE_RATE);
+  const gpFeeTotal = computeGpFeeTotal(partners, totalProfit);
+  const netProfitAfterFee = totalProfit - gpFeeTotal;
   const profitPositive = totalProfit >= 0;
   const yieldPct =
     fundBreakdown.originalCapital > 0
@@ -116,7 +118,7 @@ export default function DashboardPage() {
           year: "numeric",
         });
         const quarter = `Q${Math.ceil(Number(m) / 3)} ${y}`;
-        const gpFees = profit > 0 ? profit * MANAGEMENT_FEE_RATE : 0;
+        const gpFees = computeGpFeeTotal(partners, profit);
         return {
           key,
           labelAr,
