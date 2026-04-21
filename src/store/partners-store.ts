@@ -137,12 +137,16 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const updatedHistory = [...existingHistory, newHistoryEntry];
 
     // --- 1a. Update the numeric fields (guaranteed to exist) ---
+    // Also stamp last_settlement_date so the distribution engine treats
+    // all prior trade profits as "settled" — profit resets to $0 while
+    // the investment (totalDeposits / baseCapital) stays unchanged.
     const { error: updateError } = await supabase
       .from("partners")
       .update({
         "currentBalance": newCurrentBalance,
         total_balance: newTotalBalance,
         "totalWithdrawals": newTotalWithdrawals,
+        last_settlement_date: new Date().toISOString(),
       })
       .eq("id", partner.id);
 
