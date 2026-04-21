@@ -145,10 +145,10 @@ export function Sidebar() {
       >
         {/* Fund Manager / GP Card */}
         {collapsed ? (
-          <SidebarTooltip label="سالم العامري · Fund Manager">
+          <SidebarTooltip label="هادي الغانم · Fund Manager">
             <div className="group relative mb-2 flex items-center justify-center rounded-md border border-amber-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-amber-400/50 hover:shadow-[0_0_22px_-6px_rgba(251,191,36,0.45)]">
               <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/5 text-[10px] font-black text-amber-300 shadow-[0_0_12px_-4px_rgba(251,191,36,0.55)]">
-                SA
+                HA
                 <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-[#050505] bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]">
                   <Crown
                     size={7}
@@ -164,7 +164,7 @@ export function Sidebar() {
             <div className="pointer-events-none absolute -top-10 -right-10 h-24 w-24 rounded-full bg-amber-400/[0.06] blur-2xl" />
             <div className="relative flex items-center gap-3">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/5 text-xs font-black text-amber-300 shadow-[0_0_14px_-4px_rgba(251,191,36,0.55)]">
-                SA
+                HA
                 <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#050505] bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]">
                   <Crown
                     size={8}
@@ -175,7 +175,7 @@ export function Sidebar() {
               </div>
               <div className="flex-1 overflow-hidden">
                 <p className="truncate text-[13px] font-bold text-white">
-                  سالم العامري
+                  هادي الغانم
                 </p>
                 <p className="mt-0.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-amber-300/80">
                   <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.9)]" />
