@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo, useState } from "react";
 import {
   Wallet,
   TrendingUp,
@@ -14,9 +15,11 @@ import { Icon } from "@/components/ui/icon";
 import {
   formatWholeNumber,
   formatCompactCurrency,
+  formatCurrency,
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
+  tradeProfit,
   MANAGEMENT_FEE_RATE,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
@@ -25,10 +28,12 @@ import {
   monthlySummaries,
   portfolioDistribution,
 } from "@/data/mock-data";
+import type { Trade } from "@/types";
 
 export default function DashboardPage() {
   const { partners, totalAssets, loading: partnersLoading } = usePartners();
   const {
+    trades,
     totalProfit,
     openCount,
     potentialTargetProfit,
@@ -49,6 +54,45 @@ export default function DashboardPage() {
     fundBreakdown.originalCapital > 0
       ? (potentialTargetProfit / fundBreakdown.originalCapital) * 100
       : 0;
+
+  // ── Cumulative P&L by month ──
+  const cumulativeData = useMemo(() => {
+    if (trades.length === 0) return [];
+
+    // Bucket each trade's realized profit into its month key (YYYY-MM)
+    const buckets: Record<string, number> = {};
+    for (const t of trades) {
+      const isOption = t.type === "Sell Put" || t.type === "Sell Call";
+      const isStockSell = t.type === "Stock Sell";
+      if (!isOption && !isStockSell) continue;
+
+      const pnl = tradeProfit(t);
+      // Pick the date that represents when profit was locked in
+      const rawDate =
+        isOption && t.status === "closed" && t.expiration?.trim()
+          ? t.expiration
+          : t.date;
+      if (!rawDate) continue;
+
+      const d = new Date(rawDate);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      buckets[key] = (buckets[key] ?? 0) + pnl;
+    }
+
+    // Sort chronologically and build cumulative sum
+    const months = Object.keys(buckets).sort();
+    let cumulative = 0;
+    return months.map((key) => {
+      cumulative += buckets[key];
+      const [y, m] = key.split("-");
+      const monthLabel = new Date(Number(y), Number(m) - 1).toLocaleString(
+        "en-US",
+        { month: "short", year: "2-digit" }
+      );
+      return { key, label: monthLabel, value: cumulative, monthly: buckets[key] };
+    });
+  }, [trades]);
 
   return (
     <AppShell>
@@ -234,77 +278,7 @@ export default function DashboardPage() {
       {/* ═══════ Chart Section ═══════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
         {/* Profit Growth Chart */}
-        <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm min-h-[400px] flex flex-col">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
-                نمو الأرباح الشهري
-              </h2>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-[0.22em] mt-2 font-semibold">
-                Monthly Profit Growth Analytics
-              </p>
-            </div>
-            <div className="flex gap-2 items-center rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-              <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">
-                Realized
-              </span>
-            </div>
-          </div>
-          <div className="flex-1 flex items-end gap-1 px-2 relative">
-            <div className="absolute inset-0 opacity-20 pointer-events-none">
-              <div className="w-full h-full border-b border-l border-zinc-700/40" />
-            </div>
-            <svg
-              className="w-full h-full absolute inset-0 p-8"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-            >
-              <defs>
-                <linearGradient
-                  id="chartGradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="0%" stopColor="#34d399" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0 80 Q10 75 20 60 T40 65 T60 40 T80 20 T100 10 L100 100 L0 100 Z"
-                fill="url(#chartGradient)"
-              />
-              <path
-                d="M0 80 Q10 75 20 60 T40 65 T60 40 T80 20 T100 10"
-                fill="none"
-                stroke="#34d399"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <div className="w-full flex justify-between absolute bottom-4 px-8 text-[9px] text-zinc-600 uppercase tracking-widest font-semibold">
-              {[
-                "Jan",
-                "Feb",
-                "Mar",
-                "Apr",
-                "May",
-                "Jun",
-                "Jul",
-                "Aug",
-                "Sep",
-                "Oct",
-                "Nov",
-                "Dec",
-              ].map((m) => (
-                <span key={m}>{m}</span>
-              ))}
-            </div>
-          </div>
-        </div>
+        <CumulativePnLChart data={cumulativeData} loading={loading} />
 
         {/* Portfolio Distribution */}
         <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm flex flex-col justify-between">
@@ -442,4 +416,238 @@ export default function DashboardPage() {
       </section>
     </AppShell>
   );
+}
+
+// ── Dynamic Cumulative P&L Chart ──
+
+interface ChartPoint {
+  key: string;
+  label: string;
+  value: number;
+  monthly: number;
+}
+
+function CumulativePnLChart({
+  data,
+  loading,
+}: {
+  data: ChartPoint[];
+  loading: boolean;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
+  // Chart geometry
+  const PAD_L = 52;
+  const PAD_R = 16;
+  const PAD_T = 16;
+  const PAD_B = 28;
+  const W = 600;
+  const H = 300;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+
+  const { points, linePath, areaPath, yTicks } = useMemo(() => {
+    if (data.length === 0)
+      return { points: [], linePath: "", areaPath: "", yTicks: [] as number[] };
+
+    const values = data.map((d) => d.value);
+    const minV = Math.min(0, ...values);
+    const maxV = Math.max(0, ...values);
+    const range = maxV - minV || 1;
+
+    const pts = data.map((d, i) => {
+      const x = PAD_L + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
+      const y = PAD_T + plotH - ((d.value - minV) / range) * plotH;
+      return { x, y, ...d };
+    });
+
+    const lp = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+    const ap = `${lp} L${pts[pts.length - 1].x},${PAD_T + plotH} L${pts[0].x},${PAD_T + plotH} Z`;
+
+    // Y-axis ticks (4–5 nice values)
+    const step = niceStep(range, 4);
+    const ticks: number[] = [];
+    let tick = Math.floor(minV / step) * step;
+    while (tick <= maxV + step * 0.01) {
+      ticks.push(tick);
+      tick += step;
+    }
+
+    return { points: pts, linePath: lp, areaPath: ap, yTicks: ticks };
+  }, [data, plotW, plotH]);
+
+  return (
+    <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm min-h-[400px] flex flex-col">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
+            نمو الأرباح التراكمي
+          </h2>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-[0.22em] mt-2 font-semibold">
+            Cumulative Realized P&L · نمو تراكمي
+          </p>
+        </div>
+        <div className="flex gap-2 items-center rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+          <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">
+            Realized
+          </span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+        </div>
+      ) : data.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2">
+          <TrendingUp size={32} className="text-zinc-800" />
+          <p className="text-xs text-zinc-600">
+            No realized trades yet · لا توجد صفقات محققة
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 relative">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full h-full"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <defs>
+              <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.30" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+
+            {/* Grid lines */}
+            {yTicks.map((tick) => {
+              const values = data.map((d) => d.value);
+              const minV = Math.min(0, ...values);
+              const maxV = Math.max(0, ...values);
+              const range = maxV - minV || 1;
+              const y = PAD_T + plotH - ((tick - minV) / range) * plotH;
+              return (
+                <React.Fragment key={tick}>
+                  <line
+                    x1={PAD_L}
+                    y1={y}
+                    x2={W - PAD_R}
+                    y2={y}
+                    stroke="#27272a"
+                    strokeWidth={0.5}
+                    strokeDasharray="3,3"
+                  />
+                  <text
+                    x={PAD_L - 8}
+                    y={y + 3}
+                    textAnchor="end"
+                    className="fill-zinc-600 text-[8px] font-mono"
+                  >
+                    {tick >= 1000
+                      ? `$${(tick / 1000).toFixed(tick % 1000 === 0 ? 0 : 1)}K`
+                      : `$${tick}`}
+                  </text>
+                </React.Fragment>
+              );
+            })}
+
+            {/* Area fill */}
+            <path d={areaPath} fill="url(#cumGrad)" />
+
+            {/* Line stroke */}
+            <path
+              d={linePath}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* Data points + hover zones */}
+            {points.map((p, i) => (
+              <React.Fragment key={p.key}>
+                {/* Invisible hit zone for hover */}
+                <rect
+                  x={p.x - plotW / data.length / 2}
+                  y={PAD_T}
+                  width={plotW / data.length}
+                  height={plotH}
+                  fill="transparent"
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
+                />
+                {/* Dot */}
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={hovered === i ? 5 : 3}
+                  fill={hovered === i ? "#10b981" : "#09090b"}
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  className="transition-all duration-150"
+                />
+                {/* Vertical guide line on hover */}
+                {hovered === i && (
+                  <line
+                    x1={p.x}
+                    y1={PAD_T}
+                    x2={p.x}
+                    y2={PAD_T + plotH}
+                    stroke="#10b981"
+                    strokeWidth={0.5}
+                    strokeDasharray="3,3"
+                    opacity={0.4}
+                  />
+                )}
+                {/* X-axis label */}
+                <text
+                  x={p.x}
+                  y={H - 6}
+                  textAnchor="middle"
+                  className="fill-zinc-600 text-[7px] font-mono uppercase"
+                >
+                  {p.label}
+                </text>
+              </React.Fragment>
+            ))}
+          </svg>
+
+          {/* Tooltip */}
+          {hovered !== null && points[hovered] && (
+            <div
+              className="pointer-events-none absolute z-10 rounded-md border border-[#1f1f1f] bg-[#0a0a0a] px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(16,185,129,0.3)]"
+              style={{
+                left: `${(points[hovered].x / W) * 100}%`,
+                top: `${(points[hovered].y / H) * 100 - 14}%`,
+                transform: "translate(-50%, -100%)",
+              }}
+            >
+              <p className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">
+                {points[hovered].label}
+              </p>
+              <p className="font-mono text-[13px] font-bold tabular-nums text-emerald-400">
+                {formatCurrency(points[hovered].value)}
+              </p>
+              <p className="font-mono text-[10px] tabular-nums text-zinc-500">
+                month: {points[hovered].monthly >= 0 ? "+" : ""}
+                {formatCurrency(points[hovered].monthly)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function niceStep(range: number, targetTicks: number): number {
+  const rough = range / targetTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const residual = rough / mag;
+  if (residual <= 1.5) return mag;
+  if (residual <= 3) return 2 * mag;
+  if (residual <= 7) return 5 * mag;
+  return 10 * mag;
 }
