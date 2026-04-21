@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Target,
+  ChevronDown,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -55,44 +56,91 @@ export default function DashboardPage() {
       ? (potentialTargetProfit / fundBreakdown.originalCapital) * 100
       : 0;
 
-  // ── Cumulative P&L by month ──
-  const cumulativeData = useMemo(() => {
-    if (trades.length === 0) return [];
+  // ── Selected month state (drives distribution + donut center) ──
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
-    // Bucket each trade's realized profit into its month key (YYYY-MM)
+  // ── Monthly profit buckets (shared by chart, ledger, distribution) ──
+  const monthlyProfitBuckets = useMemo(() => {
     const buckets: Record<string, number> = {};
     for (const t of trades) {
       const isOption = t.type === "Sell Put" || t.type === "Sell Call";
       const isStockSell = t.type === "Stock Sell";
       if (!isOption && !isStockSell) continue;
-
       const pnl = tradeProfit(t);
-      // Pick the date that represents when profit was locked in
       const rawDate =
         isOption && t.status === "closed" && t.expiration?.trim()
           ? t.expiration
           : t.date;
       if (!rawDate) continue;
-
       const d = new Date(rawDate);
       if (Number.isNaN(d.getTime())) continue;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       buckets[key] = (buckets[key] ?? 0) + pnl;
     }
+    return buckets;
+  }, [trades]);
 
-    // Sort chronologically and build cumulative sum
-    const months = Object.keys(buckets).sort();
+  // ── Cumulative P&L chart data ──
+  const cumulativeData = useMemo(() => {
+    const months = Object.keys(monthlyProfitBuckets).sort();
+    if (months.length === 0) return [];
     let cumulative = 0;
     return months.map((key) => {
-      cumulative += buckets[key];
+      cumulative += monthlyProfitBuckets[key];
       const [y, m] = key.split("-");
       const monthLabel = new Date(Number(y), Number(m) - 1).toLocaleString(
         "en-US",
         { month: "short", year: "2-digit" }
       );
-      return { key, label: monthLabel, value: cumulative, monthly: buckets[key] };
+      return { key, label: monthLabel, value: cumulative, monthly: monthlyProfitBuckets[key] };
     });
-  }, [trades]);
+  }, [monthlyProfitBuckets]);
+
+  // ── Monthly ledger for summary table (newest first) ──
+  const monthlyLedger = useMemo(() => {
+    const now = new Date();
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const capital = partners.reduce(
+      (s, p) => s + (Number(p.currentBalance) || 0),
+      0
+    );
+    return Object.keys(monthlyProfitBuckets)
+      .sort()
+      .reverse()
+      .map((key) => {
+        const profit = monthlyProfitBuckets[key];
+        const [y, m] = key.split("-");
+        const date = new Date(Number(y), Number(m) - 1);
+        const labelAr = date.toLocaleString("ar-SA", {
+          month: "long",
+          year: "numeric",
+        });
+        const quarter = `Q${Math.ceil(Number(m) / 3)} ${y}`;
+        const gpFees = profit > 0 ? profit * MANAGEMENT_FEE_RATE : 0;
+        return {
+          key,
+          labelAr,
+          quarter,
+          grossProfit: profit,
+          gpFees,
+          totalCapital: capital,
+          status: (key === currentKey ? "Active" : "Settled") as "Active" | "Settled",
+        };
+      });
+  }, [monthlyProfitBuckets, partners]);
+
+  // ── Profit for selected month (or all-time) ──
+  const selectedMonthProfit = useMemo(() => {
+    if (selectedMonth === "all") return totalProfit;
+    return monthlyProfitBuckets[selectedMonth] ?? 0;
+  }, [selectedMonth, totalProfit, monthlyProfitBuckets]);
+
+  // ── Equity at end of selected month (for donut center override) ──
+  const selectedMonthEquity = useMemo(() => {
+    if (selectedMonth === "all") return null;
+    const entry = cumulativeData.find((d) => d.key === selectedMonth);
+    return entry?.value ?? null;
+  }, [selectedMonth, cumulativeData]);
 
   // ── Portfolio allocation by ticker ──
   const allocationData = useMemo(() => {
@@ -340,36 +388,195 @@ export default function DashboardPage() {
           slices={allocationData.slices}
           total={allocationData.total}
           loading={loading}
+          equityOverride={selectedMonthEquity}
         />
       </div>
+
+      {/* ═══════ Monthly Ledger ═══════ */}
+      <MonthlySummaryTable
+        ledger={monthlyLedger}
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        loading={loading}
+      />
 
       {/* ═══════ Partner Profit Distribution ═══════ */}
       <ProfitDistribution
         partners={partners}
-        totalProfit={totalProfit}
+        totalProfit={selectedMonthProfit}
         loading={loading}
+        selectedMonth={selectedMonth}
+        onMonthChange={setSelectedMonth}
+        monthOptions={monthlyLedger.map((m) => ({ key: m.key, label: m.labelAr }))}
       />
     </AppShell>
   );
 }
 
+// ── Monthly Summary Table ──
+
+interface LedgerEntry {
+  key: string;
+  labelAr: string;
+  quarter: string;
+  grossProfit: number;
+  gpFees: number;
+  totalCapital: number;
+  status: "Active" | "Settled";
+}
+
+function MonthlySummaryTable({
+  ledger,
+  selectedMonth,
+  onSelectMonth,
+  loading,
+}: {
+  ledger: LedgerEntry[];
+  selectedMonth: string;
+  onSelectMonth: (key: string) => void;
+  loading: boolean;
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] backdrop-blur-sm mb-8">
+      <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+            <Icon name="analytics" className="text-emerald-400 !text-base" />
+          </div>
+          <h2 className="text-sm font-headline font-bold text-white tracking-[0.18em] uppercase">
+            السجل الشهري · Monthly Ledger
+          </h2>
+        </div>
+        {selectedMonth !== "all" && (
+          <button
+            onClick={() => onSelectMonth("all")}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-all duration-200 hover:border-emerald-500/30 hover:text-emerald-400"
+          >
+            عرض الكل · Show All
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+        </div>
+      ) : ledger.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-16">
+          <TrendingUp size={28} className="text-zinc-800" />
+          <p className="text-xs text-zinc-600">No monthly data yet · لا توجد بيانات شهرية</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-right">
+            <thead className="sticky top-0 z-10">
+              <tr className="text-[10px] text-zinc-600 uppercase tracking-[0.2em] bg-zinc-950/80 backdrop-blur">
+                <th className="px-6 py-4 font-semibold">الشهر / السنة</th>
+                <th className="px-6 py-4 font-semibold">إجمالي رأس المال</th>
+                <th className="px-6 py-4 font-semibold">إجمالي الأرباح</th>
+                <th className="px-6 py-4 font-semibold">رسوم الإدارة (GP)</th>
+                <th className="px-6 py-4 font-semibold text-left">الحالة</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/40">
+              {ledger.map((entry) => {
+                const isSelected = selectedMonth === entry.key;
+                const profitPositive = entry.grossProfit >= 0;
+                return (
+                  <tr
+                    key={entry.key}
+                    onClick={() => onSelectMonth(isSelected ? "all" : entry.key)}
+                    className={`cursor-pointer transition-colors duration-150 ${
+                      isSelected
+                        ? "bg-emerald-500/[0.06] border-r-2 border-r-emerald-400"
+                        : "hover:bg-emerald-500/[0.02]"
+                    }`}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm text-white font-semibold">
+                          {entry.labelAr}
+                        </span>
+                        <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">
+                          {entry.quarter}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono tabular-nums text-zinc-300">
+                      {formatWholeNumber(entry.totalCapital)}
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-sm font-mono tabular-nums font-bold ${
+                        profitPositive ? "text-emerald-400" : "text-rose-400"
+                      }`}
+                    >
+                      {profitPositive ? "+" : ""}
+                      {formatWholeNumber(entry.grossProfit)}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono tabular-nums text-amber-300/80">
+                      {formatWholeNumber(entry.gpFees)}
+                    </td>
+                    <td className="px-6 py-4 text-left">
+                      {entry.status === "Active" ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-widest">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-zinc-700/40 bg-zinc-900/40 text-zinc-500 font-bold uppercase tracking-widest">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
+                          Settled
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="p-4 border-t border-zinc-800/40 flex justify-between items-center text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">
+        <span className="font-mono tabular-nums">
+          {ledger.length} شهر · Months
+        </span>
+        <span className="text-zinc-600">
+          انقر على شهر لتصفية التوزيع · Click a month to filter distribution
+        </span>
+      </div>
+    </section>
+  );
+}
+
 // ── Dynamic Partner Profit Distribution ──
+
+interface MonthOption {
+  key: string;
+  label: string;
+}
 
 function ProfitDistribution({
   partners,
   totalProfit,
   loading,
+  selectedMonth,
+  onMonthChange,
+  monthOptions,
 }: {
   partners: Partner[];
   totalProfit: number;
   loading: boolean;
+  selectedMonth: string;
+  onMonthChange: (key: string) => void;
+  monthOptions: MonthOption[];
 }) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const distribution = useMemo(
     () => computePortfolioDistribution(partners, totalProfit),
     [partners, totalProfit]
   );
 
-  // GP first, then by netProfit descending
   const sortedPartners = useMemo(() => {
     return [...partners].sort((a, b) => {
       const aDist = distribution[a.id];
@@ -389,9 +596,14 @@ function ProfitDistribution({
     return mgr?.feeAmount ?? 0;
   }, [distribution]);
 
+  const selectedLabel =
+    selectedMonth === "all"
+      ? "الكل · All Time"
+      : monthOptions.find((m) => m.key === selectedMonth)?.label ?? selectedMonth;
+
   return (
     <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] backdrop-blur-sm">
-      <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center">
+      <div className="px-6 py-4 border-b border-zinc-800/60 flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
             <Icon name="analytics" className="text-emerald-400 !text-base" />
@@ -405,23 +617,71 @@ function ProfitDistribution({
             </span>
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] font-bold">
-          <div className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5">
-            <span className="text-zinc-500">رسوم محصلة · GP Fee:</span>
-            <span className="font-mono tabular-nums text-amber-300">
-              {formatWholeNumber(totalFeeCollected)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5">
-            <span className="text-zinc-500">إجمالي · Total:</span>
-            <span
-              className={`font-mono tabular-nums ${
-                totalNetProfit >= 0 ? "text-emerald-400" : "text-rose-400"
-              }`}
+        <div className="flex items-center gap-3">
+          {/* Month Selector Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen((o) => !o)}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-300 transition-all duration-200 hover:border-emerald-500/30 hover:text-white"
             >
-              {totalNetProfit >= 0 ? "+" : ""}
-              {formatWholeNumber(totalNetProfit)}
-            </span>
+              <span className="max-w-[120px] truncate normal-case">{selectedLabel}</span>
+              <ChevronDown
+                size={12}
+                className={`text-zinc-500 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+            {dropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 w-52 max-h-56 overflow-y-auto rounded-md border border-[#1f1f1f] bg-[#0a0a0a] shadow-[0_0_30px_-8px_rgba(0,0,0,0.9)] backdrop-blur-xl">
+                <button
+                  onClick={() => {
+                    onMonthChange("all");
+                    setDropdownOpen(false);
+                  }}
+                  className={`w-full text-right px-4 py-2.5 text-[11px] font-semibold transition-colors ${
+                    selectedMonth === "all"
+                      ? "text-emerald-400 bg-emerald-500/[0.06]"
+                      : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+                  }`}
+                >
+                  الكل · All Time
+                </button>
+                {monthOptions.map((m) => (
+                  <button
+                    key={m.key}
+                    onClick={() => {
+                      onMonthChange(m.key);
+                      setDropdownOpen(false);
+                    }}
+                    className={`w-full text-right px-4 py-2.5 text-[11px] font-semibold transition-colors ${
+                      selectedMonth === m.key
+                        ? "text-emerald-400 bg-emerald-500/[0.06]"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="hidden md:flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] font-bold">
+            <div className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5">
+              <span className="text-zinc-500">GP:</span>
+              <span className="font-mono tabular-nums text-amber-300">
+                {formatWholeNumber(totalFeeCollected)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5">
+              <span className="text-zinc-500">Net:</span>
+              <span
+                className={`font-mono tabular-nums ${
+                  totalNetProfit >= 0 ? "text-emerald-400" : "text-rose-400"
+                }`}
+              >
+                {totalNetProfit >= 0 ? "+" : ""}
+                {formatWholeNumber(totalNetProfit)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -529,7 +789,7 @@ function ProfitDistribution({
           {sortedPartners.length} شريك · Partners
         </span>
         <span className="text-zinc-600">
-          Live · تحديث مباشر من صافي ربح الصندوق
+          {selectedMonth === "all" ? "All Time" : selectedLabel} · تصفية حسب الشهر
         </span>
       </div>
     </section>
@@ -792,10 +1052,12 @@ function PortfolioComposition({
   slices,
   total,
   loading,
+  equityOverride,
 }: {
   slices: AllocSlice[];
   total: number;
   loading: boolean;
+  equityOverride?: number | null;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -900,6 +1162,15 @@ function PortfolioComposition({
                       style={{ color: slices[hovered].color }}
                     >
                       {slices[hovered].pct.toFixed(1)}%
+                    </span>
+                  </>
+                ) : equityOverride != null ? (
+                  <>
+                    <span className={`block text-2xl font-headline font-black tracking-tight tabular-nums ${equityOverride >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {equityOverride >= 0 ? "+" : ""}{formatCompactCurrency(equityOverride)}
+                    </span>
+                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-semibold">
+                      Month P&L
                     </span>
                   </>
                 ) : (
