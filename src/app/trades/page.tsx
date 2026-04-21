@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   CircleDollarSign,
+  Crown,
   Download,
   Layers,
   PackageOpen,
@@ -30,6 +33,7 @@ import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
 import { tradeProfit } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
+import { usePartners } from "@/hooks/use-partners";
 import type { Trade, ActiveStock } from "@/types";
 
 function typeBadgeClass(type: string): string {
@@ -84,11 +88,43 @@ export default function TradesPage() {
     lastPriceUpdate,
   } = useTrades();
 
+  const { partners } = usePartners();
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [editingStock, setEditingStock] = useState<ActiveStock | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const pricesRefreshing = activeStocks.some((s) => s.priceLoading);
+
+  // Group open option positions by ticker for the expanded row detail
+  const optionsByTicker = useMemo(() => {
+    const map: Record<string, Trade[]> = {};
+    for (const t of [...sellPuts, ...sellCalls]) {
+      const key = t.ticker.toUpperCase();
+      if (!map[key]) map[key] = [];
+      map[key].push(t);
+    }
+    return map;
+  }, [sellPuts, sellCalls]);
+
+  // Identify the GP (manager) for fee display
+  const manager = useMemo(
+    () => partners.find((p) => p.isAdmin || p.name?.trim() === "المدير") ?? null,
+    [partners]
+  );
+  const totalCapital = useMemo(
+    () => partners.reduce((sum, p) => sum + (Number(p.currentBalance) || 0), 0),
+    [partners]
+  );
+
+  function toggleRow(id: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Keep the "Last Updated · X ago" label live by ticking once a second.
   const [, forceTick] = useState(0);
@@ -307,113 +343,394 @@ export default function TradesPage() {
                     : 0;
                   const potentialPositive = potential >= 0;
                   const zebra = idx % 2 === 0 ? "bg-transparent" : "bg-zinc-900/30";
+                  const isExpanded = expandedRows.has(stock.id);
+                  const relatedOptions =
+                    optionsByTicker[stock.ticker.toUpperCase()] ?? [];
                   return (
-                    <tr
-                      key={stock.id}
-                      className={`border-t border-zinc-800/50 transition-colors hover:bg-emerald-500/[0.04] ${zebra}`}
-                    >
-                      <td className="px-4 py-3 font-mono font-bold tracking-wider text-white">
-                        {stock.ticker}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums text-zinc-300">
-                        {stock.quantity.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums text-zinc-400">
-                        {formatCurrency(stock.purchasePrice)}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums">
-                        {stock.priceLoading ? (
-                          <span className="inline-flex items-center gap-2 text-zinc-500">
-                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
-                            <span className="text-[10px] uppercase tracking-widest">
-                              fetching
-                            </span>
-                          </span>
-                        ) : hasLivePrice ? (
-                          <span className="text-white font-semibold">
-                            {formatCurrency(stock.currentPrice!)}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums">
-                        {stock.priceLoading ? (
-                          <span className="h-3 w-3 inline-block animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
-                        ) : hasLivePrice ? (
+                    <React.Fragment key={stock.id}>
+                      <tr
+                        className={`border-t border-zinc-800/50 transition-colors hover:bg-emerald-500/[0.04] cursor-pointer ${zebra} ${
+                          isExpanded ? "bg-zinc-900/40" : ""
+                        }`}
+                        onClick={() => toggleRow(stock.id)}
+                      >
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            {pnlPositive && (
-                              <ArrowUpRight
-                                size={14}
-                                className="text-emerald-400"
-                              />
-                            )}
-                            {pnlNegative && (
-                              <ArrowDownRight
-                                size={14}
-                                className="text-rose-400"
-                              />
-                            )}
-                            <div className="flex flex-col">
-                              <span className={`font-bold ${pnlTone}`}>
-                                {pnlPositive ? "+" : ""}
-                                {formatCurrency(pnlAbs)}
-                              </span>
-                              <span
-                                className={`text-[10px] ${pnlTone} opacity-80`}
-                              >
-                                {pnlPositive ? "+" : ""}
-                                {pnlPct.toFixed(2)}%
-                              </span>
-                            </div>
+                            <span className="text-zinc-500 transition-transform duration-200">
+                              {isExpanded ? (
+                                <ChevronDown size={14} />
+                              ) : (
+                                <ChevronRight size={14} />
+                              )}
+                            </span>
+                            <span className="font-mono font-bold tracking-wider text-white">
+                              {stock.ticker}
+                            </span>
                           </div>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums">
-                        {hasTarget ? (
-                          <span className="text-cyan-300">
-                            {formatCurrency(stock.targetSellPrice)}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums">
-                        {hasTarget ? (
-                          <span
-                            className={`font-semibold ${
-                              potentialPositive
-                                ? "text-cyan-300"
-                                : "text-rose-400"
-                            }`}
-                            title="(Target − Buy) × Qty"
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums text-zinc-300">
+                          {stock.quantity.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums text-zinc-400">
+                          {formatCurrency(stock.purchasePrice)}
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums">
+                          {stock.priceLoading ? (
+                            <span className="inline-flex items-center gap-2 text-zinc-500">
+                              <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+                              <span className="text-[10px] uppercase tracking-widest">
+                                fetching
+                              </span>
+                            </span>
+                          ) : hasLivePrice ? (
+                            <span className="text-white font-semibold">
+                              {formatCurrency(stock.currentPrice!)}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums">
+                          {stock.priceLoading ? (
+                            <span className="h-3 w-3 inline-block animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+                          ) : hasLivePrice ? (
+                            <div className="flex items-center gap-2">
+                              {pnlPositive && (
+                                <ArrowUpRight
+                                  size={14}
+                                  className="text-emerald-400"
+                                />
+                              )}
+                              {pnlNegative && (
+                                <ArrowDownRight
+                                  size={14}
+                                  className="text-rose-400"
+                                />
+                              )}
+                              <div className="flex flex-col">
+                                <span className={`font-bold ${pnlTone}`}>
+                                  {pnlPositive ? "+" : ""}
+                                  {formatCurrency(pnlAbs)}
+                                </span>
+                                <span
+                                  className={`text-[10px] ${pnlTone} opacity-80`}
+                                >
+                                  {pnlPositive ? "+" : ""}
+                                  {pnlPct.toFixed(2)}%
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums">
+                          {hasTarget ? (
+                            <span className="text-cyan-300">
+                              {formatCurrency(stock.targetSellPrice)}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums">
+                          {hasTarget ? (
+                            <span
+                              className={`font-semibold ${
+                                potentialPositive
+                                  ? "text-cyan-300"
+                                  : "text-rose-400"
+                              }`}
+                              title="(Target − Buy) × Qty"
+                            >
+                              {potentialPositive ? "+" : ""}
+                              {formatCurrency(potential)}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono font-semibold tabular-nums text-white">
+                          {formatCurrency(stock.costBasis)}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-500">
+                          {stock.purchaseDate || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingStock(stock);
+                            }}
+                            className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                            title="تعديل المركز"
+                            aria-label={`Edit ${stock.ticker}`}
                           >
-                            {potentialPositive ? "+" : ""}
-                            {formatCurrency(potential)}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono font-semibold tabular-nums text-white">
-                        {formatCurrency(stock.costBasis)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-500">
-                        {stock.purchaseDate || "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => setEditingStock(stock)}
-                          className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
-                          title="تعديل المركز"
-                          aria-label={`Edit ${stock.ticker}`}
-                        >
-                          <Pencil size={12} />
-                        </button>
-                      </td>
-                    </tr>
+                            <Pencil size={12} />
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* ── Expanded Detail Panel ── */}
+                      {isExpanded && (
+                        <tr className="border-t border-zinc-800/30">
+                          <td colSpan={10} className="p-0">
+                            <div className="bg-zinc-950/80 border-b border-zinc-800/40 px-6 py-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                              {/* Related Options */}
+                              {relatedOptions.length > 0 && (
+                                <div>
+                                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">
+                                    Related Options · الخيارات المرتبطة
+                                  </h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {relatedOptions.map((opt) => {
+                                      const premium = tradeProfit(opt);
+                                      return (
+                                        <div
+                                          key={opt.id}
+                                          className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-black/40 px-3 py-2"
+                                        >
+                                          <span
+                                            className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-bold ${typeBadgeClass(opt.type)}`}
+                                          >
+                                            {opt.type}
+                                          </span>
+                                          <span className="inline-flex items-center gap-1 rounded border border-rose-500/25 bg-rose-500/5 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
+                                            Strike {formatCurrency(opt.strike)}
+                                          </span>
+                                          {opt.expiration && (
+                                            <span className="inline-flex items-center gap-1 rounded border border-amber-400/25 bg-amber-400/5 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                                              Exp {opt.expiration}
+                                            </span>
+                                          )}
+                                          <span className="font-mono text-xs tabular-nums text-emerald-400 font-bold">
+                                            +{formatCurrency(premium)}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Entry details */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <DetailBadge
+                                  label="Entry Price · سعر الشراء"
+                                  value={formatCurrency(stock.purchasePrice)}
+                                  tone="zinc"
+                                />
+                                <DetailBadge
+                                  label="Cost Basis · إجمالي التكلفة"
+                                  value={formatCurrency(stock.costBasis)}
+                                  tone="zinc"
+                                />
+                                {hasLivePrice && (
+                                  <DetailBadge
+                                    label="Market Value · القيمة السوقية"
+                                    value={formatCurrency(
+                                      stock.currentPrice! * stock.quantity
+                                    )}
+                                    tone="emerald"
+                                  />
+                                )}
+                                {relatedOptions.length > 0 && (
+                                  <DetailBadge
+                                    label="Options Income · عوائد الخيارات"
+                                    value={`+${formatCurrency(
+                                      relatedOptions.reduce(
+                                        (s, o) => s + tradeProfit(o),
+                                        0
+                                      )
+                                    )}`}
+                                    tone="emerald"
+                                  />
+                                )}
+                              </div>
+
+                              {/* Partner Profit Allocation */}
+                              {hasLivePrice &&
+                                partners.length > 0 &&
+                                pnlAbs !== 0 && (
+                                  <div>
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">
+                                      Partner Allocation · توزيع أرباح الشركاء
+                                    </h4>
+                                    <div className="rounded-md border border-zinc-800/60 bg-black/40 overflow-hidden">
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="text-[9px] uppercase tracking-widest text-zinc-600 bg-zinc-950/60">
+                                            <th className="px-3 py-2 text-start font-semibold">
+                                              Partner
+                                            </th>
+                                            <th className="px-3 py-2 text-start font-semibold">
+                                              Share %
+                                            </th>
+                                            <th className="px-3 py-2 text-start font-semibold">
+                                              Gross Share
+                                            </th>
+                                            <th className="px-3 py-2 text-start font-semibold">
+                                              Fee (20%)
+                                            </th>
+                                            <th className="px-3 py-2 text-start font-semibold">
+                                              Net Profit
+                                            </th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-800/40">
+                                          {partners.map((p) => {
+                                            const ownership =
+                                              totalCapital > 0
+                                                ? (Number(
+                                                    p.currentBalance
+                                                  ) || 0) / totalCapital
+                                                : 0;
+                                            const grossShare =
+                                              pnlAbs * ownership;
+                                            const isGP =
+                                              p.id === manager?.id;
+                                            const feeRate =
+                                              (Number(
+                                                p.managementFeeRate
+                                              ) || 0) / 100;
+                                            const fee = isGP
+                                              ? 0
+                                              : grossShare > 0
+                                                ? grossShare * feeRate
+                                                : 0;
+                                            const netShare = isGP
+                                              ? grossShare
+                                              : grossShare - fee;
+                                            return (
+                                              <tr
+                                                key={p.id}
+                                                className="hover:bg-white/[0.02]"
+                                              >
+                                                <td className="px-3 py-2 text-zinc-200 font-semibold">
+                                                  <span className="inline-flex items-center gap-1.5">
+                                                    {p.name}
+                                                    {isGP && (
+                                                      <Crown
+                                                        size={10}
+                                                        className="text-amber-300"
+                                                      />
+                                                    )}
+                                                  </span>
+                                                </td>
+                                                <td className="px-3 py-2 font-mono tabular-nums text-zinc-400">
+                                                  {(
+                                                    ownership * 100
+                                                  ).toFixed(1)}
+                                                  %
+                                                </td>
+                                                <td
+                                                  className={`px-3 py-2 font-mono tabular-nums font-bold ${
+                                                    grossShare >= 0
+                                                      ? "text-white"
+                                                      : "text-rose-400"
+                                                  }`}
+                                                >
+                                                  {grossShare >= 0
+                                                    ? "+"
+                                                    : ""}
+                                                  {formatCurrency(
+                                                    grossShare
+                                                  )}
+                                                </td>
+                                                <td className="px-3 py-2 font-mono tabular-nums text-rose-400/80">
+                                                  {isGP ? (
+                                                    <span className="text-amber-300">
+                                                      collects
+                                                    </span>
+                                                  ) : fee > 0 ? (
+                                                    `-${formatCurrency(
+                                                      fee
+                                                    )}`
+                                                  ) : (
+                                                    "—"
+                                                  )}
+                                                </td>
+                                                <td
+                                                  className={`px-3 py-2 font-mono tabular-nums font-bold ${
+                                                    netShare >= 0
+                                                      ? "text-emerald-400"
+                                                      : "text-rose-400"
+                                                  }`}
+                                                >
+                                                  {netShare >= 0
+                                                    ? "+"
+                                                    : ""}
+                                                  {formatCurrency(
+                                                    netShare
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                        {/* GP total fee from this asset */}
+                                        {manager && (
+                                          <tfoot>
+                                            <tr className="bg-amber-400/5 border-t border-amber-400/20">
+                                              <td
+                                                colSpan={3}
+                                                className="px-3 py-2 text-[9px] uppercase tracking-widest text-amber-300/70 font-bold"
+                                              >
+                                                <span className="inline-flex items-center gap-1">
+                                                  <Crown
+                                                    size={10}
+                                                    className="text-amber-300"
+                                                  />
+                                                  GP Fee from this asset ·
+                                                  رسوم المدير
+                                                </span>
+                                              </td>
+                                              <td
+                                                colSpan={2}
+                                                className="px-3 py-2 font-mono tabular-nums font-bold text-amber-300 text-right"
+                                              >
+                                                +
+                                                {formatCurrency(
+                                                  (() => {
+                                                    let total = 0;
+                                                    for (const p of partners) {
+                                                      if (
+                                                        p.id === manager.id
+                                                      )
+                                                        continue;
+                                                      const ow =
+                                                        totalCapital > 0
+                                                          ? (Number(
+                                                              p.currentBalance
+                                                            ) || 0) /
+                                                            totalCapital
+                                                          : 0;
+                                                      const gs =
+                                                        pnlAbs * ow;
+                                                      const fr =
+                                                        (Number(
+                                                          p.managementFeeRate
+                                                        ) || 0) / 100;
+                                                      if (gs > 0)
+                                                        total +=
+                                                          gs * fr;
+                                                    }
+                                                    return total;
+                                                  })()
+                                                )}
+                                              </td>
+                                            </tr>
+                                          </tfoot>
+                                        )}
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
             </tbody>
@@ -756,5 +1073,40 @@ function TradeSection({
         </table>
       </div>
     </section>
+  );
+}
+
+function DetailBadge({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "emerald" | "rose" | "zinc";
+}) {
+  const border =
+    tone === "emerald"
+      ? "border-emerald-500/25"
+      : tone === "rose"
+        ? "border-rose-500/25"
+        : "border-zinc-800/60";
+  const valColor =
+    tone === "emerald"
+      ? "text-emerald-300"
+      : tone === "rose"
+        ? "text-rose-400"
+        : "text-white";
+  return (
+    <div
+      className={`rounded-md border ${border} bg-black/40 px-3 py-2`}
+    >
+      <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-semibold">
+        {label}
+      </p>
+      <p className={`mt-0.5 font-mono text-sm font-bold tabular-nums ${valColor}`}>
+        {value}
+      </p>
+    </div>
   );
 }
