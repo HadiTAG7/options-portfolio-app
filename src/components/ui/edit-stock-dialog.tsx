@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pencil, Save, X } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { ActiveStock } from "@/types";
 
 export interface StockEditPayload {
@@ -222,12 +223,11 @@ export function EditStockDialog({
             <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500">
               تاريخ الشراء (Purchase Date)
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={purchaseDate}
-              onChange={(e) => setPurchaseDate(e.target.value)}
+              onChange={setPurchaseDate}
               disabled={submitting}
-              className="w-full rounded-md border border-zinc-800/70 bg-black/60 px-4 py-3 font-mono text-sm tabular-nums text-white outline-none transition-all focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+              placeholder="اختر تاريخ الشراء"
             />
           </div>
 

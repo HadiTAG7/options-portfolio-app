@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { Partner } from "@/types";
 
 export interface PartnerEditPayload {
@@ -152,12 +153,11 @@ export function EditPartnerDialog({
               <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold block">
                 تاريخ الانضمام (Date Joined)
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={entryDate}
-                onChange={(e) => setEntryDate(e.target.value)}
+                onChange={setEntryDate}
                 disabled={submitting}
-                className="w-full bg-surface-container-low border border-white/10 rounded-sm px-4 py-3 text-sm text-white font-mono focus:ring-1 focus:ring-primary focus:border-primary/50 outline-none transition-all disabled:opacity-50"
+                placeholder="اختر تاريخ الانضمام"
               />
             </div>
             <div className="space-y-2">

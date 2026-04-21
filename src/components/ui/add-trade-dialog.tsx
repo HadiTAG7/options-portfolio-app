@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export interface AddTradePayload {
   type: "Stock" | "Sell Call" | "Sell Put";
@@ -296,12 +297,11 @@ export function AddTradeDialog({
                 <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold block">
                   تاريخ الانتهاء (Expiration)
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={expiration}
-                  onChange={(e) => setExpiration(e.target.value)}
+                  onChange={setExpiration}
                   disabled={submitting}
-                  className="w-full bg-surface-container-low border border-white/10 rounded-sm px-4 py-3 text-sm text-white font-mono focus:ring-1 focus:ring-primary focus:border-primary/50 outline-none transition-all disabled:opacity-50"
+                  placeholder="اختر تاريخ الانتهاء"
                 />
               </div>
             </div>
@@ -312,12 +312,11 @@ export function AddTradeDialog({
             <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold block">
               تاريخ الشراء (Purchase Date)
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
               disabled={submitting}
-              className="w-full bg-surface-container-low border border-white/10 rounded-sm px-4 py-3 text-sm text-white font-mono focus:ring-1 focus:ring-primary focus:border-primary/50 outline-none transition-all disabled:opacity-50"
+              placeholder="اختر تاريخ الشراء"
             />
           </div>
 
