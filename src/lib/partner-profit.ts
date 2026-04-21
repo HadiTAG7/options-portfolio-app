@@ -40,12 +40,19 @@ function tradeCloseDate(t: Trade): string | null {
 }
 
 // A partner is eligible for a trade's profit iff they joined on or
-// before the trade's close date. Partners without an entry date fall
-// back to "always eligible" so legacy rows don't get silently excluded.
+// before the trade's close date AND the trade closed strictly after
+// their last profit capitalization ("تثبيت الأرباح"). Partners without
+// an entry date fall back to "always eligible"; partners that have
+// never settled include every trade.
 function isEligible(partner: Partner, closeDate: string): boolean {
   const entry = partner.entryDate?.trim();
-  if (!entry) return true;
-  return entry <= closeDate;
+  if (entry && entry > closeDate) return false;
+  const settlement = partner.lastSettlementDate?.trim();
+  if (settlement) {
+    const settlementDay = settlement.slice(0, 10);
+    if (closeDate <= settlementDay) return false;
+  }
+  return true;
 }
 
 // Distribute realized profit trade-by-trade with entry-date eligibility,
@@ -320,6 +327,100 @@ export function computePortfolioDistribution(
       partnerId: p.id,
       investment,
       ownershipPct: ownershipById[p.id] * 100,
+      grossProfit: gross,
+      feeRatePct,
+      feeAmount,
+      netProfit,
+      isManager,
+      returnPct,
+      collectedFromLps,
+    };
+  }
+
+  return result;
+}
+
+// Like computePortfolioDistribution, but profit is built trade-by-trade
+// with per-partner eligibility (entry date + last settlement date).
+// After a partner calls "تثبيت الأرباح" their grossProfit resets to 0
+// for trades closed on or before the settlement timestamp.
+export function computePartnerDistributionFromTrades(
+  partners: Partner[],
+  trades: Trade[]
+): Record<string, PartnerDistribution> {
+  const managerId = partners.find(isManagerPartner)?.id ?? null;
+
+  const grossById: Record<string, number> = {};
+  for (const p of partners) grossById[p.id] = 0;
+
+  for (const t of trades) {
+    const profit = tradeProfit(t);
+    if (profit === 0) continue;
+
+    const closeDate = tradeCloseDate(t);
+    if (!closeDate) continue;
+
+    const eligible = partners.filter((p) => isEligible(p, closeDate));
+    const totalEligibleCapital = eligible.reduce(
+      (sum, p) => sum + (Number(p.currentBalance) || 0),
+      0
+    );
+    if (totalEligibleCapital <= 0) continue;
+
+    for (const p of eligible) {
+      const share = (Number(p.currentBalance) || 0) / totalEligibleCapital;
+      grossById[p.id] += profit * share;
+    }
+  }
+
+  const lpFeeById: Record<string, number> = {};
+  let totalLpFees = 0;
+  for (const p of partners) {
+    if (p.id === managerId) continue;
+    const feeRate = (Number(p.managementFeeRate) || 0) / 100;
+    const gross = grossById[p.id];
+    const fee = gross > 0 ? gross * feeRate : 0;
+    lpFeeById[p.id] = fee;
+    totalLpFees += fee;
+  }
+
+  const totalCapital = partners.reduce(
+    (sum, p) => sum + (Number(p.currentBalance) || 0),
+    0
+  );
+
+  const result: Record<string, PartnerDistribution> = {};
+  for (const p of partners) {
+    const isManager = p.id === managerId;
+    const gross = grossById[p.id];
+    const investment =
+      Number(p.totalDeposits) || Number(p.currentBalance) || 0;
+    const feeRatePct = Number(p.managementFeeRate) || 0;
+    const ownershipPct =
+      totalCapital > 0
+        ? ((Number(p.currentBalance) || 0) / totalCapital) * 100
+        : 0;
+
+    let feeAmount: number;
+    let netProfit: number;
+    let collectedFromLps: PartnerDistribution["collectedFromLps"] = [];
+    if (isManager) {
+      feeAmount = totalLpFees;
+      netProfit = gross + totalLpFees;
+      collectedFromLps = partners
+        .filter((lp) => lp.id !== managerId && (lpFeeById[lp.id] ?? 0) > 0)
+        .map((lp) => ({ partnerId: lp.id, amount: lpFeeById[lp.id] ?? 0 }));
+    } else {
+      feeAmount = lpFeeById[p.id] ?? 0;
+      netProfit = gross - feeAmount;
+    }
+
+    const returnPct = investment > 0 ? (netProfit / investment) * 100 : 0;
+
+    result[p.id] = {
+      partnerId: p.id,
+      investment,
+      ownershipPct,
       grossProfit: gross,
       feeRatePct,
       feeAmount,

@@ -34,6 +34,7 @@ export interface Database {
           managementFeePercent: number | null;
           baseCapital: number;
           balanceHistory: BalanceHistoryEntry[];
+          last_settlement_date: string | null;
         };
         Insert: {
           id?: string;
@@ -59,6 +60,7 @@ export interface Database {
           totalWithdrawals?: number;
           totalNetProfit?: number;
           managementFeesPaid?: number;
+          last_settlement_date?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];

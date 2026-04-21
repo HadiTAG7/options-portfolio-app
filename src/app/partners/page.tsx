@@ -14,7 +14,7 @@ import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import {
   computeFundBreakdown,
-  computePortfolioDistribution,
+  computePartnerDistributionFromTrades,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
@@ -32,16 +32,16 @@ export default function PartnersPage() {
     updatePartner,
     refetch,
   } = usePartners();
-  const { totalProfit } = useTrades();
+  const { trades, totalProfit } = useTrades();
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
-  // Distribute the single fund-wide `totalProfit` (realized + unrealized
-  // + collected premium) across partners by ownership %, then apply the
-  // 20% GP/LP performance-fee transfer. Recomputing on every totalProfit
-  // change makes the table react live to new trades AND live price
-  // refreshes — the "data persistence" the Phase-2 spec asked for.
+  // Build the distribution trade-by-trade so each partner's eligibility
+  // (entry date + last_settlement_date) is honored. After a partner
+  // runs "تثبيت الأرباح", trades closed on/before the settlement
+  // timestamp no longer contribute to their gross, so their Net resets
+  // to $0 until new trades close.
   const distributionByPartner = useMemo(
-    () => computePortfolioDistribution(partners, totalProfit),
-    [partners, totalProfit]
+    () => computePartnerDistributionFromTrades(partners, trades),
+    [partners, trades]
   );
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
@@ -55,6 +55,8 @@ export default function PartnersPage() {
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
   const [editTarget, setEditTarget] = useState<Partner | null>(null);
   const [ledgerTarget, setLedgerTarget] = useState<Partner | null>(null);
+  const [capitalizeTarget, setCapitalizeTarget] = useState<Partner | null>(null);
+  const [capitalizing, setCapitalizing] = useState(false);
 
   // Auto-dismiss success notification
   useEffect(() => {
@@ -77,6 +79,19 @@ export default function PartnersPage() {
 
   async function onCapitalize(partner: Partner) {
     await capitalizeProfits(partner, refetch);
+  }
+
+  async function handleCapitalizeConfirm() {
+    if (!capitalizeTarget) return;
+    setCapitalizing(true);
+    try {
+      await capitalizeProfits(capitalizeTarget, refetch);
+      setCapitalizeTarget(null);
+    } catch {
+      // error surfaced via notification
+    } finally {
+      setCapitalizing(false);
+    }
   }
 
   const generatedPositive = fundTotalProfit >= 0;
@@ -124,6 +139,25 @@ export default function PartnersPage() {
         totalProfit={fundTotalProfit}
         partners={partners}
         onClose={() => setLedgerTarget(null)}
+      />
+
+      {/* Capitalize Profits Confirmation */}
+      <ConfirmDialog
+        open={capitalizeTarget !== null}
+        title="تثبيت الأرباح"
+        description={
+          capitalizeTarget
+            ? `هل تريد تحويل أرباح ${capitalizeTarget.name} البالغة ${formatCurrency(
+                Math.max(
+                  0,
+                  distributionByPartner[capitalizeTarget.id]?.netProfit ?? 0
+                )
+              )} إلى رأس المال؟`
+            : ""
+        }
+        confirmLabel={capitalizing ? "جاري التثبيت..." : "تأكيد التثبيت"}
+        onConfirm={handleCapitalizeConfirm}
+        onCancel={() => !capitalizing && setCapitalizeTarget(null)}
       />
 
       {/* Confirmation Dialog */}
@@ -485,6 +519,19 @@ export default function PartnersPage() {
                               className="!text-xs"
                             />
                             سحب
+                          </button>
+                          <button
+                            onClick={() => setCapitalizeTarget(partner)}
+                            disabled={(dist.netProfit ?? 0) <= 0}
+                            className="flex items-center gap-1 rounded-md border border-amber-400/25 bg-amber-400/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-300 transition-all duration-200 hover:scale-[1.03] hover:border-amber-400/50 hover:bg-amber-400/10 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-amber-400/25 disabled:hover:bg-amber-400/5 disabled:hover:text-amber-300"
+                            title={
+                              (dist.netProfit ?? 0) > 0
+                                ? "تثبيت الأرباح وتحويلها إلى رأس المال"
+                                : "لا توجد أرباح للتثبيت"
+                            }
+                          >
+                            <Icon name="savings" className="!text-xs" />
+                            تثبيت
                           </button>
                           <Link
                             href={`/partners/${partner.id}`}

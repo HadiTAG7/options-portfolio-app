@@ -20,6 +20,7 @@ export interface Partner {
   performanceTrend: "up" | "down";
   joinedAt: string;
   entryDate: string | null; // date the partner entered the fund (YYYY-MM-DD)
+  lastSettlementDate: string | null; // ISO timestamp of last profit capitalization
   isAdmin: boolean;
   totalDeposits: number;
   totalWithdrawals: number;
