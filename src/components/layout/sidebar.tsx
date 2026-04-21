@@ -78,7 +78,7 @@ export function Sidebar() {
       <div
         className={cn(
           "relative border-b border-[#1f1f1f] transition-[padding] duration-300",
-          collapsed ? "px-0 pt-7 pb-5" : "px-6 pt-7 pb-6"
+          collapsed ? "px-0 pt-7 pb-5" : "px-5 pt-7 pb-6"
         )}
       >
         <div
@@ -95,19 +95,19 @@ export function Sidebar() {
           >
             {collapsed ? (
               <span className="font-headline text-[13px] font-black text-emerald-300">
-                K
+                A
               </span>
             ) : (
               <Terminal size={14} className="text-emerald-400" />
             )}
           </div>
           {!collapsed && (
-            <div className="flex flex-col leading-tight overflow-hidden">
-              <span className="font-headline text-[13px] font-black tracking-[0.08em] text-white uppercase whitespace-nowrap">
-                The Kinetic Terminal
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="font-headline text-[11px] font-black tracking-[0.06em] text-white uppercase whitespace-nowrap">
+                Alghanim Options Desk
               </span>
-              <span className="mt-0.5 font-mono text-[9px] tracking-[0.28em] text-emerald-400/70 uppercase whitespace-nowrap">
-                Precision · Options · Trading
+              <span className="mt-0.5 font-mono text-[8px] tracking-[0.24em] text-emerald-400/70 uppercase whitespace-nowrap">
+                Proprietary Trading Desk
               </span>
             </div>
           )}

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "The Kinetic Terminal | Options Portfolio Manager",
-  description: "Precision Options Trading - Shared Investment Portfolio Manager",
+  title: "Alghanim Options Desk | Proprietary Trading",
+  description: "Alghanim Options Desk - Proprietary Trading & Portfolio Management",
 };
 
 export default function RootLayout({
