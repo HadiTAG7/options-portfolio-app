@@ -1,4 +1,5 @@
 import type { Partner, Trade } from "@/types";
+import { getPartnerInvestment } from "@/lib/utils";
 
 // Legacy default fee rate. The GP/LP logic reads each partner's own
 // managementFeeRate, but this constant is still exported for consumers
@@ -314,8 +315,7 @@ export function computePortfolioDistribution(
   for (const p of partners) {
     const isManager = p.id === managerId;
     const gross = grossById[p.id];
-    const investment =
-      Number(p.totalDeposits) || Number(p.currentBalance) || 0;
+    const investment = getPartnerInvestment(p);
     const feeRatePct = Number(p.managementFeeRate) || 0;
 
     let feeAmount: number;
@@ -404,8 +404,7 @@ export function computePartnerDistributionFromTrades(
   for (const p of partners) {
     const isManager = p.id === managerId;
     const gross = grossById[p.id];
-    const investment =
-      Number(p.totalDeposits) || Number(p.currentBalance) || 0;
+    const investment = getPartnerInvestment(p);
     const feeRatePct = Number(p.managementFeeRate) || 0;
     const ownershipPct =
       totalCapital > 0

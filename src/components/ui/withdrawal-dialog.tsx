@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, safeNumber } from "@/lib/utils";
+import { formatCurrency, safeNumber, getPartnerInvestment } from "@/lib/utils";
 import type { Partner } from "@/types";
 
 interface WithdrawalDialogProps {
@@ -51,7 +51,9 @@ export function WithdrawalDialog({
 
   if (!open || !partner) return null;
 
-  const balance = safeNumber(partner.currentBalance) || safeNumber(partner.totalBalance);
+  // Use the same canonical Investment value the DepositDialog and the
+  // partners Investment column read from — no drift between modals.
+  const balance = getPartnerInvestment(partner);
   const availableProfit = Math.max(0, remainingProfit);
   const maxWithdrawable = balance + availableProfit;
   const numericAmount = parseFloat(amount);
@@ -201,7 +203,7 @@ export function WithdrawalDialog({
           </div>
           <div className="text-left">
             <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
-              الرصيد المتاح
+              رأس المال الحالي
             </p>
             <p className="text-sm font-headline font-bold text-primary">
               {formatCurrency(balance)}

@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, safeNumber } from "@/lib/utils";
+import { formatCurrency, getPartnerInvestment } from "@/lib/utils";
 import type { Partner } from "@/types";
 
 interface DepositDialogProps {
   open: boolean;
   partner: Partner | null;
-  currentCapital?: number;
   onClose: () => void;
   onSubmit: (partner: Partner, amount: number) => Promise<void>;
 }
@@ -16,7 +15,6 @@ interface DepositDialogProps {
 export function DepositDialog({
   open,
   partner,
-  currentCapital,
   onClose,
   onSubmit,
 }: DepositDialogProps) {
@@ -45,12 +43,11 @@ export function DepositDialog({
 
   if (!open || !partner) return null;
 
-  const baseCapital =
-    currentCapital !== undefined
-      ? currentCapital
-      : safeNumber(partner.totalDeposits) ||
-        safeNumber(partner.baseCapital) ||
-        safeNumber(partner.currentBalance);
+  // Read straight from the partner record via the shared helper. This
+  // is the same value shown in the Investment column and the same
+  // value the WithdrawalDialog header reads — guaranteed to match to
+  // the penny.
+  const baseCapital = getPartnerInvestment(partner);
 
   const numericAmount = parseFloat(amount);
   const safeAmount =

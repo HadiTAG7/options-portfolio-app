@@ -148,14 +148,6 @@ export default function PartnersPage() {
       <DepositDialog
         open={depositTarget !== null}
         partner={depositTarget}
-        currentCapital={
-          depositTarget
-            ? (distributionByPartner[depositTarget.id]?.investment ??
-               depositTarget.totalDeposits ??
-               depositTarget.baseCapital ??
-               depositTarget.currentBalance)
-            : 0
-        }
         onClose={() => setDepositTarget(null)}
         onSubmit={onDeposit}
       />

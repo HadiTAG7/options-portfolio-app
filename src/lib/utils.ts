@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { Partner } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -47,4 +48,16 @@ export function formatPercent(
 
 export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat("en-US").format(safeNumber(value));
+}
+
+// Canonical "Investment" value for a partner. Reads straight from
+// the partner record with no extra math — both the deposit and
+// withdrawal dialogs, and the distribution engine's `investment`
+// field, must pick from this same function so they never drift.
+export function getPartnerInvestment(partner: Partner): number {
+  return (
+    safeNumber(partner.totalDeposits) ||
+    safeNumber(partner.baseCapital) ||
+    safeNumber(partner.currentBalance)
+  );
 }
