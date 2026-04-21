@@ -39,18 +39,28 @@ function tradeCloseDate(t: Trade): string | null {
   return t.date?.trim() || null;
 }
 
-// A partner is eligible for a trade's profit iff they joined on or
-// before the trade's close date AND the trade closed strictly after
-// their last profit capitalization ("تثبيت الأرباح"). Partners without
-// an entry date fall back to "always eligible"; partners that have
-// never settled include every trade.
-function isEligible(partner: Partner, closeDate: string): boolean {
+// When was this trade's profit actually earned?
+// Open options: premium collected at trade date.
+// Closed trades: profit realized at close/expiration.
+function tradeProfitDate(t: Trade): string | null {
+  if (t.status === "open") return t.date?.trim() || null;
+  return tradeCloseDate(t);
+}
+
+// Two checks gate per-trade eligibility:
+//   1. Entry-date:    partner joined on or before the trade resolved (closeDate)
+//   2. Settlement:    profit was earned strictly AFTER the last capitalization
+//
+// `profitDate` is the date the money was earned — for open options this is
+// the trade date (when premium was collected), not the future expiration.
+// Using Date objects for the settlement comparison avoids timezone mismatches
+// between the ISO-timestamped last_settlement_date and YYYY-MM-DD trade dates.
+function isEligible(partner: Partner, closeDate: string, profitDate: string): boolean {
   const entry = partner.entryDate?.trim();
   if (entry && entry > closeDate) return false;
   const settlement = partner.lastSettlementDate?.trim();
   if (settlement) {
-    const settlementDay = settlement.slice(0, 10);
-    if (closeDate <= settlementDay) return false;
+    if (new Date(profitDate) <= new Date(settlement)) return false;
   }
   return true;
 }
@@ -85,8 +95,9 @@ export function computePartnerProfits(
 
     const closeDate = tradeCloseDate(t);
     if (!closeDate) continue;
+    const profitDate = tradeProfitDate(t) ?? closeDate;
 
-    const eligible = partners.filter((p) => isEligible(p, closeDate));
+    const eligible = partners.filter((p) => isEligible(p, closeDate, profitDate));
     const totalEligibleCapital = eligible.reduce(
       (sum, p) => sum + (Number(p.currentBalance) || 0),
       0
@@ -359,8 +370,9 @@ export function computePartnerDistributionFromTrades(
 
     const closeDate = tradeCloseDate(t);
     if (!closeDate) continue;
+    const profitDate = tradeProfitDate(t) ?? closeDate;
 
-    const eligible = partners.filter((p) => isEligible(p, closeDate));
+    const eligible = partners.filter((p) => isEligible(p, closeDate, profitDate));
     const totalEligibleCapital = eligible.reduce(
       (sum, p) => sum + (Number(p.currentBalance) || 0),
       0
