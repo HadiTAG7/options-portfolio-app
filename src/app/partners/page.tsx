@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
 import { EditPartnerDialog } from "@/components/ui/edit-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
+import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
@@ -47,12 +48,18 @@ export default function PartnersPage() {
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
   const fundTotalProfit = totalProfit;
-  const { handleWithdrawal, capitalizeProfits, notification, clearNotification } =
-    usePartnersStore();
+  const {
+    handleWithdrawal,
+    capitalizeProfits,
+    handleDeposit,
+    notification,
+    clearNotification,
+  } = usePartnersStore();
   const [deleteTarget, setDeleteTarget] = useState<Partner | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
+  const [depositTarget, setDepositTarget] = useState<Partner | null>(null);
   const [editTarget, setEditTarget] = useState<Partner | null>(null);
   const [ledgerTarget, setLedgerTarget] = useState<Partner | null>(null);
   const [capitalizeTarget, setCapitalizeTarget] = useState<Partner | null>(null);
@@ -84,6 +91,10 @@ export default function PartnersPage() {
   async function onCapitalize(partner: Partner) {
     const netProfit = distributionByPartner[partner.id]?.netProfit ?? 0;
     await capitalizeProfits(partner, netProfit, refetch);
+  }
+
+  async function onDeposit(partner: Partner, amount: number) {
+    await handleDeposit(partner, amount, refetch);
   }
 
   async function handleCapitalizeConfirm() {
@@ -131,6 +142,22 @@ export default function PartnersPage() {
         onClose={() => setWithdrawTarget(null)}
         onSubmit={onWithdraw}
         onCapitalize={onCapitalize}
+      />
+
+      {/* Deposit Dialog — new capital inflow */}
+      <DepositDialog
+        open={depositTarget !== null}
+        partner={depositTarget}
+        currentCapital={
+          depositTarget
+            ? (distributionByPartner[depositTarget.id]?.investment ??
+               depositTarget.totalDeposits ??
+               depositTarget.baseCapital ??
+               depositTarget.currentBalance)
+            : 0
+        }
+        onClose={() => setDepositTarget(null)}
+        onSubmit={onDeposit}
       />
 
       {/* Partner Ledger Dialog — GP/LP distribution breakdown */}
@@ -514,6 +541,19 @@ export default function PartnersPage() {
                             title="تعديل بيانات الشريك"
                           >
                             <Icon name="edit" className="!text-base" />
+                          </button>
+                          <button
+                            onClick={() => setDepositTarget(partner)}
+                            disabled={(dist.netProfit ?? 0) > 0}
+                            className="flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-emerald-500/25 disabled:hover:bg-emerald-500/5 disabled:hover:text-emerald-300"
+                            title={
+                              (dist.netProfit ?? 0) > 0
+                                ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
+                                : "إيداع رأس مال جديد"
+                            }
+                          >
+                            <Icon name="add" className="!text-xs" />
+                            إيداع
                           </button>
                           <button
                             onClick={() => setWithdrawTarget(partner)}

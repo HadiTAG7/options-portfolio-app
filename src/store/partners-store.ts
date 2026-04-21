@@ -73,6 +73,11 @@ interface PartnersState {
     netProfitAmount: number,
     onDone?: () => Promise<void>
   ) => Promise<void>;
+  handleDeposit: (
+    partner: Partner,
+    amount: number,
+    onDone?: () => Promise<void>
+  ) => Promise<void>;
   clearNotification: () => void;
 }
 
@@ -353,6 +358,145 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       notification: {
         type: "success",
         message: `تم تثبيت أرباح ${partner.name} (${formatCurrency(netProfitAmount)}) وإضافتها لرأس المال`,
+      },
+    });
+
+    if (onDone) await onDone();
+    await get().fetchPartners();
+  },
+
+  // Deposit fresh capital into a partner's account. Adds to balance,
+  // totalDeposits, and baseCapital, then stamps a settlement date so
+  // future trade profits share against the new capital ratio.
+  // "Clean Slate Rule": callers must block this action when the partner
+  // has outstanding net profit (net profit must be capitalized first).
+  handleDeposit: async (
+    partner: Partner,
+    amount: number,
+    onDone?: () => Promise<void>
+  ) => {
+    set({ error: null, notification: null });
+
+    if (amount <= 0) {
+      const msg = "مبلغ الإيداع يجب أن يكون أكبر من صفر";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    const oldBalance = safeNumber(partner.currentBalance);
+    const oldTotalBalance = safeNumber(partner.totalBalance);
+    const oldTotalDeposits = safeNumber(partner.totalDeposits);
+    const oldBaseCapital =
+      safeNumber(partner.baseCapital) || oldBalance;
+
+    const newBalance = oldBalance + amount;
+    const newTotalBalance = oldTotalBalance + amount;
+    const newTotalDeposits = oldTotalDeposits + amount;
+    const newBaseCapital = oldBaseCapital + amount;
+    const settlementDate = new Date().toISOString();
+    const today = settlementDate.split("T")[0];
+
+    // --- 1a. Update numeric fields with .select() to detect RLS silent failures ---
+    const { data, error: updateError } = await supabase
+      .from("partners")
+      .update({
+        currentBalance: newBalance,
+        total_balance: newTotalBalance,
+        totalDeposits: newTotalDeposits,
+        baseCapital: newBaseCapital,
+        last_settlement_date: settlementDate,
+      })
+      .eq("id", partner.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("[handleDeposit] Partner update failed:", updateError);
+      let userMsg = `فشل إيداع الأموال: ${updateError.message}`;
+      if (updateError.message.includes("permission")) {
+        userMsg =
+          "ليس لديك صلاحية لتنفيذ الإيداع. تحقق من سياسات RLS في Supabase.";
+      } else if (
+        updateError.message.includes("column") ||
+        updateError.message.includes("schema cache")
+      ) {
+        userMsg =
+          "أحد الأعمدة مفقود في قاعدة البيانات. يرجى تشغيل ملفات الهجرة وإعادة تحميل مخطط PostgREST.";
+      }
+      set({ notification: { type: "error", message: userMsg } });
+      throw updateError;
+    }
+
+    if (!data) {
+      const msg =
+        "لم يتم تحديث أي سجل. تحقق من صلاحيات RLS في Supabase أو أن الشريك موجود.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    // --- 1b. Update balanceHistory separately (tolerate missing column) ---
+    const newHistoryEntry: BalanceHistoryEntry = {
+      date: today,
+      balance: newBalance,
+    };
+    const existingHistory = Array.isArray(partner.balanceHistory)
+      ? partner.balanceHistory
+      : [];
+    const updatedHistory = [...existingHistory, newHistoryEntry];
+
+    try {
+      const { error: historyError } = await supabase
+        .from("partners")
+        .update({
+          "balanceHistory": updatedHistory as unknown as BalanceHistoryEntry[],
+        })
+        .eq("id", partner.id);
+
+      if (historyError) {
+        console.error(
+          "[handleDeposit] balanceHistory update failed (non-fatal):",
+          historyError
+        );
+      }
+    } catch (historyCatchErr) {
+      console.error(
+        "[handleDeposit] balanceHistory update threw (non-fatal):",
+        historyCatchErr
+      );
+    }
+
+    // --- 2. Insert transaction record (non-blocking) ---
+    try {
+      const { error: txError } = await supabase.from("transactions").insert({
+        investorId: partner.id,
+        amount,
+        type: "Deposit" as const,
+        date: today,
+      });
+      if (txError) {
+        console.error("[handleDeposit] Transaction insert failed:", txError);
+      }
+    } catch (txCatchErr) {
+      console.error("[handleDeposit] Transaction insert threw:", txCatchErr);
+    }
+
+    // --- 3. Recalculate ownership (non-blocking) ---
+    try {
+      const { error: rpcError } = await supabase.rpc("recalculate_ownership");
+      if (rpcError) {
+        console.error(
+          "[handleDeposit] recalculate_ownership RPC failed:",
+          rpcError
+        );
+      }
+    } catch (rpcCatchErr) {
+      console.error("[handleDeposit] recalculate_ownership threw:", rpcCatchErr);
+    }
+
+    set({
+      notification: {
+        type: "success",
+        message: `تم إيداع ${formatCurrency(amount)} في حساب ${partner.name} بنجاح`,
       },
     });
 
