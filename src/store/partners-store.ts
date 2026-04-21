@@ -65,6 +65,7 @@ interface PartnersState {
   handleWithdrawal: (
     partner: Partner,
     amount: number,
+    availableProfit: number,
     onDone?: () => Promise<void>
   ) => Promise<void>;
   capitalizeProfits: (
@@ -103,12 +104,15 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
   handleWithdrawal: async (
     partner: Partner,
     amount: number,
+    availableProfit: number,
     onDone?: () => Promise<void>
   ) => {
     set({ error: null, notification: null });
 
     // --- Client-side validation ---
     const balance = safeNumber(partner.currentBalance);
+    const profit = Math.max(0, availableProfit);
+    const maxWithdrawable = balance + profit;
 
     if (amount <= 0) {
       const msg = "مبلغ السحب يجب أن يكون أكبر من صفر";
@@ -116,14 +120,23 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       throw new Error(msg);
     }
 
-    if (amount > balance) {
-      const msg = `المبلغ المطلوب ($${amount.toLocaleString()}) يتجاوز الرصيد المتاح ($${balance.toLocaleString()})`;
+    if (amount > maxWithdrawable) {
+      const msg = `المبلغ المطلوب ($${amount.toLocaleString()}) يتجاوز المتاح ($${maxWithdrawable.toLocaleString()} — رأس المال + الأرباح)`;
       set({ error: msg });
       throw new Error(msg);
     }
 
-    const newCurrentBalance = balance - amount;
-    const newTotalBalance = safeNumber(partner.totalBalance) - amount;
+    // Split the withdrawal: profit first (no capital impact), then capital.
+    // Profit portion is paid out of realized trade gains, so it must NOT
+    // reduce currentBalance / totalDeposits — the principal stays intact.
+    // Capital portion (amount exceeding profit) reduces currentBalance
+    // only; totalDeposits (the historical Investment) is never mutated
+    // by withdrawals.
+    const profitPortion = Math.min(amount, profit);
+    const capitalPortion = Math.max(0, amount - profitPortion);
+
+    const newCurrentBalance = balance - capitalPortion;
+    const newTotalBalance = safeNumber(partner.totalBalance) - capitalPortion;
     const newTotalWithdrawals = safeNumber(partner.totalWithdrawals) + amount;
     const today = new Date().toISOString().split("T")[0];
 

@@ -74,7 +74,11 @@ export default function PartnersPage() {
   }
 
   async function onWithdraw(partner: Partner, amount: number) {
-    await handleWithdrawal(partner, amount, refetch);
+    const availableProfit = Math.max(
+      0,
+      distributionByPartner[partner.id]?.netProfit ?? 0
+    );
+    await handleWithdrawal(partner, amount, availableProfit, refetch);
   }
 
   async function onCapitalize(partner: Partner) {

@@ -52,11 +52,18 @@ export function WithdrawalDialog({
   if (!open || !partner) return null;
 
   const balance = safeNumber(partner.currentBalance) || safeNumber(partner.totalBalance);
+  const availableProfit = Math.max(0, remainingProfit);
+  const maxWithdrawable = balance + availableProfit;
   const numericAmount = parseFloat(amount);
-  const isOverBalance = !isNaN(numericAmount) && numericAmount > balance;
+  const isOverMax = !isNaN(numericAmount) && numericAmount > maxWithdrawable;
+  // Split preview: profit drawn first (leaves capital intact), then capital.
+  const safeAmount = !isNaN(numericAmount) && numericAmount > 0 ? numericAmount : 0;
+  const profitPortion = Math.min(safeAmount, availableProfit);
+  const capitalPortion = Math.max(0, safeAmount - profitPortion);
+  const newCapitalBalance = balance - capitalPortion;
   const percentage =
-    !isNaN(numericAmount) && balance > 0
-      ? Math.min((numericAmount / balance) * 100, 100)
+    !isNaN(numericAmount) && maxWithdrawable > 0
+      ? Math.min((numericAmount / maxWithdrawable) * 100, 100)
       : 0;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -71,9 +78,9 @@ export function WithdrawalDialog({
       return;
     }
 
-    if (parsed > balance) {
+    if (parsed > maxWithdrawable) {
       setError(
-        `المبلغ يتجاوز الرصيد المتاح (${formatCurrency(balance)})`
+        `المبلغ يتجاوز المتاح (${formatCurrency(maxWithdrawable)} — رأس المال + الأرباح)`
       );
       return;
     }
@@ -106,12 +113,15 @@ export function WithdrawalDialog({
   }
 
   function setMaxAmount() {
-    setAmount(balance.toString());
+    setAmount(maxWithdrawable.toString());
     setError(null);
   }
 
   function fillProfitAmount() {
-    const clamped = Math.max(0, Math.min(remainingProfit, balance));
+    // Pure profit payout — leaves capital untouched. No need to clamp
+    // against `balance` anymore since the store allows amount > balance
+    // as long as it's within balance + availableProfit.
+    const clamped = Math.max(0, availableProfit);
     setAmount(clamped.toFixed(2));
     setError(null);
   }
@@ -309,29 +319,29 @@ export function WithdrawalDialog({
                 }}
                 placeholder="0.00"
                 min="0"
-                max={balance}
+                max={maxWithdrawable}
                 step="0.01"
                 disabled={submitting}
                 className={`w-full bg-surface-container-low border rounded-sm pr-8 pl-4 py-3 text-sm text-white font-mono placeholder:text-on-surface-variant/40 focus:ring-1 outline-none transition-all disabled:opacity-50 ${
-                  isOverBalance
+                  isOverMax
                     ? "border-secondary/50 focus:ring-secondary focus:border-secondary/50"
                     : "border-white/10 focus:ring-primary focus:border-primary/50"
                 }`}
               />
             </div>
-            {isOverBalance && (
+            {isOverMax && (
               <p className="text-[10px] text-secondary flex items-center gap-1">
                 <Icon name="warning" className="!text-xs" />
-                المبلغ يتجاوز الرصيد المتاح
+                المبلغ يتجاوز المتاح (رأس المال + الأرباح)
               </p>
             )}
           </div>
 
-          {/* Balance Progress Bar */}
-          {numericAmount > 0 && !isNaN(numericAmount) && !isOverBalance && (
+          {/* Split Preview — profit first, capital only if amount exceeds profit */}
+          {numericAmount > 0 && !isNaN(numericAmount) && !isOverMax && (
             <div className="space-y-2">
               <div className="flex justify-between text-[10px] text-on-surface-variant">
-                <span>نسبة السحب من الرصيد</span>
+                <span>نسبة السحب من المتاح</span>
                 <span className="font-mono">{percentage.toFixed(1)}%</span>
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -340,13 +350,45 @@ export function WithdrawalDialog({
                   style={{ width: `${percentage}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] text-on-surface-variant/60">
-                <span>
-                  الرصيد بعد السحب:{" "}
-                  <span className="text-white font-mono">
-                    {formatCurrency(balance - numericAmount)}
+              <div className="rounded-sm border border-white/5 bg-surface-container-low/60 p-3 space-y-1.5 text-[10px]">
+                {profitPortion > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-on-surface-variant">
+                      من الأرباح (Profit)
+                    </span>
+                    <span className="font-mono text-primary font-bold">
+                      {formatCurrency(profitPortion)}
+                    </span>
+                  </div>
+                )}
+                {capitalPortion > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-secondary/90">
+                      من رأس المال (Capital)
+                    </span>
+                    <span className="font-mono text-secondary font-bold">
+                      {formatCurrency(capitalPortion)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1.5 border-t border-white/5">
+                  <span className="text-on-surface-variant/80">
+                    رأس المال بعد السحب
                   </span>
-                </span>
+                  <span
+                    className={`font-mono ${
+                      capitalPortion > 0 ? "text-secondary" : "text-white"
+                    }`}
+                  >
+                    {formatCurrency(newCapitalBalance)}
+                  </span>
+                </div>
+                {capitalPortion === 0 && (
+                  <div className="flex items-center gap-1 pt-1 text-primary/90">
+                    <Icon name="check_circle" className="!text-xs" />
+                    <span>رأس المال (الاستثمار) لن يتأثر</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -371,7 +413,7 @@ export function WithdrawalDialog({
             </button>
             <button
               type="submit"
-              disabled={submitting || isOverBalance}
+              disabled={submitting || isOverMax}
               className="flex-1 px-4 py-2.5 rounded-sm bg-secondary text-white text-xs font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
             >
               {submitting ? (
