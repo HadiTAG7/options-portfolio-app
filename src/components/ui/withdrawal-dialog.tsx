@@ -373,7 +373,7 @@ export function WithdrawalDialog({
                 )}
                 <div className="flex justify-between pt-1.5 border-t border-white/5">
                   <span className="text-on-surface-variant/80">
-                    رأس المال بعد السحب
+                    الاستثمار بعد السحب (New Investment)
                   </span>
                   <span
                     className={`font-mono ${

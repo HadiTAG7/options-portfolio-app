@@ -131,18 +131,29 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       throw new Error(msg);
     }
 
-    // Split the withdrawal: profit first (no capital impact), then capital.
-    // Profit portion is paid out of realized trade gains, so it must NOT
-    // reduce currentBalance / totalDeposits — the principal stays intact.
-    // Capital portion (amount exceeding profit) reduces currentBalance
-    // only; totalDeposits (the historical Investment) is never mutated
-    // by withdrawals.
+    // Split the withdrawal: profit first, then capital.
+    //  - profitPortion  → paid out of realized trade gains. It does NOT
+    //    reduce the investment (totalDeposits / baseCapital). It only
+    //    reduces currentBalance + total_balance by the same amount the
+    //    distribution engine would have added when capitalized.
+    //  - capitalPortion → the slice that exceeds available profit. This
+    //    IS a principal reduction: it reduces currentBalance AND the
+    //    investment columns (totalDeposits / baseCapital) so future
+    //    ownership % is computed against the smaller stake.
     const profitPortion = Math.min(amount, profit);
     const capitalPortion = Math.max(0, amount - profitPortion);
 
     const newCurrentBalance = balance - capitalPortion;
     const newTotalBalance = safeNumber(partner.totalBalance) - capitalPortion;
     const newTotalWithdrawals = safeNumber(partner.totalWithdrawals) + amount;
+    const newTotalDeposits = Math.max(
+      0,
+      safeNumber(partner.totalDeposits) - capitalPortion
+    );
+    const newBaseCapital = Math.max(
+      0,
+      (safeNumber(partner.baseCapital) || balance) - capitalPortion
+    );
     const today = new Date().toISOString().split("T")[0];
 
     const newHistoryEntry: BalanceHistoryEntry = {
@@ -155,15 +166,18 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const updatedHistory = [...existingHistory, newHistoryEntry];
 
     // --- 1a. Update the numeric fields (guaranteed to exist) ---
-    // Also stamp last_settlement_date so the distribution engine treats
-    // all prior trade profits as "settled" — profit resets to $0 while
-    // the investment (totalDeposits / baseCapital) stays unchanged.
+    // Stamp last_settlement_date so the distribution engine treats all
+    // prior trade profits as "settled" — profit resets to $0.
+    // totalDeposits / baseCapital shrink ONLY by capitalPortion (pure
+    // profit payouts leave investment untouched).
     const { error: updateError } = await supabase
       .from("partners")
       .update({
         "currentBalance": newCurrentBalance,
         total_balance: newTotalBalance,
         "totalWithdrawals": newTotalWithdrawals,
+        "totalDeposits": newTotalDeposits,
+        "baseCapital": newBaseCapital,
         last_settlement_date: new Date().toISOString(),
       })
       .eq("id", partner.id);
