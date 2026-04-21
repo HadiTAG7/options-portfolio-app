@@ -126,19 +126,38 @@ export default function PartnerDetailPage() {
     });
   }, [partner, ownershipPct, sellPuts, sellCalls, activeStocks, isGP]);
 
-  // Stock holdings — unchanged structure, shown in its own table.
+  // Stock holdings — partner-centric view with live pricing + P&L.
+  // If the live quote is missing we leave currentPrice null so the UI
+  // can render a "no live price" placeholder instead of pretending the
+  // purchase price is the current price.
   const stockPositions = useMemo(() => {
     if (!partner) return [];
     const share = ownershipPct / 100;
     return activeStocks.map((s) => {
-      const price = s.currentPrice ?? s.purchasePrice;
-      const globalMarketValue = price * s.quantity;
+      const purchasePrice = Number(s.purchasePrice) || 0;
+      const currentPrice =
+        typeof s.currentPrice === "number" && Number.isFinite(s.currentPrice)
+          ? s.currentPrice
+          : null;
+      const livePrice = currentPrice ?? purchasePrice; // fallback for value calcs
+      const partnerQuantity = s.quantity * share;
+      const partnerMarketValue = livePrice * partnerQuantity;
+      const partnerUnrealized = (livePrice - purchasePrice) * partnerQuantity;
+      const unrealizedPct =
+        purchasePrice > 0
+          ? ((livePrice - purchasePrice) / purchasePrice) * 100
+          : 0;
       return {
         id: s.id,
         ticker: s.ticker,
-        totalQuantity: s.quantity,
-        partnerQuantity: s.quantity * share,
-        partnerMarketValue: globalMarketValue * share,
+        purchasePrice,
+        currentPrice,
+        targetPrice: Number(s.targetSellPrice) || 0,
+        partnerQuantity,
+        partnerMarketValue,
+        partnerUnrealized,
+        unrealizedPct,
+        priceLoading: s.priceLoading === true,
       };
     });
   }, [partner, ownershipPct, activeStocks]);
@@ -467,15 +486,25 @@ export default function PartnerDetailPage() {
               <thead>
                 <tr className="text-[10px] text-on-surface-variant uppercase tracking-widest bg-surface-container-low">
                   <th className="px-4 py-3 font-medium">الرمز</th>
-                  <th className="px-4 py-3 font-medium">إجمالي الكمية</th>
+                  <th className="px-4 py-3 font-medium">
+                    التكلفة · السعر الحالي
+                  </th>
                   <th className="px-4 py-3 font-medium">حصة الشريك</th>
-                  <th className="px-4 py-3 font-medium">القيمة السوقية</th>
+                  <th className="px-4 py-3 font-medium">
+                    القيمة السوقية
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    ربح/خسارة غير محققة
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    السعر المستهدف
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {stockPositions.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center">
+                    <td colSpan={6} className="px-6 py-12 text-center">
                       <Icon
                         name="layers_clear"
                         className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
@@ -486,25 +515,91 @@ export default function PartnerDetailPage() {
                     </td>
                   </tr>
                 )}
-                {stockPositions.map((stk) => (
-                  <tr
-                    key={stk.id}
-                    className="hover:bg-white/[0.02] transition-colors"
-                  >
-                    <td className="px-4 py-3 text-sm font-bold text-white font-mono">
-                      {stk.ticker}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-on-surface-variant font-mono tabular-nums">
-                      {stk.totalQuantity.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
-                      {stk.partnerQuantity.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white font-mono tabular-nums">
-                      {formatCurrency(stk.partnerMarketValue)}
-                    </td>
-                  </tr>
-                ))}
+                {stockPositions.map((stk) => {
+                  const hasLive = stk.currentPrice !== null;
+                  const pnlPositive = stk.partnerUnrealized >= 0;
+                  return (
+                    <tr
+                      key={stk.id}
+                      className="hover:bg-white/[0.02] transition-colors"
+                    >
+                      <td className="px-4 py-3 text-sm font-bold text-white font-mono">
+                        {stk.ticker}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <div className="flex items-center gap-2 tabular-nums">
+                          <span className="text-xs text-on-surface-variant">
+                            ${stk.purchasePrice.toFixed(2)}
+                          </span>
+                          <Icon
+                            name="arrow_left_alt"
+                            className="!text-xs text-on-surface-variant/40"
+                          />
+                          {hasLive ? (
+                            <span className="text-xs text-white font-bold">
+                              ${stk.currentPrice!.toFixed(2)}
+                            </span>
+                          ) : stk.priceLoading ? (
+                            <span className="text-[10px] text-on-surface-variant/60">
+                              جاري التحديث...
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-on-surface-variant/40">
+                              —
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
+                        {stk.partnerQuantity.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white font-mono tabular-nums">
+                        {formatCurrency(stk.partnerMarketValue)}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        {hasLive ? (
+                          <div className="flex flex-col gap-0.5 tabular-nums">
+                            <span
+                              className={`text-xs font-bold ${
+                                pnlPositive
+                                  ? "text-emerald-400"
+                                  : "text-rose-400"
+                              }`}
+                            >
+                              {pnlPositive ? "+" : ""}
+                              {formatCurrency(stk.partnerUnrealized)}
+                            </span>
+                            <span
+                              className={`text-[10px] ${
+                                pnlPositive
+                                  ? "text-emerald-400/70"
+                                  : "text-rose-400/70"
+                              }`}
+                            >
+                              {pnlPositive ? "+" : ""}
+                              {stk.unrealizedPct.toFixed(2)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-on-surface-variant/40">
+                            لا يوجد سعر مرجعي
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono tabular-nums">
+                        {stk.targetPrice > 0 ? (
+                          <span className="text-xs text-primary">
+                            ${stk.targetPrice.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-on-surface-variant/40">
+                            —
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
