@@ -32,6 +32,15 @@ function formatExpiry(expiry: string): string {
   return `${day} ${month}`;
 }
 
+// Partner-friendly labels. The raw DB types ("Sell Put" / "Sell Call")
+// are trader jargon; partners see the strategy name + short English
+// gloss instead.
+function partnerFriendlyType(type: string): { ar: string; en: string } {
+  if (type === "Sell Put") return { ar: "تأمين نقدي", en: "Cash Secured Put" };
+  if (type === "Sell Call") return { ar: "بيع مغطى", en: "Covered Call" };
+  return { ar: type, en: "" };
+}
+
 export default function PartnerDetailPage() {
   const params = useParams<{ id: string }>();
   const partnerId = params?.id ?? "";
@@ -91,6 +100,14 @@ export default function PartnerDetailPage() {
       const partnerNetPremium = partnerNetOf(totalPremium, share, isGP);
       const partnerNetUnrealized = partnerNetOf(globalUnrealized, share, isGP);
 
+      // Partner-centric view: how many underlying shares they're exposed
+      // to, and how much of their cash is locked as collateral at the
+      // option's strike. `qty` already stores total underlying shares
+      // across all contracts, so no extra ×100.
+      const partnerShareExposure = qty * share;
+      const partnerLockedCollateral =
+        partnerShareExposure * (Number(t.strike) || 0);
+
       return {
         id: t.id,
         ticker: t.ticker,
@@ -98,8 +115,9 @@ export default function PartnerDetailPage() {
         strike: Number(t.strike) || 0,
         expiration: t.expiration,
         premium,
-        contracts: qty > 0 ? qty / 100 : 0,
         totalPremium,
+        partnerShareExposure,
+        partnerLockedCollateral,
         partnerNetPremium,
         spot,
         globalUnrealized,
@@ -303,13 +321,13 @@ export default function PartnerDetailPage() {
                     Strike · الانتهاء
                   </th>
                   <th className="px-4 py-3 font-medium">
-                    عقود · Contracts
+                    الأسهم المعرضة
+                  </th>
+                  <th className="px-4 py-3 font-medium">
+                    الكاش المحجوز
                   </th>
                   <th className="px-4 py-3 font-medium">
                     البريميوم · Entry
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    إجمالي البريميوم
                   </th>
                   <th className="px-4 py-3 font-medium text-emerald-400/80">
                     صافي بريميوم الشريك
@@ -336,6 +354,7 @@ export default function PartnerDetailPage() {
                 {optionPositions.map((opt) => {
                   const pnlPositive = opt.partnerNetUnrealized >= 0;
                   const isPut = opt.type === "Sell Put";
+                  const label = partnerFriendlyType(opt.type);
                   return (
                     <tr
                       key={opt.id}
@@ -345,15 +364,24 @@ export default function PartnerDetailPage() {
                         {opt.ticker}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-sm border font-bold uppercase ${
+                        <div
+                          className={`inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded-sm border ${
                             isPut
-                              ? "border-secondary/50 text-secondary"
-                              : "border-primary/50 text-primary"
+                              ? "border-secondary/50"
+                              : "border-primary/50"
                           }`}
                         >
-                          {opt.type}
-                        </span>
+                          <span
+                            className={`text-[10px] font-bold ${
+                              isPut ? "text-secondary" : "text-primary"
+                            }`}
+                          >
+                            {label.ar}
+                          </span>
+                          <span className="text-[9px] text-on-surface-variant/60 uppercase tracking-wider">
+                            {label.en}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3 font-mono">
                         <div className="flex flex-col gap-0.5">
@@ -365,8 +393,18 @@ export default function PartnerDetailPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant font-mono tabular-nums">
-                        {opt.contracts.toFixed(opt.contracts % 1 === 0 ? 0 : 2)}
+                      <td className="px-4 py-3 font-mono">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-white tabular-nums">
+                            {opt.partnerShareExposure.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant/60 tabular-nums">
+                            shares
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
+                        {formatCurrency(opt.partnerLockedCollateral)}
                       </td>
                       <td className="px-4 py-3 font-mono">
                         <div className="flex flex-col gap-0.5">
@@ -377,9 +415,6 @@ export default function PartnerDetailPage() {
                             per share
                           </span>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant font-mono tabular-nums">
-                        {formatCurrency(opt.totalPremium)}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm font-headline font-bold text-emerald-400 font-mono tabular-nums drop-shadow-[0_0_6px_rgba(52,211,153,0.35)]">
