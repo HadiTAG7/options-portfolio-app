@@ -19,13 +19,13 @@ import {
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
+  computePortfolioDistribution,
   tradeProfit,
   MANAGEMENT_FEE_RATE,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
-import { monthlySummaries } from "@/data/mock-data";
-import type { Trade } from "@/types";
+import type { Partner } from "@/types";
 
 export default function DashboardPage() {
   const { partners, totalAssets, loading: partnersLoading } = usePartners();
@@ -343,84 +343,196 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ═══════ Monthly Summary ═══════ */}
-      <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] backdrop-blur-sm">
-        <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <Icon name="analytics" className="text-emerald-400 !text-base" />
-            </div>
-            <h2 className="text-sm font-headline font-bold text-white tracking-[0.18em] uppercase">
-              الملخص الشهري · Monthly Summary
-            </h2>
+      {/* ═══════ Partner Profit Distribution ═══════ */}
+      <ProfitDistribution
+        partners={partners}
+        totalProfit={totalProfit}
+        loading={loading}
+      />
+    </AppShell>
+  );
+}
+
+// ── Dynamic Partner Profit Distribution ──
+
+function ProfitDistribution({
+  partners,
+  totalProfit,
+  loading,
+}: {
+  partners: Partner[];
+  totalProfit: number;
+  loading: boolean;
+}) {
+  const distribution = useMemo(
+    () => computePortfolioDistribution(partners, totalProfit),
+    [partners, totalProfit]
+  );
+
+  // GP first, then by netProfit descending
+  const sortedPartners = useMemo(() => {
+    return [...partners].sort((a, b) => {
+      const aDist = distribution[a.id];
+      const bDist = distribution[b.id];
+      if (aDist?.isManager && !bDist?.isManager) return -1;
+      if (!aDist?.isManager && bDist?.isManager) return 1;
+      return (bDist?.netProfit ?? 0) - (aDist?.netProfit ?? 0);
+    });
+  }, [partners, distribution]);
+
+  const totalNetProfit = useMemo(
+    () => Object.values(distribution).reduce((s, d) => s + d.netProfit, 0),
+    [distribution]
+  );
+  const totalFeeCollected = useMemo(() => {
+    const mgr = Object.values(distribution).find((d) => d.isManager);
+    return mgr?.feeAmount ?? 0;
+  }, [distribution]);
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] backdrop-blur-sm">
+      <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+            <Icon name="analytics" className="text-emerald-400 !text-base" />
           </div>
-          <button className="group flex items-center gap-1.5 rounded-lg border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-all duration-200 hover:border-emerald-500/30 hover:text-emerald-400">
-            <Icon name="download" className="!text-sm" />
-            تحميل التقرير
-          </button>
+          <div className="flex flex-col">
+            <h2 className="text-sm font-headline font-bold text-white tracking-[0.18em] uppercase">
+              توزيع أرباح الشركاء · Partner Distribution
+            </h2>
+            <span className="text-[9px] text-zinc-600 uppercase tracking-[0.22em] font-semibold mt-0.5">
+              After {(MANAGEMENT_FEE_RATE * 100).toFixed(0)}% Performance Fee
+            </span>
+          </div>
         </div>
+        <div className="hidden md:flex items-center gap-4 text-[10px] uppercase tracking-[0.18em] font-bold">
+          <div className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5">
+            <span className="text-zinc-500">رسوم محصلة · GP Fee:</span>
+            <span className="font-mono tabular-nums text-amber-300">
+              {formatWholeNumber(totalFeeCollected)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 px-3 py-1.5">
+            <span className="text-zinc-500">إجمالي · Total:</span>
+            <span
+              className={`font-mono tabular-nums ${
+                totalNetProfit >= 0 ? "text-emerald-400" : "text-rose-400"
+              }`}
+            >
+              {totalNetProfit >= 0 ? "+" : ""}
+              {formatWholeNumber(totalNetProfit)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+        </div>
+      ) : sortedPartners.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-16">
+          <Activity size={28} className="text-zinc-800" />
+          <p className="text-xs text-zinc-600">No partners yet · لا يوجد شركاء</p>
+        </div>
+      ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-right">
             <thead className="sticky top-0 z-10">
               <tr className="text-[10px] text-zinc-600 uppercase tracking-[0.2em] bg-zinc-950/80 backdrop-blur">
-                <th className="px-6 py-4 font-semibold">الشهر / السنة</th>
-                <th className="px-6 py-4 font-semibold">إجمالي رأس المال</th>
-                <th className="px-6 py-4 font-semibold">إجمالي الأرباح</th>
-                <th className="px-6 py-4 font-semibold">رسوم الإدارة</th>
-                <th className="px-6 py-4 font-semibold text-left">الحالة</th>
+                <th className="px-6 py-4 font-semibold">الاسم · Name</th>
+                <th className="px-6 py-4 font-semibold">رأس المال · Capital</th>
+                <th className="px-6 py-4 font-semibold">الحصة · Share</th>
+                <th className="px-6 py-4 font-semibold">الربح الصافي · Net Profit</th>
+                <th className="px-6 py-4 font-semibold text-left">الحالة · Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/40">
-              {monthlySummaries.map((summary) => (
-                <tr
-                  key={summary.id}
-                  className="hover:bg-emerald-500/[0.02] transition-colors duration-150"
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm text-white font-semibold">
-                        {summary.monthAr}
-                      </span>
-                      <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">
-                        {summary.quarter}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-mono tabular-nums text-zinc-300">
-                    {formatWholeNumber(summary.totalCapital)}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-mono tabular-nums font-bold text-emerald-400">
-                    +{formatWholeNumber(summary.totalProfits)}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-mono tabular-nums text-rose-400/80">
-                    {formatWholeNumber(summary.managementFees)}
-                  </td>
-                  <td className="px-6 py-4 text-left">
-                    <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-widest">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                      {summary.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {sortedPartners.map((p) => {
+                const dist = distribution[p.id];
+                if (!dist) return null;
+                const netPositive = dist.netProfit >= 0;
+                const capital = Number(p.currentBalance) || 0;
+                const isActive = capital > 0;
+                return (
+                  <tr
+                    key={p.id}
+                    className="hover:bg-emerald-500/[0.02] transition-colors duration-150"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg border text-[11px] font-black tracking-wide ${
+                            dist.isManager
+                              ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                              : "border-emerald-500/30 bg-emerald-500/5 text-emerald-300"
+                          }`}
+                        >
+                          {p.initials}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-white font-semibold">
+                              {p.name}
+                            </span>
+                            {dist.isManager && (
+                              <span className="inline-flex items-center rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-[1px] text-[8px] font-black uppercase tracking-[0.18em] text-amber-300">
+                                GP
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-mono text-[10px] text-zinc-600 uppercase tracking-widest">
+                            {p.code}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono tabular-nums text-zinc-300">
+                      {formatWholeNumber(capital)}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono tabular-nums text-zinc-400">
+                      {dist.ownershipPct.toFixed(2)}%
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-sm font-mono tabular-nums font-bold ${
+                        netPositive
+                          ? "text-emerald-400 [text-shadow:_0_0_12px_rgba(16,185,129,0.4)]"
+                          : "text-rose-400"
+                      }`}
+                    >
+                      {netPositive ? "+" : ""}
+                      {formatWholeNumber(dist.netProfit)}
+                    </td>
+                    <td className="px-6 py-4 text-left">
+                      {isActive ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-widest">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                          نشط · Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-zinc-700/40 bg-zinc-900/40 text-zinc-500 font-bold uppercase tracking-widest">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
+                          مكتمل · Completed
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t border-zinc-800/40 flex justify-between items-center text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">
-          <span>
-            عرض 1-4 من أصل 12 شهراً
-          </span>
-          <div className="flex gap-4">
-            <button className="hover:text-white transition-colors">
-              السابق
-            </button>
-            <button className="text-emerald-400 hover:text-emerald-300 transition-colors font-bold">
-              التالي
-            </button>
-          </div>
-        </div>
-      </section>
-    </AppShell>
+      )}
+
+      <div className="p-4 border-t border-zinc-800/40 flex justify-between items-center text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">
+        <span className="font-mono tabular-nums">
+          {sortedPartners.length} شريك · Partners
+        </span>
+        <span className="text-zinc-600">
+          Live · تحديث مباشر من صافي ربح الصندوق
+        </span>
+      </div>
+    </section>
   );
 }
 
