@@ -29,6 +29,7 @@ export interface Partner {
   managementFeesPaid: number;
   baseCapital: number;
   balanceHistory: BalanceHistoryEntry[];
+  archivedAt: string | null;
 }
 
 // ============================================================

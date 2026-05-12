@@ -36,6 +36,7 @@ function rowToPartner(row: PartnerRow): Partner {
     balanceHistory: Array.isArray(row.balanceHistory)
       ? (row.balanceHistory as Partner["balanceHistory"])
       : [],
+    archivedAt: row.archived_at ?? null,
   };
 }
 
@@ -93,6 +94,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const { data, error } = await supabase
       .from("partners")
       .select("*")
+      .is("archived_at", null)
       .order("total_balance", { ascending: false });
 
     if (error) {

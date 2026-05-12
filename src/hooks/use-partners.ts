@@ -38,6 +38,7 @@ function rowToPartner(row: PartnerRow): Partner {
     balanceHistory: Array.isArray(row.balanceHistory)
       ? (row.balanceHistory as Partner["balanceHistory"])
       : [],
+    archivedAt: row.archived_at ?? null,
   };
 }
 
@@ -66,6 +67,7 @@ export function usePartners() {
     const { data, error: fetchError } = await supabase
       .from("partners")
       .select("*")
+      .is("archived_at", null)
       .order("total_balance", { ascending: false });
 
     console.log(
@@ -81,6 +83,14 @@ export function usePartners() {
       const mapped = withDerivedOwnership((data ?? []).map(rowToPartner));
       console.log("[fetchPartners] Partners loaded:", mapped.map(p => `${p.name} (${p.id})`));
       setPartners(mapped);
+
+      // Snapshot to localStorage as a backup against accidental data loss
+      try {
+        localStorage.setItem(
+          "kt.fund.partners.snapshot.v1",
+          JSON.stringify({ ts: new Date().toISOString(), partners: mapped })
+        );
+      } catch { /* quota exceeded — ignore */ }
     }
 
     setLoading(false);
@@ -94,10 +104,10 @@ export function usePartners() {
     async (id: string) => {
       setError(null);
 
-      // 1. Delete the partner row
+      // Soft-delete: mark as archived instead of permanent removal
       const { error: deleteError } = await supabase
         .from("partners")
-        .delete()
+        .update({ archived_at: new Date().toISOString() })
         .eq("id", id);
 
       if (deleteError) {
