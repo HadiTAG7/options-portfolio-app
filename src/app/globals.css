@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* ── Thmanyah Sans (body / UI) ── */
+@font-face { font-family: "Thmanyah Sans"; font-weight: 300; font-display: swap; src: url("/fonts/thmanyah/thmanyahsans-Light.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Sans"; font-weight: 400; font-display: swap; src: url("/fonts/thmanyah/thmanyahsans-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Sans"; font-weight: 500; font-display: swap; src: url("/fonts/thmanyah/thmanyahsans-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Sans"; font-weight: 700; font-display: swap; src: url("/fonts/thmanyah/thmanyahsans-Bold.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Sans"; font-weight: 900; font-display: swap; src: url("/fonts/thmanyah/thmanyahsans-Black.woff2") format("woff2"); }
+
+/* ── Thmanyah Serif Display (headlines) ── */
+@font-face { font-family: "Thmanyah Serif Display"; font-weight: 300; font-display: swap; src: url("/fonts/thmanyah/thmanyahserifdisplay-Light.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Serif Display"; font-weight: 400; font-display: swap; src: url("/fonts/thmanyah/thmanyahserifdisplay-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Serif Display"; font-weight: 500; font-display: swap; src: url("/fonts/thmanyah/thmanyahserifdisplay-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Serif Display"; font-weight: 700; font-display: swap; src: url("/fonts/thmanyah/thmanyahserifdisplay-Bold.woff2") format("woff2"); }
+@font-face { font-family: "Thmanyah Serif Display"; font-weight: 900; font-display: swap; src: url("/fonts/thmanyah/thmanyahserifdisplay-Black.woff2") format("woff2"); }
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -69,10 +83,10 @@
   --color-outline-variant: #2a2a2e;
 
   /* Fonts */
-  --font-headline: "Be Vietnam Pro", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
-  --font-label: "Inter", system-ui, sans-serif;
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-headline: "Thmanyah Serif Display", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-body: "Thmanyah Sans", "Inter", system-ui, sans-serif;
+  --font-label: "Thmanyah Sans", "Inter", system-ui, sans-serif;
+  --font-sans: "Thmanyah Sans", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* Border Radius - terminal aesthetic */
