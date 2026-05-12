@@ -137,6 +137,9 @@
 }
 
 @layer base {
+  html {
+    font-size: 17px;
+  }
   * {
     border-color: var(--color-outline-variant);
   }
