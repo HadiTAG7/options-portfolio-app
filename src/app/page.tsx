@@ -162,18 +162,14 @@ export default function DashboardPage() {
 
     const deployed = Object.values(buckets).reduce((s, v) => s + v, 0);
 
-    // Cash = total fund equity - deployed
-    const totalDeposits = partners.reduce(
-      (sum, p) => sum + (Number(p.currentBalance) || 0),
-      0
-    );
-    const cash = Math.max(0, totalDeposits + totalProfit - deployed);
+    // Cash = AUM (total partner balances) - deployed
+    const cash = Math.max(0, totalAssets - deployed);
 
     const entries = Object.entries(buckets)
       .map(([ticker, value]) => ({ ticker, value }))
       .sort((a, b) => b.value - a.value);
 
-    const grandTotal = deployed + cash;
+    const grandTotal = totalAssets;
     if (grandTotal === 0) return { slices: [] as AllocSlice[], total: 0 };
 
     // Top 5 tickers + "Others" bucket
@@ -208,7 +204,7 @@ export default function DashboardPage() {
     }
 
     return { slices, total: grandTotal };
-  }, [activeStocks, sellPuts, sellCalls, partners, totalProfit]);
+  }, [activeStocks, sellPuts, sellCalls, totalAssets]);
 
   return (
     <AppShell>
