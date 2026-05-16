@@ -484,6 +484,7 @@ function MonthlySummaryTable({
                 <th className="px-6 py-4 font-semibold">الشهر / السنة</th>
                 <th className="px-6 py-4 font-semibold">إجمالي رأس المال</th>
                 <th className="px-6 py-4 font-semibold">إجمالي الأرباح</th>
+                <th className="px-6 py-4 font-semibold">نسبة الربح</th>
                 <th className="px-6 py-4 font-semibold">رسوم الإدارة (GP)</th>
                 <th className="px-6 py-4 font-semibold text-left">الحالة</th>
               </tr>
@@ -522,6 +523,15 @@ function MonthlySummaryTable({
                     >
                       {profitPositive ? "+" : ""}
                       {formatWholeNumber(entry.grossProfit)}
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-sm font-mono tabular-nums font-bold ${
+                        profitPositive ? "text-emerald-400" : "text-rose-400"
+                      }`}
+                    >
+                      {entry.totalCapital > 0
+                        ? `${profitPositive ? "+" : ""}${((entry.grossProfit / entry.totalCapital) * 100).toFixed(2)}%`
+                        : "—"}
                     </td>
                     <td className="px-6 py-4 text-sm font-mono tabular-nums text-amber-300/80">
                       {formatWholeNumber(entry.gpFees)}
