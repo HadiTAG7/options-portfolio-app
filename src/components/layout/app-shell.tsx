@@ -27,7 +27,7 @@ function AppShellInner({ children }: AppShellProps) {
         }`}
       >
         <TopBar />
-        <div className="pt-24 px-8 pb-12 max-w-[1600px] mx-auto">
+        <div className="pt-24 px-4 pb-12 max-w-[1800px] mx-auto">
           {children}
         </div>
       </main>
