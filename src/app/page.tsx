@@ -160,12 +160,21 @@ export default function DashboardPage() {
       buckets[key] = (buckets[key] ?? 0) + val;
     }
 
+    const deployed = Object.values(buckets).reduce((s, v) => s + v, 0);
+
+    // Cash = total fund equity - deployed
+    const totalDeposits = partners.reduce(
+      (sum, p) => sum + (Number(p.currentBalance) || 0),
+      0
+    );
+    const cash = Math.max(0, totalDeposits + totalProfit - deployed);
+
     const entries = Object.entries(buckets)
       .map(([ticker, value]) => ({ ticker, value }))
       .sort((a, b) => b.value - a.value);
 
-    const total = entries.reduce((s, e) => s + e.value, 0);
-    if (total === 0) return { slices: [] as AllocSlice[], total: 0 };
+    const grandTotal = deployed + cash;
+    if (grandTotal === 0) return { slices: [] as AllocSlice[], total: 0 };
 
     // Top 5 tickers + "Others" bucket
     const MAX_SLICES = 5;
@@ -176,7 +185,7 @@ export default function DashboardPage() {
     const slices: AllocSlice[] = top.map((e, i) => ({
       ticker: e.ticker,
       value: e.value,
-      pct: (e.value / total) * 100,
+      pct: (e.value / grandTotal) * 100,
       color: ALLOC_COLORS[i % ALLOC_COLORS.length],
     }));
 
@@ -184,13 +193,22 @@ export default function DashboardPage() {
       slices.push({
         ticker: "Others",
         value: othersValue,
-        pct: (othersValue / total) * 100,
+        pct: (othersValue / grandTotal) * 100,
         color: ALLOC_COLORS[MAX_SLICES % ALLOC_COLORS.length],
       });
     }
 
-    return { slices, total };
-  }, [activeStocks, sellPuts, sellCalls]);
+    if (cash > 0) {
+      slices.push({
+        ticker: "CASH",
+        value: cash,
+        pct: (cash / grandTotal) * 100,
+        color: "#3b82f6",
+      });
+    }
+
+    return { slices, total: grandTotal };
+  }, [activeStocks, sellPuts, sellCalls, partners, totalProfit]);
 
   return (
     <AppShell>
