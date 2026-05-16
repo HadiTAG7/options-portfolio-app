@@ -7,7 +7,7 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
-  Target,
+  Receipt,
   ChevronDown,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -38,8 +38,6 @@ export default function DashboardPage() {
     sellCalls,
     totalProfit,
     openCount,
-    potentialTargetProfit,
-    projectedPortfolioValue,
     loading: tradesLoading,
   } = useTrades();
 
@@ -51,11 +49,6 @@ export default function DashboardPage() {
   const yieldPct =
     fundBreakdown.originalCapital > 0
       ? (totalProfit / fundBreakdown.originalCapital) * 100
-      : 0;
-  const potentialPositive = potentialTargetProfit >= 0;
-  const potentialReturnPct =
-    fundBreakdown.originalCapital > 0
-      ? (potentialTargetProfit / fundBreakdown.originalCapital) * 100
       : 0;
 
   // ── Selected month state (drives distribution + donut center) ──
@@ -302,46 +295,43 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* ── Projected Portfolio Value ── */}
+            {/* ── Management Fees Total ── */}
             <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
-                <Target size={72} strokeWidth={1} />
+                <Receipt size={72} strokeWidth={1} />
               </div>
               <div className="relative flex flex-col gap-4">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-400/20">
-                    <Target size={18} className="text-cyan-300" />
+                    <Receipt size={18} className="text-cyan-300" />
                   </div>
                   <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">
-                    القيمة المستهدفة · Projected Value
+                    رسوم الإدارة · Management Fees
                   </span>
                 </div>
                 <div className="flex items-baseline gap-3">
                   <span className="text-4xl font-headline font-light tracking-tight text-cyan-200 font-mono tabular-nums">
-                    {formatWholeNumber(projectedPortfolioValue)}
+                    {formatCurrency(gpFeeTotal)}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-[10px]">
                   <span className="text-zinc-500">
-                    <span className="opacity-70">الربح المحتمل:</span>{" "}
-                    <span
-                      className={`font-mono tabular-nums font-bold ${
-                        potentialPositive ? "text-cyan-300" : "text-rose-400"
-                      }`}
-                    >
-                      {potentialPositive ? "+" : ""}
-                      {formatCompactCurrency(potentialTargetProfit)}
+                    <span className="opacity-70">نسبة الرسوم:</span>{" "}
+                    <span className="font-mono tabular-nums font-bold text-cyan-300">
+                      {(MANAGEMENT_FEE_RATE * 100).toFixed(0)}%
                     </span>
                   </span>
                   <span className="text-zinc-600">|</span>
-                  <span
-                    className={`font-mono tabular-nums font-bold ${
-                      potentialPositive ? "text-cyan-300" : "text-rose-400"
-                    }`}
-                  >
-                    {potentialPositive ? "+" : ""}
-                    {potentialReturnPct.toFixed(1)}%
+                  <span className="text-zinc-500">
+                    <span className="opacity-70">صافي الربح:</span>{" "}
+                    <span
+                      className={`font-mono tabular-nums font-bold ${
+                        netProfitAfterFee >= 0 ? "text-cyan-300" : "text-rose-400"
+                      }`}
+                    >
+                      {formatCompactCurrency(netProfitAfterFee)}
+                    </span>
                   </span>
                 </div>
               </div>
