@@ -1189,7 +1189,7 @@ function PortfolioComposition({
                       {formatCompactCurrency(total)}
                     </span>
                     <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-semibold">
-                      Deployed
+                      Total
                     </span>
                   </>
                 )}
