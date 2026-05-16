@@ -296,7 +296,7 @@ export function useTrades() {
     void (async () => {
       const n = await checkAndCloseExpiredTrades(tradesList);
       if (n > 0) {
-        setToast(`Processed ${n} expired position${n === 1 ? "" : "s"}.`);
+        setToast(`تم إغلاق ${n} صفقة منتهية — لم تتغير الأرباح`);
       }
     })();
   }, [loading, tradesList, expirationRan, checkAndCloseExpiredTrades]);

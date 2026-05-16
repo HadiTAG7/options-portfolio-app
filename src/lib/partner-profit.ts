@@ -41,11 +41,13 @@ function tradeCloseDate(t: Trade): string | null {
 }
 
 // When was this trade's profit actually earned?
-// Open options: premium collected at trade date.
-// Closed trades: profit realized at close/expiration.
+// Short options: premium collected at trade entry — always use t.date
+// so the settlement comparison stays stable across open→closed.
+// Other trades (Stock Sell): profit realized at close/trade date.
 function tradeProfitDate(t: Trade): string | null {
-  if (t.status === "open") return t.date?.trim() || null;
-  return tradeCloseDate(t);
+  const isShortOption = t.type === "Sell Put" || t.type === "Sell Call";
+  if (isShortOption) return t.date?.trim() || null;
+  return tradeCloseDate(t) ?? t.date?.trim() ?? null;
 }
 
 // Two checks gate per-trade eligibility:
