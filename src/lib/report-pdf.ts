@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export interface MonthlyReportData {
   periodLabel: string;
@@ -92,7 +92,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
 
   const profitPositive = data.partnerSummary.netProfit >= 0;
 
-  (doc as jsPDF & { autoTable: (opts: Record<string, unknown>) => void }).autoTable({
+  autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
     head: [["Item", "Value"]],
@@ -132,7 +132,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   doc.text("Fund Summary", margin, y);
   y += 4;
 
-  (doc as jsPDF & { autoTable: (opts: Record<string, unknown>) => void }).autoTable({
+  autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
     head: [["Metric", "Value"]],
