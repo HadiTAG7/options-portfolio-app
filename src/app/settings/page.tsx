@@ -536,22 +536,27 @@ function DepositSettlementFix() {
         const settlementDay = partner.lastSettlementDate?.slice(0, 10);
         if (!settlementDay) continue;
 
-        // A settlement date is from the deposit bug iff:
-        //  1. partner has no withdrawals (otherwise the settlement may be
-        //     a legitimate withdrawal stamp)
-        //  2. balanceHistory has a balance-change entry on the settlement
-        //     day (deposits write balanceHistory; capitalize-profits does
-        //     NOT — so this isolates the deposit case)
-        // balanceHistory + transactions are both checked: balanceHistory
-        // lives on the partner row and is reliably populated, transactions
-        // is the secondary signal in case balanceHistory is empty.
-        const hasNoWithdrawals = (partner.totalWithdrawals || 0) === 0;
-        const balanceEntryOnDay = (partner.balanceHistory || []).some(
-          (entry) => entry.date === settlementDay
+        // Did the balance go UP on the settlement day? If so, the
+        // settlement was stamped by a deposit (bug); a withdrawal would
+        // have shrunk the balance and would have been a legitimate stamp.
+        // Capitalize-profits doesn't write balanceHistory at all, so it
+        // isn't a false-positive here.
+        const sortedHistory = [...(partner.balanceHistory || [])].sort(
+          (a, b) => a.date.localeCompare(b.date)
+        );
+        const entryIdx = sortedHistory.findIndex(
+          (e) => e.date === settlementDay
         );
 
+        let wasIncrease = false;
+        if (entryIdx >= 0) {
+          const prevBalance =
+            entryIdx > 0 ? sortedHistory[entryIdx - 1].balance : 0;
+          wasIncrease = sortedHistory[entryIdx].balance > prevBalance;
+        }
+
         let hasDepositTx = false;
-        if (!balanceEntryOnDay) {
+        if (!wasIncrease) {
           const { data: depositTxs } = await supabase
             .from("transactions")
             .select("id")
@@ -562,8 +567,7 @@ function DepositSettlementFix() {
           hasDepositTx = Boolean(depositTxs && depositTxs.length > 0);
         }
 
-        if (!hasNoWithdrawals) continue;
-        if (!balanceEntryOnDay && !hasDepositTx) continue;
+        if (!wasIncrease && !hasDepositTx) continue;
 
         const { error: updateError } = await supabase
           .from("partners")
