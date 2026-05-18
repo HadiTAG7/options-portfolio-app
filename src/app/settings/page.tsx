@@ -24,6 +24,7 @@ import type { FundSettings } from "@/hooks/use-settings";
 import { usePartners } from "@/hooks/use-partners";
 import { supabase } from "@/lib/supabase";
 import { Wrench } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const REFRESH_OPTIONS: { value: FundSettings["priceRefreshInterval"]; label: string }[] = [
   { value: "manual", label: "Manual Only" },
@@ -508,84 +509,58 @@ function MonthlyReportSender() {
   );
 }
 
-// One-shot repair for a bug where handleDeposit used to stamp
-// last_settlement_date on every deposit, which excluded the partner
-// from all prior-period trade profits via isEligible(). This card
-// finds partners whose settlement date matches a Deposit transaction
-// on the same day and nulls the field for them.
+// Set a prior-distribution cutoff for partners whose settlement date
+// was cleared (e.g. by the earlier auto-fix tool) so they stop
+// double-counting profits earned BEFORE the last actual distribution.
+// Touches only partners whose last_settlement_date is currently NULL —
+// partners with a valid settlement date are left untouched.
 function DepositSettlementFix() {
   const { partners, refetch } = usePartners();
   const [running, setRunning] = useState(false);
+  const [date, setDate] = useState("");
   const [result, setResult] = useState<{
-    fixed: string[];
-    checked: number;
+    count: number;
+    date: string;
+    names: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const candidates = partners.filter((p) => p.lastSettlementDate);
+  const needsDate = partners.filter((p) => !p.lastSettlementDate);
 
-  async function handleFix() {
+  async function handleApply() {
+    if (!date) {
+      setError("يرجى اختيار التاريخ أولاً");
+      return;
+    }
+    if (needsDate.length === 0) {
+      setError("ما في شركاء يحتاجون تاريخ تسوية");
+      return;
+    }
+
     setRunning(true);
     setError(null);
     setResult(null);
 
     try {
-      const fixed: string[] = [];
+      // End-of-day so any trade profit dated <= picked date is settled.
+      const settlementIso = `${date}T23:59:59.999Z`;
+      const ids = needsDate.map((p) => p.id);
 
-      for (const partner of candidates) {
-        const settlementDay = partner.lastSettlementDate?.slice(0, 10);
-        if (!settlementDay) continue;
+      const { error: updateError } = await supabase
+        .from("partners")
+        .update({ last_settlement_date: settlementIso })
+        .in("id", ids);
 
-        // Did the balance go UP on the settlement day? If so, the
-        // settlement was stamped by a deposit (bug); a withdrawal would
-        // have shrunk the balance and would have been a legitimate stamp.
-        // Capitalize-profits doesn't write balanceHistory at all, so it
-        // isn't a false-positive here.
-        const sortedHistory = [...(partner.balanceHistory || [])].sort(
-          (a, b) => a.date.localeCompare(b.date)
-        );
-        const entryIdx = sortedHistory.findIndex(
-          (e) => e.date === settlementDay
-        );
-
-        let wasIncrease = false;
-        if (entryIdx >= 0) {
-          const prevBalance =
-            entryIdx > 0 ? sortedHistory[entryIdx - 1].balance : 0;
-          wasIncrease = sortedHistory[entryIdx].balance > prevBalance;
-        }
-
-        let hasDepositTx = false;
-        if (!wasIncrease) {
-          const { data: depositTxs } = await supabase
-            .from("transactions")
-            .select("id")
-            .eq("investorId", partner.id)
-            .eq("type", "Deposit")
-            .eq("date", settlementDay)
-            .limit(1);
-          hasDepositTx = Boolean(depositTxs && depositTxs.length > 0);
-        }
-
-        if (!wasIncrease && !hasDepositTx) continue;
-
-        const { error: updateError } = await supabase
-          .from("partners")
-          .update({ last_settlement_date: null })
-          .eq("id", partner.id);
-
-        if (updateError) {
-          console.warn(
-            `[fix] clear failed for ${partner.name}:`,
-            updateError
-          );
-          continue;
-        }
-
-        fixed.push(partner.name);
+      if (updateError) {
+        setError(updateError.message);
+        return;
       }
 
-      setResult({ fixed, checked: candidates.length });
+      setResult({
+        count: ids.length,
+        date,
+        names: needsDate.map((p) => p.name),
+      });
       await refetch();
     } catch (err: unknown) {
       const msg =
@@ -602,42 +577,61 @@ function DepositSettlementFix() {
     <div className="space-y-4">
       <div>
         <p className="text-[12px] font-semibold text-zinc-200">
-          إصلاح حساب الأرباح بعد الإيداعات
+          تعيين تاريخ التوزيع السابق
         </p>
         <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
-          Restore profit eligibility after deposits
+          Set previous distribution cutoff
         </p>
       </div>
 
       <p className="text-[11px] leading-relaxed text-zinc-400">
-        النسخة السابقة كانت تعتبر كل إيداع "تثبيت أرباح"، فيستثني الشريك من حصة
-        الصفقات السابقة. هذا الإصلاح يبحث عن الشركاء الذين تاريخ تسويتهم يطابق
-        يوم إيداع مسجّل لهم، ويعيد حقهم في الأرباح.
+        اختر تاريخ آخر توزيع فعلي للأرباح. كل ربح صفقة تاريخه قبل أو يساوي هذا
+        التاريخ يُعتبر موزّعاً، فلا يُحتسب مرة ثانية. الأداة تحط هذا التاريخ
+        فقط للشركاء الذين <strong>ليس عندهم تاريخ تسوية حالياً</strong>؛ من
+        عندهم تاريخ موجود لا يتم تعديله.
       </p>
 
-      {candidates.length > 0 && (
+      {needsDate.length > 0 ? (
         <p className="text-[11px] text-amber-300">
-          {candidates.length} شريك عندهم تاريخ تسوية للفحص
+          {needsDate.length} شريك بدون تاريخ تسوية: {needsDate.map((p) => p.name).join("، ")}
+        </p>
+      ) : (
+        <p className="text-[11px] text-emerald-300">
+          كل الشركاء عندهم تاريخ تسوية. لا حاجة لتطبيق شيء.
         </p>
       )}
 
-      <button
-        onClick={handleFix}
-        disabled={running || candidates.length === 0}
-        className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition-all duration-200 hover:bg-amber-500 hover:shadow-[0_0_28px_-4px_rgba(245,158,11,0.7)] active:scale-[0.98] disabled:opacity-70"
-      >
-        {running ? (
-          <>
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            جاري الفحص...
-          </>
-        ) : (
-          <>
-            <Wrench size={12} />
-            تشخيص وإصلاح
-          </>
-        )}
-      </button>
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+            تاريخ التوزيع السابق
+          </label>
+          <DatePicker
+            value={date}
+            onChange={setDate}
+            disabled={running}
+            placeholder="اختر تاريخ التوزيع"
+          />
+        </div>
+
+        <button
+          onClick={handleApply}
+          disabled={running || needsDate.length === 0 || !date}
+          className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition-all duration-200 hover:bg-amber-500 hover:shadow-[0_0_28px_-4px_rgba(245,158,11,0.7)] active:scale-[0.98] disabled:opacity-70"
+        >
+          {running ? (
+            <>
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              جاري التطبيق...
+            </>
+          ) : (
+            <>
+              <Wrench size={12} />
+              تطبيق
+            </>
+          )}
+        </button>
+      </div>
 
       {error && (
         <div className="flex items-center gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
@@ -647,22 +641,14 @@ function DepositSettlementFix() {
 
       {result && (
         <div className="space-y-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 p-4 text-[11px]">
-          {result.fixed.length === 0 ? (
-            <p className="text-zinc-400">
-              تم فحص {result.checked} شريك، لم يُعثر على حالات تحتاج إصلاح.
-            </p>
-          ) : (
-            <>
-              <p className="text-emerald-400 font-bold">
-                ✓ تم إصلاح {result.fixed.length} شريك
-              </p>
-              <ul className="space-y-1 text-zinc-300">
-                {result.fixed.map((name) => (
-                  <li key={name}>• {name}</li>
-                ))}
-              </ul>
-            </>
-          )}
+          <p className="text-emerald-400 font-bold">
+            ✓ تم تعيين {result.date} كتاريخ توزيع لـ {result.count} شريك
+          </p>
+          <ul className="space-y-1 text-zinc-300">
+            {result.names.map((name) => (
+              <li key={name}>• {name}</li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
