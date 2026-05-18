@@ -21,6 +21,7 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { useSettings } from "@/hooks/use-settings";
 import type { FundSettings } from "@/hooks/use-settings";
+import { usePartners } from "@/hooks/use-partners";
 
 const REFRESH_OPTIONS: { value: FundSettings["priceRefreshInterval"]; label: string }[] = [
   { value: "manual", label: "Manual Only" },
@@ -310,10 +311,12 @@ function SettingsCard({
 }
 
 function MonthlyReportSender() {
+  const { partners } = usePartners();
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{
     sentCount: number;
@@ -344,7 +347,10 @@ function MonthlyReportSender() {
       const res = await fetch("/api/reports/send-monthly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month: selectedMonth }),
+        body: JSON.stringify({
+          month: selectedMonth,
+          partnerId: selectedPartnerId || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -373,41 +379,64 @@ function MonthlyReportSender() {
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3">
         <select
-          value={selectedMonth}
+          value={selectedPartnerId}
           onChange={(e) => {
-            setSelectedMonth(e.target.value);
+            setSelectedPartnerId(e.target.value);
             setResult(null);
             setError(null);
           }}
           disabled={sending}
-          className="flex-1 rounded-md border border-zinc-800/70 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition-all focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-50"
+          className="w-full rounded-md border border-zinc-800/70 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition-all focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-50"
         >
-          {months.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
+          <option value="">كل الشركاء — All partners</option>
+          {partners
+            .filter((p) => p.email)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.code ? ` (${p.code})` : ""}
+              </option>
+            ))}
         </select>
 
-        <button
-          onClick={handleSend}
-          disabled={sending}
-          className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_20px_-6px_rgba(34,211,238,0.5)] transition-all duration-200 hover:bg-cyan-500 hover:shadow-[0_0_28px_-4px_rgba(34,211,238,0.7)] active:scale-[0.98] disabled:opacity-70"
-        >
-          {sending ? (
-            <>
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              جاري الإرسال...
-            </>
-          ) : (
-            <>
-              <Send size={12} />
-              إرسال
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedMonth}
+            onChange={(e) => {
+              setSelectedMonth(e.target.value);
+              setResult(null);
+              setError(null);
+            }}
+            disabled={sending}
+            className="flex-1 rounded-md border border-zinc-800/70 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition-all focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-50"
+          >
+            {months.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={handleSend}
+            disabled={sending}
+            className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_20px_-6px_rgba(34,211,238,0.5)] transition-all duration-200 hover:bg-cyan-500 hover:shadow-[0_0_28px_-4px_rgba(34,211,238,0.7)] active:scale-[0.98] disabled:opacity-70"
+          >
+            {sending ? (
+              <>
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                جاري الإرسال...
+              </>
+            ) : (
+              <>
+                <Send size={12} />
+                إرسال
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {error && (

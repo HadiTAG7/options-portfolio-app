@@ -79,7 +79,10 @@ function computeMonthlyBuckets(trades: Trade[]): Record<string, number> {
 
 export async function POST(request: NextRequest) {
   try {
-    const { month } = await request.json();
+    const { month, partnerId } = (await request.json()) as {
+      month: string;
+      partnerId?: string;
+    };
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return Response.json(
@@ -113,6 +116,19 @@ export async function POST(request: NextRequest) {
     if (pError) throw new Error(`Failed to fetch partners: ${pError.message}`);
 
     const partners = (partnerRows ?? []).map(rowToPartner);
+
+    // Optional single-recipient mode. We still keep the full partners list
+    // for ownership/distribution math (so a partner's share doesn't change
+    // when only they receive the email) and only narrow the send loop.
+    const targetPartners = partnerId
+      ? partners.filter((p) => p.id === partnerId)
+      : partners;
+    if (partnerId && targetPartners.length === 0) {
+      return Response.json(
+        { success: false, error: "Partner not found." },
+        { status: 404 }
+      );
+    }
 
     // Fetch trades
     const { data: tradeRows, error: tError } = await supabase
@@ -167,7 +183,7 @@ export async function POST(request: NextRequest) {
       reason?: string;
     }> = [];
 
-    for (const partner of partners) {
+    for (const partner of targetPartners) {
       if (!partner.email) {
         results.push({
           partnerId: partner.id,
