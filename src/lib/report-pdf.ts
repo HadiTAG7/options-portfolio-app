@@ -70,7 +70,6 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
 
   const partnerInfo = [
     ["Code", data.partner.code],
-    ["Ownership", `${data.partnerSummary.returnPct >= 0 ? "" : ""}${data.partner.ownershipPct.toFixed(2)}%`],
     ["Current Balance", fmt(data.partnerSummary.currentBalance)],
   ];
 
