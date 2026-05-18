@@ -69,7 +69,6 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   doc.setTextColor(60, 60, 60);
 
   const partnerInfo = [
-    ["Name", data.partner.name],
     ["Code", data.partner.code],
     ["Ownership", `${data.partnerSummary.returnPct >= 0 ? "" : ""}${data.partner.ownershipPct.toFixed(2)}%`],
     ["Current Balance", fmt(data.partnerSummary.currentBalance)],
