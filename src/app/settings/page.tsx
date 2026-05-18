@@ -536,38 +536,49 @@ function DepositSettlementFix() {
         const settlementDay = partner.lastSettlementDate?.slice(0, 10);
         if (!settlementDay) continue;
 
-        const { data: depositTxs, error: txError } = await supabase
-          .from("transactions")
-          .select("id")
-          .eq("investorId", partner.id)
-          .eq("type", "Deposit")
-          .eq("date", settlementDay)
-          .limit(1);
+        // A settlement date is from the deposit bug iff:
+        //  1. partner has no withdrawals (otherwise the settlement may be
+        //     a legitimate withdrawal stamp)
+        //  2. balanceHistory has a balance-change entry on the settlement
+        //     day (deposits write balanceHistory; capitalize-profits does
+        //     NOT — so this isolates the deposit case)
+        // balanceHistory + transactions are both checked: balanceHistory
+        // lives on the partner row and is reliably populated, transactions
+        // is the secondary signal in case balanceHistory is empty.
+        const hasNoWithdrawals = (partner.totalWithdrawals || 0) === 0;
+        const balanceEntryOnDay = (partner.balanceHistory || []).some(
+          (entry) => entry.date === settlementDay
+        );
 
-        if (txError) {
+        let hasDepositTx = false;
+        if (!balanceEntryOnDay) {
+          const { data: depositTxs } = await supabase
+            .from("transactions")
+            .select("id")
+            .eq("investorId", partner.id)
+            .eq("type", "Deposit")
+            .eq("date", settlementDay)
+            .limit(1);
+          hasDepositTx = Boolean(depositTxs && depositTxs.length > 0);
+        }
+
+        if (!hasNoWithdrawals) continue;
+        if (!balanceEntryOnDay && !hasDepositTx) continue;
+
+        const { error: updateError } = await supabase
+          .from("partners")
+          .update({ last_settlement_date: null })
+          .eq("id", partner.id);
+
+        if (updateError) {
           console.warn(
-            `[fix] transactions check failed for ${partner.name}:`,
-            txError
+            `[fix] clear failed for ${partner.name}:`,
+            updateError
           );
           continue;
         }
 
-        if (depositTxs && depositTxs.length > 0) {
-          const { error: updateError } = await supabase
-            .from("partners")
-            .update({ last_settlement_date: null })
-            .eq("id", partner.id);
-
-          if (updateError) {
-            console.warn(
-              `[fix] clear failed for ${partner.name}:`,
-              updateError
-            );
-            continue;
-          }
-
-          fixed.push(partner.name);
-        }
+        fixed.push(partner.name);
       }
 
       setResult({ fixed, checked: candidates.length });
