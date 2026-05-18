@@ -22,6 +22,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { useSettings } from "@/hooks/use-settings";
 import type { FundSettings } from "@/hooks/use-settings";
 import { usePartners } from "@/hooks/use-partners";
+import { supabase } from "@/lib/supabase";
+import { Wrench } from "lucide-react";
 
 const REFRESH_OPTIONS: { value: FundSettings["priceRefreshInterval"]; label: string }[] = [
   { value: "manual", label: "Manual Only" },
@@ -270,6 +272,15 @@ export default function SettingsPage() {
           <MonthlyReportSender />
         </SettingsCard>
 
+        {/* ═══════ Maintenance ═══════ */}
+        <SettingsCard
+          icon={<Wrench size={14} className="text-amber-300" />}
+          title="Maintenance"
+          subtitle="الصيانة"
+        >
+          <DepositSettlementFix />
+        </SettingsCard>
+
         {/* ═══════ Danger Zone ═══════ */}
         <div className="lg:col-span-2">
           <DangerZone />
@@ -491,6 +502,152 @@ function MonthlyReportSender() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One-shot repair for a bug where handleDeposit used to stamp
+// last_settlement_date on every deposit, which excluded the partner
+// from all prior-period trade profits via isEligible(). This card
+// finds partners whose settlement date matches a Deposit transaction
+// on the same day and nulls the field for them.
+function DepositSettlementFix() {
+  const { partners, refetch } = usePartners();
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{
+    fixed: string[];
+    checked: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const candidates = partners.filter((p) => p.lastSettlementDate);
+
+  async function handleFix() {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const fixed: string[] = [];
+
+      for (const partner of candidates) {
+        const settlementDay = partner.lastSettlementDate?.slice(0, 10);
+        if (!settlementDay) continue;
+
+        const { data: depositTxs, error: txError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("investorId", partner.id)
+          .eq("type", "Deposit")
+          .eq("date", settlementDay)
+          .limit(1);
+
+        if (txError) {
+          console.warn(
+            `[fix] transactions check failed for ${partner.name}:`,
+            txError
+          );
+          continue;
+        }
+
+        if (depositTxs && depositTxs.length > 0) {
+          const { error: updateError } = await supabase
+            .from("partners")
+            .update({ last_settlement_date: null })
+            .eq("id", partner.id);
+
+          if (updateError) {
+            console.warn(
+              `[fix] clear failed for ${partner.name}:`,
+              updateError
+            );
+            continue;
+          }
+
+          fixed.push(partner.name);
+        }
+      }
+
+      setResult({ fixed, checked: candidates.length });
+      await refetch();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? (err as { message: string }).message
+          : "خطأ غير متوقع";
+      setError(msg);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-[12px] font-semibold text-zinc-200">
+          إصلاح حساب الأرباح بعد الإيداعات
+        </p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+          Restore profit eligibility after deposits
+        </p>
+      </div>
+
+      <p className="text-[11px] leading-relaxed text-zinc-400">
+        النسخة السابقة كانت تعتبر كل إيداع "تثبيت أرباح"، فيستثني الشريك من حصة
+        الصفقات السابقة. هذا الإصلاح يبحث عن الشركاء الذين تاريخ تسويتهم يطابق
+        يوم إيداع مسجّل لهم، ويعيد حقهم في الأرباح.
+      </p>
+
+      {candidates.length > 0 && (
+        <p className="text-[11px] text-amber-300">
+          {candidates.length} شريك عندهم تاريخ تسوية للفحص
+        </p>
+      )}
+
+      <button
+        onClick={handleFix}
+        disabled={running || candidates.length === 0}
+        className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition-all duration-200 hover:bg-amber-500 hover:shadow-[0_0_28px_-4px_rgba(245,158,11,0.7)] active:scale-[0.98] disabled:opacity-70"
+      >
+        {running ? (
+          <>
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            جاري الفحص...
+          </>
+        ) : (
+          <>
+            <Wrench size={12} />
+            تشخيص وإصلاح
+          </>
+        )}
+      </button>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 p-4 text-[11px]">
+          {result.fixed.length === 0 ? (
+            <p className="text-zinc-400">
+              تم فحص {result.checked} شريك، لم يُعثر على حالات تحتاج إصلاح.
+            </p>
+          ) : (
+            <>
+              <p className="text-emerald-400 font-bold">
+                ✓ تم إصلاح {result.fixed.length} شريك
+              </p>
+              <ul className="space-y-1 text-zinc-300">
+                {result.fixed.map((name) => (
+                  <li key={name}>• {name}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
     </div>
