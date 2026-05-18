@@ -43,17 +43,24 @@ function rowToPartner(row: PartnerRow): Partner {
   };
 }
 
-// Recompute ownership client-side from currentBalance so it works even
-// when the server-side column is null/stale.
+// Recompute ownership client-side from totalDeposits so same Investment
+// always yields same ownership share, regardless of small balance drift.
 function withDerivedOwnership(partners: Partner[]): Partner[] {
-  const totalAssets = partners.reduce((sum, p) => sum + p.currentBalance, 0);
-  if (totalAssets <= 0) {
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + (p.totalDeposits || p.baseCapital || p.currentBalance || 0),
+    0
+  );
+  if (totalInvestment <= 0) {
     return partners.map((p) => ({ ...p, ownershipPercentage: 0 }));
   }
-  return partners.map((p) => ({
-    ...p,
-    ownershipPercentage: (p.currentBalance / totalAssets) * 100,
-  }));
+  return partners.map((p) => {
+    const investment =
+      p.totalDeposits || p.baseCapital || p.currentBalance || 0;
+    return {
+      ...p,
+      ownershipPercentage: (investment / totalInvestment) * 100,
+    };
+  });
 }
 
 export function usePartners() {

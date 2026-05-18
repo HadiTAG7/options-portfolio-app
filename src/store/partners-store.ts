@@ -42,14 +42,21 @@ function rowToPartner(row: PartnerRow): Partner {
 }
 
 function withDerivedOwnership(partners: Partner[]): Partner[] {
-  const totalAssets = partners.reduce((sum, p) => sum + p.currentBalance, 0);
-  if (totalAssets <= 0) {
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + (p.totalDeposits || p.baseCapital || p.currentBalance || 0),
+    0
+  );
+  if (totalInvestment <= 0) {
     return partners.map((p) => ({ ...p, ownershipPercentage: 0 }));
   }
-  return partners.map((p) => ({
-    ...p,
-    ownershipPercentage: (p.currentBalance / totalAssets) * 100,
-  }));
+  return partners.map((p) => {
+    const investment =
+      p.totalDeposits || p.baseCapital || p.currentBalance || 0;
+    return {
+      ...p,
+      ownershipPercentage: (investment / totalInvestment) * 100,
+    };
+  });
 }
 
 interface Notification {

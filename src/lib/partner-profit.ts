@@ -73,9 +73,14 @@ function isEligible(partner: Partner, closeDate: string, profitDate: string): bo
 //
 // For each trade:
 //   1. Pick partners where entry_date <= trade close_date.
-//   2. Weight each eligible partner by their currentBalance share of
-//      the eligible pool.
+//   2. Weight each eligible partner by their **investment** share of
+//      the total committed capital (totalDeposits / Σ totalDeposits).
 //   3. Accumulate the weighted profit into per-partner grossProfit.
+//
+// Ownership is intentionally based on Investment (totalDeposits), not
+// currentBalance, so two partners with the same money in get the same
+// share regardless of small balance drift from withdrawals or pending
+// profit accrual.
 //
 // Then:
 //   - LPs pay managementFeeRate% of their gross as a fee.
@@ -92,12 +97,9 @@ export function computePartnerProfits(
   const grossById: Record<string, number> = {};
   for (const p of partners) grossById[p.id] = 0;
 
-  // Global fixed ownership — never changes per-trade.
-  // A partner's share of any trade is always (their capital / total fund capital).
-  // If they're ineligible (already settled), their slice simply vanishes —
-  // it does NOT get redistributed to the remaining partners.
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
+  // Investment-weighted ownership: same Investment ⇒ same share.
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + getPartnerInvestment(p),
     0
   );
 
@@ -109,11 +111,11 @@ export function computePartnerProfits(
     if (!closeDate) continue;
     const profitDate = tradeProfitDate(t) ?? closeDate;
 
-    if (totalCapital <= 0) continue;
+    if (totalInvestment <= 0) continue;
 
     for (const p of partners) {
       if (!isEligible(p, closeDate, profitDate)) continue;
-      const share = (Number(p.currentBalance) || 0) / totalCapital;
+      const share = getPartnerInvestment(p) / totalInvestment;
       grossById[p.id] += profit * share;
     }
   }
@@ -131,8 +133,8 @@ export function computePartnerProfits(
   const result: Record<string, PartnerProfit> = {};
   for (const p of partners) {
     const ownershipPct =
-      totalCapital > 0
-        ? ((Number(p.currentBalance) || 0) / totalCapital) * 100
+      totalInvestment > 0
+        ? (getPartnerInvestment(p) / totalInvestment) * 100
         : 0;
     const grossProfit = grossById[p.id];
     const isManager = p.id === managerId;
@@ -195,16 +197,16 @@ export function computeCurrentCycleProfits(
     totalLpFees += fee;
   }
 
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + getPartnerInvestment(p),
     0
   );
 
   const result: Record<string, PartnerProfit> = {};
   for (const p of partners) {
     const ownershipPct =
-      totalCapital > 0
-        ? ((Number(p.currentBalance) || 0) / totalCapital) * 100
+      totalInvestment > 0
+        ? (getPartnerInvestment(p) / totalInvestment) * 100
         : 0;
     const grossProfit = grossById[p.id];
     const isManager = p.id === managerId;
@@ -281,8 +283,9 @@ export function computePortfolioDistribution(
 ): Record<string, PartnerDistribution> {
   const managerId = partners.find(isManagerPartner)?.id ?? null;
 
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
+  // Investment-weighted ownership: same Investment ⇒ same share.
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + getPartnerInvestment(p),
     0
   );
 
@@ -294,9 +297,7 @@ export function computePortfolioDistribution(
 
   for (const p of partners) {
     const ownership =
-      totalCapital > 0
-        ? (Number(p.currentBalance) || 0) / totalCapital
-        : 0;
+      totalInvestment > 0 ? getPartnerInvestment(p) / totalInvestment : 0;
     const gross = ownership * totalProfit;
     grossById[p.id] = gross;
     ownershipById[p.id] = ownership;
@@ -366,11 +367,11 @@ export function computePartnerDistributionFromTrades(
   const grossById: Record<string, number> = {};
   for (const p of partners) grossById[p.id] = 0;
 
-  // Global fixed ownership — a partner's share of every trade is locked
-  // to (their capital / total fund capital). Settled partners are simply
-  // skipped; their slice evaporates instead of being redistributed.
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
+  // Investment-weighted ownership: same Investment ⇒ same share.
+  // Settled partners are still skipped from the loop; their slice
+  // evaporates instead of being redistributed.
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + getPartnerInvestment(p),
     0
   );
 
@@ -382,11 +383,11 @@ export function computePartnerDistributionFromTrades(
     if (!closeDate) continue;
     const profitDate = tradeProfitDate(t) ?? closeDate;
 
-    if (totalCapital <= 0) continue;
+    if (totalInvestment <= 0) continue;
 
     for (const p of partners) {
       if (!isEligible(p, closeDate, profitDate)) continue;
-      const share = (Number(p.currentBalance) || 0) / totalCapital;
+      const share = getPartnerInvestment(p) / totalInvestment;
       grossById[p.id] += profit * share;
     }
   }
@@ -409,9 +410,7 @@ export function computePartnerDistributionFromTrades(
     const investment = getPartnerInvestment(p);
     const feeRatePct = Number(p.managementFeeRate) || 0;
     const ownershipPct =
-      totalCapital > 0
-        ? ((Number(p.currentBalance) || 0) / totalCapital) * 100
-        : 0;
+      totalInvestment > 0 ? (investment / totalInvestment) * 100 : 0;
 
     let feeAmount: number;
     let netProfit: number;
@@ -475,14 +474,14 @@ export function computeGpFeeTotal(
 ): number {
   if (totalProfit <= 0) return 0;
   const managerId = partners.find(isManagerPartner)?.id ?? null;
-  const totalCapital = partners.reduce(
-    (sum, p) => sum + (Number(p.currentBalance) || 0),
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + getPartnerInvestment(p),
     0
   );
-  if (totalCapital <= 0) return 0;
+  if (totalInvestment <= 0) return 0;
   return partners.reduce((sum, p) => {
     if (p.id === managerId) return sum;
-    const ownership = (Number(p.currentBalance) || 0) / totalCapital;
+    const ownership = getPartnerInvestment(p) / totalInvestment;
     const feeRate = (Number(p.managementFeeRate) || 0) / 100;
     return sum + ownership * totalProfit * feeRate;
   }, 0);
