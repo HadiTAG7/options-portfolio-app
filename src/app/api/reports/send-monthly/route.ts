@@ -6,12 +6,12 @@ import type { Partner, Trade } from "@/types";
 import { safeNumber, getPartnerInvestment } from "@/lib/utils";
 import {
   computePortfolioDistribution,
-  computeGpFeeTotal,
   tradeProfit,
 } from "@/lib/partner-profit";
 import {
   generatePartnerReportPDF,
   type MonthlyReportData,
+  type PartnerPosition,
 } from "@/lib/report-pdf";
 
 type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
@@ -50,22 +50,29 @@ function rowToPartner(row: PartnerRow): Partner {
   };
 }
 
+// Returns the YYYY-MM bucket for a trade — closed options use expiration,
+// everything else uses the trade date. null means the trade is not
+// eligible for monthly bucketing (wrong type or unparseable date).
+function tradeMonthKey(t: Trade): string | null {
+  const isOption = t.type === "Sell Put" || t.type === "Sell Call";
+  const isStockSell = t.type === "Stock Sell";
+  if (!isOption && !isStockSell) return null;
+  const rawDate =
+    isOption && t.status === "closed" && t.expiration?.trim()
+      ? t.expiration
+      : t.date;
+  if (!rawDate) return null;
+  const d = new Date(rawDate);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function computeMonthlyBuckets(trades: Trade[]): Record<string, number> {
   const buckets: Record<string, number> = {};
   for (const t of trades) {
-    const isOption = t.type === "Sell Put" || t.type === "Sell Call";
-    const isStockSell = t.type === "Stock Sell";
-    if (!isOption && !isStockSell) continue;
-    const pnl = tradeProfit(t);
-    const rawDate =
-      isOption && t.status === "closed" && t.expiration?.trim()
-        ? t.expiration
-        : t.date;
-    if (!rawDate) continue;
-    const d = new Date(rawDate);
-    if (Number.isNaN(d.getTime())) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    buckets[key] = (buckets[key] ?? 0) + pnl;
+    const key = tradeMonthKey(t);
+    if (!key) continue;
+    buckets[key] = (buckets[key] ?? 0) + tradeProfit(t);
   }
   return buckets;
 }
@@ -134,12 +141,15 @@ export async function POST(request: NextRequest) {
 
     // Compute per-partner distribution
     const distribution = computePortfolioDistribution(partners, monthProfit);
-    const totalFees = computeGpFeeTotal(partners, monthProfit);
 
     const totalAUM = partners.reduce(
       (sum, p) => sum + (Number(p.currentBalance) || 0),
       0
     );
+
+    // Pre-compute the trades active in the selected month — same date logic
+    // as computeMonthlyBuckets so position-share totals match monthProfit.
+    const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
 
     // Period label
     const [y, m] = month.split("-");
@@ -179,6 +189,20 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // This partner's slice of each trade = ownership × trade P&L.
+      // Matches the simple-ownership split used by computePortfolioDistribution.
+      const ownershipShare =
+        totalAUM > 0 ? (Number(partner.currentBalance) || 0) / totalAUM : 0;
+      const positions: PartnerPosition[] = tradesInMonth.map((t) => {
+        const total = tradeProfit(t);
+        return {
+          ticker: t.ticker,
+          type: t.type,
+          totalProfit: total,
+          share: total * ownershipShare,
+        };
+      });
+
       const reportData: MonthlyReportData = {
         periodLabel,
         periodKey: month,
@@ -196,11 +220,7 @@ export async function POST(request: NextRequest) {
           returnPct: dist.returnPct,
           currentBalance: partner.currentBalance,
         },
-        fundSummary: {
-          totalAUM,
-          totalFundProfit: monthProfit,
-          totalFeesCollected: totalFees,
-        },
+        positions,
       };
 
       try {
