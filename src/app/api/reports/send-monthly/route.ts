@@ -191,17 +191,14 @@ export async function POST(request: NextRequest) {
 
       // This partner's slice of each trade = ownership × trade P&L.
       // Matches the simple-ownership split used by computePortfolioDistribution.
+      // The trade-wide total is never sent to the partner — only their share.
       const ownershipShare =
         totalAUM > 0 ? (Number(partner.currentBalance) || 0) / totalAUM : 0;
-      const positions: PartnerPosition[] = tradesInMonth.map((t) => {
-        const total = tradeProfit(t);
-        return {
-          ticker: t.ticker,
-          type: t.type,
-          totalProfit: total,
-          share: total * ownershipShare,
-        };
-      });
+      const positions: PartnerPosition[] = tradesInMonth.map((t) => ({
+        ticker: t.ticker,
+        type: t.type,
+        share: tradeProfit(t) * ownershipShare,
+      }));
 
       const reportData: MonthlyReportData = {
         periodLabel,

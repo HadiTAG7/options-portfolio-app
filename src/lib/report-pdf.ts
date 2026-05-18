@@ -4,8 +4,7 @@ import autoTable from "jspdf-autotable";
 export interface PartnerPosition {
   ticker: string;
   type: string; // "Sell Put", "Sell Call", "Stock Sell"
-  totalProfit: number; // the trade's full P&L
-  share: number; // partner's slice = ownership × totalProfit
+  share: number; // partner's slice of this trade = ownership × total P&L
 }
 
 export interface MonthlyReportData {
@@ -138,25 +137,19 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   );
 
   const positionRows = sortedPositions.length
-    ? sortedPositions.map((p) => [
-        p.ticker,
-        p.type,
-        fmt(p.totalProfit),
-        fmt(p.share),
-      ])
-    : [["—", "No positions this month", "—", "—"]];
+    ? sortedPositions.map((p) => [p.ticker, p.type, fmt(p.share)])
+    : [["—", "No positions this month", "—"]];
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Ticker", "Type", "Trade P&L", "Your Share"]],
+    head: [["Ticker", "Type", "Your Share"]],
     body: positionRows,
     foot: sortedPositions.length
       ? [
           [
             "",
             "Total",
-            fmt(sortedPositions.reduce((s, p) => s + p.totalProfit, 0)),
             fmt(sortedPositions.reduce((s, p) => s + p.share, 0)),
           ],
         ]
@@ -182,10 +175,9 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
       fillColor: [245, 245, 245],
     },
     columnStyles: {
-      0: { cellWidth: 30, fontStyle: "bold" },
-      1: { cellWidth: 40 },
-      2: { cellWidth: "auto", halign: "right" },
-      3: { cellWidth: "auto", halign: "right", fontStyle: "bold" },
+      0: { cellWidth: 40, fontStyle: "bold" },
+      1: { cellWidth: 50 },
+      2: { cellWidth: "auto", halign: "right", fontStyle: "bold" },
     },
   });
 
