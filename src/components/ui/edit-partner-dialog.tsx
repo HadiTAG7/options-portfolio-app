@@ -7,6 +7,7 @@ import type { Partner } from "@/types";
 
 export interface PartnerEditPayload {
   name: string;
+  email: string;
   managementFeePercent: number;
   entryDate: string; // YYYY-MM-DD
 }
@@ -25,6 +26,7 @@ export function EditPartnerDialog({
   onSubmit,
 }: EditPartnerDialogProps) {
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [feePercent, setFeePercent] = useState("");
   const [entryDate, setEntryDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +36,7 @@ export function EditPartnerDialog({
   useEffect(() => {
     if (!open || !partner) return;
     setName(partner.name ?? "");
+    setEmail(partner.email ?? "");
     setFeePercent(
       Number.isFinite(partner.managementFeeRate)
         ? String(partner.managementFeeRate)
@@ -80,6 +83,7 @@ export function EditPartnerDialog({
     try {
       await onSubmit(partner.id, {
         name: trimmedName,
+        email: email.trim(),
         managementFeePercent: fee,
         entryDate,
       });
@@ -147,6 +151,22 @@ export function EditPartnerDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={submitting}
+              className={inputBase}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              البريد الإلكتروني{" "}
+              <span className="text-zinc-600">(Email)</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+              placeholder="partner@example.com"
+              dir="ltr"
               className={inputBase}
             />
           </div>

@@ -8,7 +8,9 @@ import {
   Database,
   Download,
   Gauge,
+  Mail,
   RefreshCw,
+  Send,
   Server,
   Shield,
   Sliders,
@@ -258,6 +260,15 @@ export default function SettingsPage() {
           </div>
         </SettingsCard>
 
+        {/* ═══════ Monthly Reports ═══════ */}
+        <SettingsCard
+          icon={<Mail size={14} className="text-cyan-300" />}
+          title="Monthly Reports"
+          subtitle="التقارير الشهرية"
+        >
+          <MonthlyReportSender />
+        </SettingsCard>
+
         {/* ═══════ Danger Zone ═══════ */}
         <div className="lg:col-span-2">
           <DangerZone />
@@ -294,6 +305,165 @@ function SettingsCard({
         </div>
       </div>
       <div className="space-y-5 p-6">{children}</div>
+    </div>
+  );
+}
+
+function MonthlyReportSender() {
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{
+    sentCount: number;
+    skippedCount: number;
+    errorCount: number;
+    results: Array<{ name: string; status: string; reason?: string }>;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const months = React.useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleString("ar-SA", { month: "long", year: "numeric" });
+      list.push({ value, label });
+    }
+    return list;
+  }, []);
+
+  async function handleSend() {
+    setSending(true);
+    setResult(null);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/reports/send-monthly", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setError(data.error || "فشل في إرسال التقارير");
+        return;
+      }
+
+      setResult(data);
+    } catch {
+      setError("خطأ في الاتصال بالخادم");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-[12px] font-semibold text-zinc-200">
+          إرسال التقارير الشهرية
+        </p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+          Send PDF reports via email · لكل مستثمر
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <select
+          value={selectedMonth}
+          onChange={(e) => {
+            setSelectedMonth(e.target.value);
+            setResult(null);
+            setError(null);
+          }}
+          disabled={sending}
+          className="flex-1 rounded-md border border-zinc-800/70 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition-all focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-50"
+        >
+          {months.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+
+        <button
+          onClick={handleSend}
+          disabled={sending}
+          className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_20px_-6px_rgba(34,211,238,0.5)] transition-all duration-200 hover:bg-cyan-500 hover:shadow-[0_0_28px_-4px_rgba(34,211,238,0.7)] active:scale-[0.98] disabled:opacity-70"
+        >
+          {sending ? (
+            <>
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              جاري الإرسال...
+            </>
+          ) : (
+            <>
+              <Send size={12} />
+              إرسال
+            </>
+          )}
+        </button>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2 rounded-md border border-zinc-800/60 bg-zinc-950/60 p-4">
+          <div className="flex items-center gap-4 text-[11px]">
+            {result.sentCount > 0 && (
+              <span className="text-emerald-400 font-bold">
+                ✓ {result.sentCount} تم الإرسال
+              </span>
+            )}
+            {result.skippedCount > 0 && (
+              <span className="text-amber-300 font-bold">
+                ⏭ {result.skippedCount} تم تخطيه
+              </span>
+            )}
+            {result.errorCount > 0 && (
+              <span className="text-rose-400 font-bold">
+                ✗ {result.errorCount} فشل
+              </span>
+            )}
+          </div>
+          <div className="space-y-1">
+            {result.results.map((r, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between text-[10px] py-1"
+              >
+                <span className="text-zinc-300">{r.name}</span>
+                <span
+                  className={
+                    r.status === "sent"
+                      ? "text-emerald-400"
+                      : r.status === "skipped"
+                      ? "text-amber-300"
+                      : "text-rose-400"
+                  }
+                >
+                  {r.status === "sent"
+                    ? "تم الإرسال"
+                    : r.status === "skipped"
+                    ? r.reason === "no email"
+                      ? "بدون إيميل"
+                      : "تخطي"
+                    : r.reason || "خطأ"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

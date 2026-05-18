@@ -39,6 +39,7 @@ function rowToPartner(row: PartnerRow): Partner {
       ? (row.balanceHistory as Partner["balanceHistory"])
       : [],
     archivedAt: row.archived_at ?? null,
+    email: row.email ?? null,
   };
 }
 
@@ -213,6 +214,7 @@ export function usePartners() {
       id: string,
       payload: {
         name: string;
+        email: string;
         managementFeePercent: number;
         entryDate: string; // YYYY-MM-DD
       }
@@ -221,6 +223,7 @@ export function usePartners() {
 
       const updatePayload = {
         name: payload.name,
+        email: payload.email || null,
         managementFeePercent: Number(payload.managementFeePercent),
         entry_date: payload.entryDate,
       };
@@ -244,6 +247,7 @@ export function usePartners() {
             ? {
                 ...p,
                 name: updatePayload.name,
+                email: updatePayload.email,
                 managementFeeRate: updatePayload.managementFeePercent,
                 entryDate: updatePayload.entry_date,
               }

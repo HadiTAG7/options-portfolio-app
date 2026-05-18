@@ -50,6 +50,7 @@ export const partners: Partner[] = [
     baseCapital: 4000000,
     balanceHistory: [{ date: "2023-01-15", balance: 4000000 }],
     archivedAt: null,
+    email: null,
   },
   {
     id: "K-77312",
@@ -73,6 +74,7 @@ export const partners: Partner[] = [
     baseCapital: 2800000,
     balanceHistory: [{ date: "2023-03-22", balance: 2800000 }],
     archivedAt: null,
+    email: null,
   },
   {
     id: "K-91283",
@@ -96,6 +98,7 @@ export const partners: Partner[] = [
     baseCapital: 1200000,
     balanceHistory: [{ date: "2023-06-10", balance: 1200000 }],
     archivedAt: null,
+    email: null,
   },
   {
     id: "K-44521",
@@ -119,6 +122,7 @@ export const partners: Partner[] = [
     baseCapital: 1700000,
     balanceHistory: [{ date: "2023-02-01", balance: 1700000 }],
     archivedAt: null,
+    email: null,
   },
   {
     id: "K-55192",
@@ -142,6 +146,7 @@ export const partners: Partner[] = [
     baseCapital: 2050000,
     balanceHistory: [{ date: "2023-04-18", balance: 2050000 }],
     archivedAt: null,
+    email: null,
   },
   {
     id: "K-62847",
@@ -165,6 +170,7 @@ export const partners: Partner[] = [
     baseCapital: 2000000,
     balanceHistory: [{ date: "2023-05-30", balance: 2000000 }],
     archivedAt: null,
+    email: null,
   },
 ];
 
@@ -176,6 +182,7 @@ export const partnerDetail: PartnerDetail = {
   id: "K-44521",
   name: "سالم العامري",
   code: "K-44521",
+  email: null,
   initials: "SA",
   totalBalance: 1780000,
   ownershipPercentage: 12.5,

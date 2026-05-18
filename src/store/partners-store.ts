@@ -16,6 +16,7 @@ function rowToPartner(row: PartnerRow): Partner {
     id: row.id,
     name: row.name,
     code: row.code ?? "",
+    email: row.email ?? null,
     initials: row.initials ?? "",
     avatarUrl: row.avatar_url ?? undefined,
     totalBalance: safeNumber(row.total_balance),

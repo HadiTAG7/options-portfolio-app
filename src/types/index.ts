@@ -11,6 +11,7 @@ export interface Partner {
   id: string;
   name: string;
   code: string; // e.g. "K-89204"
+  email: string | null;
   avatarUrl?: string;
   initials: string;
   totalBalance: number;

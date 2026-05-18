@@ -36,6 +36,7 @@ export interface Database {
           balanceHistory: BalanceHistoryEntry[];
           last_settlement_date: string | null;
           archived_at: string | null;
+          email: string | null;
         };
         Insert: {
           id?: string;
@@ -63,6 +64,7 @@ export interface Database {
           managementFeesPaid?: number;
           last_settlement_date?: string | null;
           archived_at?: string | null;
+          email?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];
