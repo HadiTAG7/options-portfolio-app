@@ -23,6 +23,7 @@ import {
   computeGpFeeTotal,
   computePortfolioDistribution,
   tradeProfit,
+  tradeMonthKey,
   MANAGEMENT_FEE_RATE,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
@@ -55,22 +56,14 @@ export default function DashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   // ── Monthly profit buckets (shared by chart, ledger, distribution) ──
+  // Bucket by trade entry date — premium is collected on entry, not at
+  // expiration, so closed options belong to the month they were opened.
   const monthlyProfitBuckets = useMemo(() => {
     const buckets: Record<string, number> = {};
     for (const t of trades) {
-      const isOption = t.type === "Sell Put" || t.type === "Sell Call";
-      const isStockSell = t.type === "Stock Sell";
-      if (!isOption && !isStockSell) continue;
-      const pnl = tradeProfit(t);
-      const rawDate =
-        isOption && t.status === "closed" && t.expiration?.trim()
-          ? t.expiration
-          : t.date;
-      if (!rawDate) continue;
-      const d = new Date(rawDate);
-      if (Number.isNaN(d.getTime())) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      buckets[key] = (buckets[key] ?? 0) + pnl;
+      const key = tradeMonthKey(t);
+      if (!key) continue;
+      buckets[key] = (buckets[key] ?? 0) + tradeProfit(t);
     }
     return buckets;
   }, [trades]);

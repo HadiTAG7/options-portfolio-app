@@ -44,10 +44,26 @@ function tradeCloseDate(t: Trade): string | null {
 // Short options: premium collected at trade entry — always use t.date
 // so the settlement comparison stays stable across open→closed.
 // Other trades (Stock Sell): profit realized at close/trade date.
-function tradeProfitDate(t: Trade): string | null {
+export function tradeProfitDate(t: Trade): string | null {
   const isShortOption = t.type === "Sell Put" || t.type === "Sell Call";
   if (isShortOption) return t.date?.trim() || null;
   return tradeCloseDate(t) ?? t.date?.trim() ?? null;
+}
+
+// Shared bucketing helper: which YYYY-MM bucket does this trade's
+// profit belong to? Mirrors the eligibility profit-date logic so
+// dashboard charts, monthly cards, and the email sender all agree.
+// Returns null for trade types we don't bucket (anything other than
+// Sell Put / Sell Call / Stock Sell).
+export function tradeMonthKey(t: Trade): string | null {
+  const isOption = t.type === "Sell Put" || t.type === "Sell Call";
+  const isStockSell = t.type === "Stock Sell";
+  if (!isOption && !isStockSell) return null;
+  const dateStr = tradeProfitDate(t);
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 // Two checks gate per-trade eligibility:

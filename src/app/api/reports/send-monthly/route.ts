@@ -7,6 +7,7 @@ import { safeNumber, getPartnerInvestment } from "@/lib/utils";
 import {
   computePortfolioDistribution,
   tradeProfit,
+  tradeMonthKey,
 } from "@/lib/partner-profit";
 import {
   generatePartnerReportPDF,
@@ -48,23 +49,6 @@ function rowToPartner(row: PartnerRow): Partner {
       : [],
     archivedAt: row.archived_at ?? null,
   };
-}
-
-// Returns the YYYY-MM bucket for a trade — closed options use expiration,
-// everything else uses the trade date. null means the trade is not
-// eligible for monthly bucketing (wrong type or unparseable date).
-function tradeMonthKey(t: Trade): string | null {
-  const isOption = t.type === "Sell Put" || t.type === "Sell Call";
-  const isStockSell = t.type === "Stock Sell";
-  if (!isOption && !isStockSell) return null;
-  const rawDate =
-    isOption && t.status === "closed" && t.expiration?.trim()
-      ? t.expiration
-      : t.date;
-  if (!rawDate) return null;
-  const d = new Date(rawDate);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function computeMonthlyBuckets(trades: Trade[]): Record<string, number> {
