@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { Partner, Trade } from "@/types";
@@ -91,16 +91,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resendKey = process.env.RESEND_API_KEY;
-    if (!resendKey) {
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
+    if (!gmailUser || !gmailAppPassword) {
       return Response.json(
-        { success: false, error: "RESEND_API_KEY not configured." },
+        {
+          success: false,
+          error:
+            "GMAIL_USER or GMAIL_APP_PASSWORD not configured. Generate an App Password at myaccount.google.com/apppasswords.",
+        },
         { status: 500 }
       );
     }
 
-    const resend = new Resend(resendKey);
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailAppPassword },
+    });
 
     const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -240,13 +247,9 @@ export async function POST(request: NextRequest) {
         const pdfBuffer = generatePartnerReportPDF(reportData);
         const filename = `report-${month}-${partner.code || partner.name}.pdf`;
 
-        // Resend SDK v6 returns { data, error } instead of throwing on API
-        // errors (rate limits, domain not verified, recipient blocked, etc.).
-        // Without checking `error`, every send looks successful even when
-        // Resend refused to deliver.
-        const { error: sendError } = await resend.emails.send({
-          from: `AlGhanim Options Desk <${fromEmail}>`,
-          to: [partner.email],
+        await transporter.sendMail({
+          from: `"AlGhanim Options Desk" <${gmailUser}>`,
+          to: partner.email,
           subject: `Monthly Report - ${periodLabel} - ${partner.name}`,
           html: `<div style="font-family: sans-serif; direction: rtl; text-align: right;">
             <h2 style="color: #34d399;">AlGhanim Options Desk</h2>
@@ -258,20 +261,11 @@ export async function POST(request: NextRequest) {
           attachments: [
             {
               filename,
-              content: pdfBuffer.toString("base64"),
+              content: pdfBuffer,
+              contentType: "application/pdf",
             },
           ],
         });
-
-        if (sendError) {
-          results.push({
-            partnerId: partner.id,
-            name: partner.name,
-            status: "error",
-            reason: sendError.message,
-          });
-          continue;
-        }
 
         results.push({
           partnerId: partner.id,
