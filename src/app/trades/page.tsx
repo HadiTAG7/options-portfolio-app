@@ -75,9 +75,9 @@ export default function TradesPage() {
     loading,
     error,
     totalPremium,
-    totalResult,
     totalProfit,
     openCount,
+    trades,
     updateTrade,
     updateStock,
     addTrade,
@@ -89,6 +89,35 @@ export default function TradesPage() {
   } = useTrades();
 
   const { partners } = usePartners();
+
+  // Current-month profit. Mirrors the bucketing rule used by the dashboard
+  // and the monthly report sender: closed options use expiration, open
+  // options / stock sells use trade date.
+  const { monthProfit, monthLabel } = useMemo(() => {
+    const now = new Date();
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let sum = 0;
+    for (const t of trades) {
+      const isOption = t.type === "Sell Put" || t.type === "Sell Call";
+      const isStockSell = t.type === "Stock Sell";
+      if (!isOption && !isStockSell) continue;
+      const rawDate =
+        isOption && t.status === "closed" && t.expiration?.trim()
+          ? t.expiration
+          : t.date;
+      if (!rawDate) continue;
+      const d = new Date(rawDate);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (key === currentKey) sum += tradeProfit(t);
+    }
+    const label = now.toLocaleString("ar-EG", {
+      month: "long",
+      year: "numeric",
+    });
+    return { monthProfit: sum, monthLabel: label };
+  }, [trades]);
+
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [editingStock, setEditingStock] = useState<ActiveStock | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -205,10 +234,10 @@ export default function TradesPage() {
         />
         <SummaryCard
           icon={<TrendingUp size={16} />}
-          labelAr="النتائج المحققة"
-          labelEn="Realized Result"
-          value={formatCurrency(totalResult)}
-          tone={totalResult >= 0 ? "emerald" : "rose"}
+          labelAr={`ربح الشهر · ${monthLabel}`}
+          labelEn="Monthly Profit"
+          value={formatCurrency(monthProfit)}
+          tone={monthProfit >= 0 ? "emerald" : "rose"}
         />
         <SummaryCard
           icon={<Activity size={16} />}
