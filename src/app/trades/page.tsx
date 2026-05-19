@@ -31,7 +31,7 @@ import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
-import { tradeProfit } from "@/lib/partner-profit";
+import { tradeProfit, tradeMonthKey } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartners } from "@/hooks/use-partners";
 import type { Trade, ActiveStock } from "@/types";
@@ -89,26 +89,14 @@ export default function TradesPage() {
 
   const { partners } = usePartners();
 
-  // Current-month profit. Mirrors the bucketing rule used by the dashboard
-  // and the monthly report sender: closed options use expiration, open
-  // options / stock sells use trade date.
+  // Current-month profit. Bucketing always uses the trade entry date
+  // (when premium was actually collected) — never expiration.
   const { monthProfit, monthLabel } = useMemo(() => {
     const now = new Date();
     const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     let sum = 0;
     for (const t of trades) {
-      const isOption = t.type === "Sell Put" || t.type === "Sell Call";
-      const isStockSell = t.type === "Stock Sell";
-      if (!isOption && !isStockSell) continue;
-      const rawDate =
-        isOption && t.status === "closed" && t.expiration?.trim()
-          ? t.expiration
-          : t.date;
-      if (!rawDate) continue;
-      const d = new Date(rawDate);
-      if (Number.isNaN(d.getTime())) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (key === currentKey) sum += tradeProfit(t);
+      if (tradeMonthKey(t) === currentKey) sum += tradeProfit(t);
     }
     const label = now.toLocaleString("ar-EG", {
       month: "long",
