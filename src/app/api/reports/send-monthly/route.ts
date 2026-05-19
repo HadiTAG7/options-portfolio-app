@@ -240,7 +240,11 @@ export async function POST(request: NextRequest) {
         const pdfBuffer = generatePartnerReportPDF(reportData);
         const filename = `report-${month}-${partner.code || partner.name}.pdf`;
 
-        await resend.emails.send({
+        // Resend SDK v6 returns { data, error } instead of throwing on API
+        // errors (rate limits, domain not verified, recipient blocked, etc.).
+        // Without checking `error`, every send looks successful even when
+        // Resend refused to deliver.
+        const { error: sendError } = await resend.emails.send({
           from: `AlGhanim Options Desk <${fromEmail}>`,
           to: [partner.email],
           subject: `Monthly Report - ${periodLabel} - ${partner.name}`,
@@ -258,6 +262,16 @@ export async function POST(request: NextRequest) {
             },
           ],
         });
+
+        if (sendError) {
+          results.push({
+            partnerId: partner.id,
+            name: partner.name,
+            status: "error",
+            reason: sendError.message,
+          });
+          continue;
+        }
 
         results.push({
           partnerId: partner.id,
