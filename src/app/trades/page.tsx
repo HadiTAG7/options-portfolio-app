@@ -77,7 +77,6 @@ export default function TradesPage() {
     totalPremium,
     totalProfit,
     openCount,
-    trades,
     updateTrade,
     updateStock,
     addTrade,
