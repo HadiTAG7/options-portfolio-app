@@ -100,6 +100,17 @@ export default function PartnerDetailPage() {
       const partnerNetPremium = partnerNetOf(totalPremium, share, isGP);
       const partnerNetUnrealized = partnerNetOf(globalUnrealized, share, isGP);
 
+      // Break the net premium into its 3 pieces so the UI can show them
+      // separately: gross ownership slice, fee adjustment, net take-home.
+      //   - LP: gross = share × total, fee = -PERFORMANCE_FEE × gross,
+      //         net = gross + fee   (fee is negative, money paid out)
+      //   - GP: gross = share × total, fee = +PERFORMANCE_FEE × LP-slice,
+      //         net = gross + fee   (fee is positive, money collected)
+      const partnerGrossPremium = totalPremium * share;
+      const partnerFeePremium = isGP
+        ? totalPremium * PERFORMANCE_FEE * (1 - share)
+        : -partnerGrossPremium * PERFORMANCE_FEE;
+
       // Partner-centric view: how many underlying shares they're exposed
       // to, and how much of their cash is locked as collateral at the
       // option's strike. `qty` already stores total underlying shares
@@ -118,6 +129,8 @@ export default function PartnerDetailPage() {
         totalPremium,
         partnerShareExposure,
         partnerLockedCollateral,
+        partnerGrossPremium,
+        partnerFeePremium,
         partnerNetPremium,
         spot,
         globalUnrealized,
@@ -348,8 +361,14 @@ export default function PartnerDetailPage() {
                   <th className="px-4 py-3 font-medium">
                     البريميوم · Entry
                   </th>
+                  <th className="px-4 py-3 font-medium">
+                    حصة الشريك
+                  </th>
+                  <th className="px-4 py-3 font-medium text-amber-300/80">
+                    رسوم الإدارة
+                  </th>
                   <th className="px-4 py-3 font-medium text-emerald-400/80">
-                    صافي بريميوم الشريك
+                    الصافي
                   </th>
                   <th className="px-4 py-3 font-medium">
                     ربح/خسارة غير محققة
@@ -359,7 +378,7 @@ export default function PartnerDetailPage() {
               <tbody className="divide-y divide-white/5">
                 {optionPositions.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center">
+                    <td colSpan={10} className="px-6 py-12 text-center">
                       <Icon
                         name="layers_clear"
                         className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
@@ -434,6 +453,24 @@ export default function PartnerDetailPage() {
                             per share
                           </span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
+                        {formatCurrency(opt.partnerGrossPremium)}
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <span
+                          className={`text-xs font-bold tabular-nums ${
+                            isGP ? "text-amber-300" : "text-rose-400"
+                          }`}
+                          title={
+                            isGP
+                              ? "رسوم 20٪ محصّلة من حصة باقي الشركاء"
+                              : "رسوم 20٪ مدفوعة للمدير"
+                          }
+                        >
+                          {opt.partnerFeePremium >= 0 ? "+" : ""}
+                          {formatCurrency(opt.partnerFeePremium)}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm font-headline font-bold text-emerald-400 font-mono tabular-nums drop-shadow-[0_0_6px_rgba(52,211,153,0.35)]">
