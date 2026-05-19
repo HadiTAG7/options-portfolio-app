@@ -1,17 +1,17 @@
 import { type NextRequest } from "next/server";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { Partner, Trade } from "@/types";
 import { safeNumber, getPartnerInvestment } from "@/lib/utils";
 import {
   computePortfolioDistribution,
-  computeGpFeeTotal,
   tradeProfit,
 } from "@/lib/partner-profit";
 import {
   generatePartnerReportPDF,
   type MonthlyReportData,
+  type PartnerPosition,
 } from "@/lib/report-pdf";
 
 type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
@@ -50,29 +50,39 @@ function rowToPartner(row: PartnerRow): Partner {
   };
 }
 
+// Returns the YYYY-MM bucket for a trade — closed options use expiration,
+// everything else uses the trade date. null means the trade is not
+// eligible for monthly bucketing (wrong type or unparseable date).
+function tradeMonthKey(t: Trade): string | null {
+  const isOption = t.type === "Sell Put" || t.type === "Sell Call";
+  const isStockSell = t.type === "Stock Sell";
+  if (!isOption && !isStockSell) return null;
+  const rawDate =
+    isOption && t.status === "closed" && t.expiration?.trim()
+      ? t.expiration
+      : t.date;
+  if (!rawDate) return null;
+  const d = new Date(rawDate);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function computeMonthlyBuckets(trades: Trade[]): Record<string, number> {
   const buckets: Record<string, number> = {};
   for (const t of trades) {
-    const isOption = t.type === "Sell Put" || t.type === "Sell Call";
-    const isStockSell = t.type === "Stock Sell";
-    if (!isOption && !isStockSell) continue;
-    const pnl = tradeProfit(t);
-    const rawDate =
-      isOption && t.status === "closed" && t.expiration?.trim()
-        ? t.expiration
-        : t.date;
-    if (!rawDate) continue;
-    const d = new Date(rawDate);
-    if (Number.isNaN(d.getTime())) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    buckets[key] = (buckets[key] ?? 0) + pnl;
+    const key = tradeMonthKey(t);
+    if (!key) continue;
+    buckets[key] = (buckets[key] ?? 0) + tradeProfit(t);
   }
   return buckets;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { month } = await request.json();
+    const { month, partnerId } = (await request.json()) as {
+      month: string;
+      partnerId?: string;
+    };
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return Response.json(
@@ -81,16 +91,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resendKey = process.env.RESEND_API_KEY;
-    if (!resendKey) {
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
+    if (!gmailUser || !gmailAppPassword) {
       return Response.json(
-        { success: false, error: "RESEND_API_KEY not configured." },
+        {
+          success: false,
+          error:
+            "GMAIL_USER or GMAIL_APP_PASSWORD not configured. Generate an App Password at myaccount.google.com/apppasswords.",
+        },
         { status: 500 }
       );
     }
 
-    const resend = new Resend(resendKey);
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailAppPassword },
+    });
 
     const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -106,6 +123,19 @@ export async function POST(request: NextRequest) {
     if (pError) throw new Error(`Failed to fetch partners: ${pError.message}`);
 
     const partners = (partnerRows ?? []).map(rowToPartner);
+
+    // Optional single-recipient mode. We still keep the full partners list
+    // for ownership/distribution math (so a partner's share doesn't change
+    // when only they receive the email) and only narrow the send loop.
+    const targetPartners = partnerId
+      ? partners.filter((p) => p.id === partnerId)
+      : partners;
+    if (partnerId && targetPartners.length === 0) {
+      return Response.json(
+        { success: false, error: "Partner not found." },
+        { status: 404 }
+      );
+    }
 
     // Fetch trades
     const { data: tradeRows, error: tError } = await supabase
@@ -134,12 +164,15 @@ export async function POST(request: NextRequest) {
 
     // Compute per-partner distribution
     const distribution = computePortfolioDistribution(partners, monthProfit);
-    const totalFees = computeGpFeeTotal(partners, monthProfit);
 
     const totalAUM = partners.reduce(
       (sum, p) => sum + (Number(p.currentBalance) || 0),
       0
     );
+
+    // Pre-compute the trades active in the selected month — same date logic
+    // as computeMonthlyBuckets so position-share totals match monthProfit.
+    const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
 
     // Period label
     const [y, m] = month.split("-");
@@ -157,7 +190,7 @@ export async function POST(request: NextRequest) {
       reason?: string;
     }> = [];
 
-    for (const partner of partners) {
+    for (const partner of targetPartners) {
       if (!partner.email) {
         results.push({
           partnerId: partner.id,
@@ -179,6 +212,17 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // This partner's slice of each trade = ownership × trade P&L.
+      // Matches the simple-ownership split used by computePortfolioDistribution.
+      // The trade-wide total is never sent to the partner — only their share.
+      const ownershipShare =
+        totalAUM > 0 ? (Number(partner.currentBalance) || 0) / totalAUM : 0;
+      const positions: PartnerPosition[] = tradesInMonth.map((t) => ({
+        ticker: t.ticker,
+        type: t.type,
+        share: tradeProfit(t) * ownershipShare,
+      }));
+
       const reportData: MonthlyReportData = {
         periodLabel,
         periodKey: month,
@@ -196,20 +240,16 @@ export async function POST(request: NextRequest) {
           returnPct: dist.returnPct,
           currentBalance: partner.currentBalance,
         },
-        fundSummary: {
-          totalAUM,
-          totalFundProfit: monthProfit,
-          totalFeesCollected: totalFees,
-        },
+        positions,
       };
 
       try {
         const pdfBuffer = generatePartnerReportPDF(reportData);
         const filename = `report-${month}-${partner.code || partner.name}.pdf`;
 
-        await resend.emails.send({
-          from: `AlGhanim Options Desk <${fromEmail}>`,
-          to: [partner.email],
+        await transporter.sendMail({
+          from: `"AlGhanim Options Desk" <${gmailUser}>`,
+          to: partner.email,
           subject: `Monthly Report - ${periodLabel} - ${partner.name}`,
           html: `<div style="font-family: sans-serif; direction: rtl; text-align: right;">
             <h2 style="color: #34d399;">AlGhanim Options Desk</h2>
@@ -221,7 +261,8 @@ export async function POST(request: NextRequest) {
           attachments: [
             {
               filename,
-              content: pdfBuffer.toString("base64"),
+              content: pdfBuffer,
+              contentType: "application/pdf",
             },
           ],
         });

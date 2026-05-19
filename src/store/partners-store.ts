@@ -42,14 +42,21 @@ function rowToPartner(row: PartnerRow): Partner {
 }
 
 function withDerivedOwnership(partners: Partner[]): Partner[] {
-  const totalAssets = partners.reduce((sum, p) => sum + p.currentBalance, 0);
-  if (totalAssets <= 0) {
+  const totalInvestment = partners.reduce(
+    (sum, p) => sum + (p.totalDeposits || p.baseCapital || p.currentBalance || 0),
+    0
+  );
+  if (totalInvestment <= 0) {
     return partners.map((p) => ({ ...p, ownershipPercentage: 0 }));
   }
-  return partners.map((p) => ({
-    ...p,
-    ownershipPercentage: (p.currentBalance / totalAssets) * 100,
-  }));
+  return partners.map((p) => {
+    const investment =
+      p.totalDeposits || p.baseCapital || p.currentBalance || 0;
+    return {
+      ...p,
+      ownershipPercentage: (investment / totalInvestment) * 100,
+    };
+  });
 }
 
 interface Notification {
@@ -410,10 +417,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const newTotalBalance = oldTotalBalance + amount;
     const newTotalDeposits = oldTotalDeposits + amount;
     const newBaseCapital = oldBaseCapital + amount;
-    const settlementDate = new Date().toISOString();
-    const today = settlementDate.split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
 
     // --- 1a. Update numeric fields with .select() to detect RLS silent failures ---
+    // Note: deposits MUST NOT stamp last_settlement_date — that field gates
+    // eligibility for prior-period profits in isEligible(). A deposit isn't
+    // a settlement; the partner hasn't been paid out, so their share of
+    // existing trade profits must be preserved.
     const { data, error: updateError } = await supabase
       .from("partners")
       .update({
@@ -421,7 +431,6 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         total_balance: newTotalBalance,
         totalDeposits: newTotalDeposits,
         baseCapital: newBaseCapital,
-        last_settlement_date: settlementDate,
       })
       .eq("id", partner.id)
       .select()

@@ -1,5 +1,11 @@
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
+
+export interface PartnerPosition {
+  ticker: string;
+  type: string; // "Sell Put", "Sell Call", "Stock Sell"
+  share: number; // partner's slice of this trade = ownership × total P&L
+}
 
 export interface MonthlyReportData {
   periodLabel: string;
@@ -18,11 +24,7 @@ export interface MonthlyReportData {
     returnPct: number;
     currentBalance: number;
   };
-  fundSummary: {
-    totalAUM: number;
-    totalFundProfit: number;
-    totalFeesCollected: number;
-  };
+  positions: PartnerPosition[];
 }
 
 function fmt(n: number): string {
@@ -69,9 +71,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   doc.setTextColor(60, 60, 60);
 
   const partnerInfo = [
-    ["Name", data.partner.name],
     ["Code", data.partner.code],
-    ["Ownership", `${data.partnerSummary.returnPct >= 0 ? "" : ""}${data.partner.ownershipPct.toFixed(2)}%`],
     ["Current Balance", fmt(data.partnerSummary.currentBalance)],
   ];
 
@@ -92,7 +92,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
 
   const profitPositive = data.partnerSummary.netProfit >= 0;
 
-  (doc as jsPDF & { autoTable: (opts: Record<string, unknown>) => void }).autoTable({
+  autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
     head: [["Item", "Value"]],
@@ -123,24 +123,37 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
     },
   });
 
-  // Fund Summary
+  // Your Positions — per-trade share for this partner
   const autoTableInfo = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable;
   y = (autoTableInfo?.finalY ?? y + 60) + 15;
 
   doc.setFontSize(14);
   doc.setTextColor(52, 211, 153);
-  doc.text("Fund Summary", margin, y);
+  doc.text("Your Positions", margin, y);
   y += 4;
 
-  (doc as jsPDF & { autoTable: (opts: Record<string, unknown>) => void }).autoTable({
+  const sortedPositions = [...data.positions].sort(
+    (a, b) => Math.abs(b.share) - Math.abs(a.share)
+  );
+
+  const positionRows = sortedPositions.length
+    ? sortedPositions.map((p) => [p.ticker, p.type, fmt(p.share)])
+    : [["—", "No positions this month", "—"]];
+
+  autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Metric", "Value"]],
-    body: [
-      ["Total AUM", fmt(data.fundSummary.totalAUM)],
-      ["Total Fund Profit", fmt(data.fundSummary.totalFundProfit)],
-      ["Total Fees Collected", fmt(data.fundSummary.totalFeesCollected)],
-    ],
+    head: [["Ticker", "Type", "Your Share"]],
+    body: positionRows,
+    foot: sortedPositions.length
+      ? [
+          [
+            "",
+            "Total",
+            fmt(sortedPositions.reduce((s, p) => s + p.share, 0)),
+          ],
+        ]
+      : undefined,
     theme: "grid",
     headStyles: {
       fillColor: [9, 9, 11],
@@ -149,15 +162,22 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
       fontSize: 11,
     },
     bodyStyles: {
-      fontSize: 11,
+      fontSize: 10,
       textColor: [30, 30, 30],
+    },
+    footStyles: {
+      fillColor: [240, 253, 244],
+      textColor: [22, 101, 52],
+      fontStyle: "bold",
+      fontSize: 11,
     },
     alternateRowStyles: {
       fillColor: [245, 245, 245],
     },
     columnStyles: {
-      0: { cellWidth: 80, fontStyle: "bold" },
-      1: { cellWidth: "auto", halign: "right" },
+      0: { cellWidth: 40, fontStyle: "bold" },
+      1: { cellWidth: 50 },
+      2: { cellWidth: "auto", halign: "right", fontStyle: "bold" },
     },
   });
 

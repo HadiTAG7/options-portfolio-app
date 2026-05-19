@@ -44,6 +44,21 @@ export default function PartnersPage() {
     () => computePartnerDistributionFromTrades(partners, trades),
     [partners, trades]
   );
+  // Column totals for the footer row. Fees are summed across LPs only —
+  // GP's feeAmount is the same total (collected = paid), so adding both
+  // would double-count the transfer.
+  const totals = useMemo(() => {
+    const rows = Object.values(distributionByPartner);
+    return {
+      investment: rows.reduce((s, d) => s + d.investment, 0),
+      ownership: rows.reduce((s, d) => s + d.ownershipPct, 0),
+      gross: rows.reduce((s, d) => s + d.grossProfit, 0),
+      fees: rows
+        .filter((d) => !d.isManager)
+        .reduce((s, d) => s + d.feeAmount, 0),
+      net: rows.reduce((s, d) => s + d.netProfit, 0),
+    };
+  }, [distributionByPartner]);
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
@@ -590,6 +605,58 @@ export default function PartnersPage() {
                   );
                 })}
             </tbody>
+
+            {/* Totals Footer */}
+            {!loading && partners.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-emerald-500/30 bg-zinc-950/90">
+                  <td className="px-6 py-4">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
+                      الإجمالي · Total
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm font-headline font-bold text-white font-mono tabular-nums">
+                      {formatCurrency(totals.investment)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm font-mono font-bold text-white tabular-nums">
+                      {totals.ownership.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`text-sm font-mono tabular-nums font-bold ${
+                        totals.gross >= 0 ? "text-white" : "text-rose-400"
+                      }`}
+                    >
+                      {totals.gross >= 0 ? "+" : ""}
+                      {formatCurrency(totals.gross)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className="text-sm font-mono tabular-nums font-bold text-amber-300"
+                      title="إجمالي رسوم الأداء المدفوعة من LPs (يساوي ما حصّله GP)"
+                    >
+                      {formatCurrency(totals.fees)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`text-sm font-headline font-bold font-mono tabular-nums ${
+                        totals.net >= 0 ? "text-emerald-400" : "text-rose-400"
+                      }`}
+                    >
+                      {totals.net >= 0 ? "+" : ""}
+                      {formatCurrency(totals.net)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
