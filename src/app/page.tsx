@@ -871,13 +871,13 @@ function CumulativePnLChart({
             نمو الأرباح التراكمي
           </h2>
           <p className="text-[10px] text-zinc-500 uppercase tracking-[0.22em] mt-2 font-semibold">
-            Cumulative Realized P&L · نمو تراكمي
+            Cumulative P&L · Premium + Realized
           </p>
         </div>
         <div className="flex gap-2 items-center rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
           <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">
-            Realized
+            Premium + Realized
           </span>
         </div>
       </div>

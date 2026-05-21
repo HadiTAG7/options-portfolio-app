@@ -149,8 +149,11 @@ export async function POST(request: NextRequest) {
     // Compute per-partner distribution
     const distribution = computePortfolioDistribution(partners, monthProfit);
 
-    const totalAUM = partners.reduce(
-      (sum, p) => sum + (Number(p.currentBalance) || 0),
+    // Use the same investment-weighted ownership the dashboard's
+    // distribution engine uses, so a partner's per-trade share in the
+    // PDF matches what they see on the Partners page to the penny.
+    const totalInvestment = partners.reduce(
+      (sum, p) => sum + getPartnerInvestment(p),
       0
     );
 
@@ -197,10 +200,13 @@ export async function POST(request: NextRequest) {
       }
 
       // This partner's slice of each trade = ownership × trade P&L.
-      // Matches the simple-ownership split used by computePortfolioDistribution.
-      // The trade-wide total is never sent to the partner — only their share.
+      // Ownership is investment-weighted (same formula as
+      // computePortfolioDistribution) so the per-trade shares in the
+      // PDF sum to the partner's grossProfit shown on the dashboard.
       const ownershipShare =
-        totalAUM > 0 ? (Number(partner.currentBalance) || 0) / totalAUM : 0;
+        totalInvestment > 0
+          ? getPartnerInvestment(partner) / totalInvestment
+          : 0;
       const positions: PartnerPosition[] = tradesInMonth.map((t) => ({
         ticker: t.ticker,
         type: t.type,
