@@ -126,7 +126,13 @@ export default function PartnersPage() {
     }
   }
 
-  const generatedPositive = fundTotalProfit >= 0;
+  // Profit shown in the header card is the fund-level surplus
+  // (AUM − capital), NOT the trade-side P&L. This keeps the math
+  // self-consistent — AUM is always Capital + Profit on screen — and
+  // makes withdrawals from profit visibly shrink the displayed profit
+  // instead of leaving a stale "+$22K" sitting above a smaller AUM.
+  const generatedProfit = fundBreakdown.generatedProfit;
+  const generatedPositive = generatedProfit >= 0;
 
   return (
     <AppShell>
@@ -250,7 +256,7 @@ export default function PartnersPage() {
             {/* Total Partner Assets */}
             <div
               className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]"
-              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المحققة من الصفقات: ${formatCurrency(fundTotalProfit)}`}
+              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المتبقية في الـ AUM (AUM − رأس المال): ${formatCurrency(generatedProfit)} — إجمالي أرباح الصفقات: ${formatCurrency(fundTotalProfit)}`}
             >
               <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl transition-opacity duration-300 group-hover:bg-emerald-500/20" />
               <div className="pointer-events-none absolute -right-4 -top-4 text-zinc-800/40">
@@ -276,10 +282,11 @@ export default function PartnersPage() {
                     className={`font-mono tabular-nums font-bold ${
                       generatedPositive ? "text-emerald-400" : "text-rose-400"
                     }`}
+                    title={`الأرباح المتبقية في الـ AUM بعد السحوبات والتثبيت. إجمالي أرباح الصفقات: ${formatCurrency(fundTotalProfit)}`}
                   >
                     <span className="opacity-70 font-normal">أرباح:</span>{" "}
                     {generatedPositive ? "+" : ""}
-                    {formatCurrency(fundTotalProfit)}
+                    {formatCurrency(generatedProfit)}
                   </span>
                 </div>
               </div>
