@@ -13,10 +13,7 @@ import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import {
-  computeFundBreakdown,
-  computePartnerDistributionFromTrades,
-} from "@/lib/partner-profit";
+import { computePartnerDistributionFromTrades } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
@@ -33,8 +30,7 @@ export default function PartnersPage() {
     updatePartner,
     refetch,
   } = usePartners();
-  const { trades, totalProfit, unrealizedStockPnL } = useTrades();
-  const fundBreakdown = computeFundBreakdown(partners, totalAssets);
+  const { trades, totalProfit } = useTrades();
   // Build the distribution trade-by-trade so each partner's eligibility
   // (entry date + last_settlement_date) is honored. After a partner
   // runs "تثبيت الأرباح", trades closed on/before the settlement
@@ -126,14 +122,9 @@ export default function PartnersPage() {
     }
   }
 
-  // The big "Total Partner Assets" number must equal the
-  // Investment-column total at the bottom of the table — both should
-  // be Σ getPartnerInvestment, the canonical "money committed" figure.
-  // We keep realized + unrealized as separate chips below so the user
-  // sees what's capitalizable vs paper, without inflating AUM with
-  // gains that haven't actually settled.
-  const realizedProfit = totals.net;
-  const unrealizedProfit = unrealizedStockPnL;
+  // The big "Total Partner Assets" number equals the Investment-column
+  // total at the bottom of the table — Σ getPartnerInvestment, the
+  // canonical "money committed" figure.
   const investmentTotal = totals.investment;
 
   return (
@@ -256,10 +247,7 @@ export default function PartnersPage() {
         ) : (
           <>
             {/* Total Partner Assets */}
-            <div
-              className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]"
-              title={`رأس المال: ${formatCurrency(fundBreakdown.originalCapital)} (basis مؤكد) — أرباح محققة قابلة للتثبيت: ${formatCurrency(realizedProfit)} — أرباح غير محققة من الأسهم النشطة: ${formatCurrency(unrealizedProfit)}`}
-            >
+            <div className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]">
               <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl transition-opacity duration-300 group-hover:bg-emerald-500/20" />
               <div className="pointer-events-none absolute -right-4 -top-4 text-zinc-800/40">
                 <Icon name="account_balance_wallet" className="!text-8xl" />
@@ -269,40 +257,8 @@ export default function PartnersPage() {
                   إجمالي أصول الشركاء · Total Partner Assets
                 </span>
                 <div className="flex items-baseline gap-3">
-                  <span
-                    className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`Σ Investment للشركاء (يطابق الـ Total أسفل الجدول). الـ basis المتغير (Σ currentBalance) = ${formatCurrency(totalAssets)}.`}
-                  >
+                  <span className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums">
                     {formatCurrency(investmentTotal)}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px]">
-                  <span
-                    className="text-zinc-500"
-                    title="رأس المال المؤكد = Σ baseCapital (deposits + capitalized profits − capital withdrawals)"
-                  >
-                    <span className="opacity-70">رأس المال:</span>{" "}
-                    <span className="text-zinc-200 font-mono tabular-nums">
-                      {formatCurrency(fundBreakdown.originalCapital)}
-                    </span>
-                  </span>
-                  <span
-                    className={`font-mono tabular-nums font-bold ${
-                      realizedProfit >= 0 ? "text-emerald-400" : "text-rose-400"
-                    }`}
-                    title="أرباح محققة من الصفقات (premium مقبوض + Stock Sell مغلق). قابلة للتثبيت بضغطة 'تثبيت' — تنتقل لرأس المال فوراً."
-                  >
-                    <span className="opacity-70 font-normal">محقق:</span>{" "}
-                    {realizedProfit >= 0 ? "+" : ""}
-                    {formatCurrency(realizedProfit)}
-                  </span>
-                  <span
-                    className="font-mono tabular-nums font-bold text-amber-400"
-                    title="أرباح ورقية (mark-to-market) من الأسهم النشطة. لن تنتقل لرأس المال حتى تبيع السهم — قد ترتفع أو تنخفض مع السوق."
-                  >
-                    <span className="opacity-70 font-normal">غير محقق:</span>{" "}
-                    {unrealizedProfit >= 0 ? "+" : ""}
-                    {formatCurrency(unrealizedProfit)}
                   </span>
                 </div>
               </div>
