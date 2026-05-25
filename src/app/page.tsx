@@ -17,6 +17,7 @@ import {
   formatWholeNumber,
   formatCompactCurrency,
   formatCurrency,
+  getPartnerInvestment,
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
@@ -43,6 +44,15 @@ export default function DashboardPage() {
   } = useTrades();
 
   const loading = partnersLoading || tradesLoading;
+  // AUM displayed in the hero card is the canonical "money committed"
+  // figure: Σ Investment across all partners. This matches the
+  // Investment-column total in the Partners table and is stable across
+  // profit withdrawals — currentBalance can drift below baseCapital
+  // when a partner withdraws from profit, but Investment doesn't.
+  const investmentTotal = useMemo(
+    () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
+    [partners]
+  );
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
   const gpFeeTotal = computeGpFeeTotal(partners, totalProfit);
   const netProfitAfterFee = totalProfit - gpFeeTotal;
@@ -228,8 +238,11 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <div className="flex items-baseline gap-3">
-                  <span className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums">
-                    {formatWholeNumber(totalAssets)}
+                  <span
+                    className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
+                    title={`Σ Investment للشركاء (يطابق Total Investment في صفحة الشركاء). الـ basis المتغير (Σ currentBalance): ${formatCurrency(totalAssets)}.`}
+                  >
+                    {formatWholeNumber(investmentTotal)}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-[10px]">

@@ -126,28 +126,15 @@ export default function PartnersPage() {
     }
   }
 
-  // Split the profit shown in the header into two distinct buckets so
-  // the user can tell at a glance which slice "تثبيت" actually moves:
-  //
-  //  realizedProfit   — sum of per-partner Net from closed trades and
-  //                     premium-collected options. This is what قابل
-  //                     للتثبيت — pressing "تثبيت" rolls it into
-  //                     baseCapital.
-  //
-  //  unrealizedProfit — mark-to-market PnL on the active stock book
-  //                     (currentPrice − purchasePrice × qty). The
-  //                     distribution engine ignores this number on
-  //                     purpose: paper gains can vanish, so they don't
-  //                     belong in any partner's capital until the
-  //                     underlying stock is sold.
-  //
-  // AUM is then redefined as the *actual* economic value of the fund:
-  // confirmed basis (Σ currentBalance) + realized profit waiting to be
-  // capitalized + paper PnL on active stocks. That restores the
-  // identity AUM = Capital + Realized + Unrealized.
+  // The big "Total Partner Assets" number must equal the
+  // Investment-column total at the bottom of the table — both should
+  // be Σ getPartnerInvestment, the canonical "money committed" figure.
+  // We keep realized + unrealized as separate chips below so the user
+  // sees what's capitalizable vs paper, without inflating AUM with
+  // gains that haven't actually settled.
   const realizedProfit = totals.net;
   const unrealizedProfit = unrealizedStockPnL;
-  const fullAUM = totalAssets + realizedProfit + unrealizedProfit;
+  const investmentTotal = totals.investment;
 
   return (
     <AppShell>
@@ -284,9 +271,9 @@ export default function PartnersPage() {
                 <div className="flex items-baseline gap-3">
                   <span
                     className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`Basis مؤكد (${formatCurrency(totalAssets)}) + محقق (${formatCurrency(realizedProfit)}) + غير محقق (${formatCurrency(unrealizedProfit)})`}
+                    title={`Σ Investment للشركاء (يطابق الـ Total أسفل الجدول). الـ basis المتغير (Σ currentBalance) = ${formatCurrency(totalAssets)}.`}
                   >
-                    {formatCurrency(fullAUM)}
+                    {formatCurrency(investmentTotal)}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px]">
