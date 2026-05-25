@@ -33,7 +33,7 @@ export default function PartnersPage() {
     updatePartner,
     refetch,
   } = usePartners();
-  const { trades, totalProfit } = useTrades();
+  const { trades, totalProfit, unrealizedStockPnL } = useTrades();
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
   // Build the distribution trade-by-trade so each partner's eligibility
   // (entry date + last_settlement_date) is honored. After a partner
@@ -126,13 +126,28 @@ export default function PartnersPage() {
     }
   }
 
-  // Profit shown in the header card is the fund-level surplus
-  // (AUM − capital), NOT the trade-side P&L. This keeps the math
-  // self-consistent — AUM is always Capital + Profit on screen — and
-  // makes withdrawals from profit visibly shrink the displayed profit
-  // instead of leaving a stale "+$22K" sitting above a smaller AUM.
-  const generatedProfit = fundBreakdown.generatedProfit;
-  const generatedPositive = generatedProfit >= 0;
+  // Split the profit shown in the header into two distinct buckets so
+  // the user can tell at a glance which slice "تثبيت" actually moves:
+  //
+  //  realizedProfit   — sum of per-partner Net from closed trades and
+  //                     premium-collected options. This is what قابل
+  //                     للتثبيت — pressing "تثبيت" rolls it into
+  //                     baseCapital.
+  //
+  //  unrealizedProfit — mark-to-market PnL on the active stock book
+  //                     (currentPrice − purchasePrice × qty). The
+  //                     distribution engine ignores this number on
+  //                     purpose: paper gains can vanish, so they don't
+  //                     belong in any partner's capital until the
+  //                     underlying stock is sold.
+  //
+  // AUM is then redefined as the *actual* economic value of the fund:
+  // confirmed basis (Σ currentBalance) + realized profit waiting to be
+  // capitalized + paper PnL on active stocks. That restores the
+  // identity AUM = Capital + Realized + Unrealized.
+  const realizedProfit = totals.net;
+  const unrealizedProfit = unrealizedStockPnL;
+  const fullAUM = totalAssets + realizedProfit + unrealizedProfit;
 
   return (
     <AppShell>
@@ -256,7 +271,7 @@ export default function PartnersPage() {
             {/* Total Partner Assets */}
             <div
               className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]"
-              title={`رأس المال الأساسي: ${formatCurrency(fundBreakdown.originalCapital)} — الأرباح المتبقية في الـ AUM (AUM − رأس المال): ${formatCurrency(generatedProfit)} — إجمالي أرباح الصفقات: ${formatCurrency(fundTotalProfit)}`}
+              title={`رأس المال: ${formatCurrency(fundBreakdown.originalCapital)} (basis مؤكد) — أرباح محققة قابلة للتثبيت: ${formatCurrency(realizedProfit)} — أرباح غير محققة من الأسهم النشطة: ${formatCurrency(unrealizedProfit)}`}
             >
               <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl transition-opacity duration-300 group-hover:bg-emerald-500/20" />
               <div className="pointer-events-none absolute -right-4 -top-4 text-zinc-800/40">
@@ -267,12 +282,18 @@ export default function PartnersPage() {
                   إجمالي أصول الشركاء · Total Partner Assets
                 </span>
                 <div className="flex items-baseline gap-3">
-                  <span className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums">
-                    {formatCurrency(totalAssets)}
+                  <span
+                    className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
+                    title={`Basis مؤكد (${formatCurrency(totalAssets)}) + محقق (${formatCurrency(realizedProfit)}) + غير محقق (${formatCurrency(unrealizedProfit)})`}
+                  >
+                    {formatCurrency(fullAUM)}
                   </span>
                 </div>
-                <div className="flex items-center gap-5 text-[10px]">
-                  <span className="text-zinc-500">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px]">
+                  <span
+                    className="text-zinc-500"
+                    title="رأس المال المؤكد = Σ baseCapital (deposits + capitalized profits − capital withdrawals)"
+                  >
                     <span className="opacity-70">رأس المال:</span>{" "}
                     <span className="text-zinc-200 font-mono tabular-nums">
                       {formatCurrency(fundBreakdown.originalCapital)}
@@ -280,13 +301,21 @@ export default function PartnersPage() {
                   </span>
                   <span
                     className={`font-mono tabular-nums font-bold ${
-                      generatedPositive ? "text-emerald-400" : "text-rose-400"
+                      realizedProfit >= 0 ? "text-emerald-400" : "text-rose-400"
                     }`}
-                    title={`الأرباح المتبقية في الـ AUM بعد السحوبات والتثبيت. إجمالي أرباح الصفقات: ${formatCurrency(fundTotalProfit)}`}
+                    title="أرباح محققة من الصفقات (premium مقبوض + Stock Sell مغلق). قابلة للتثبيت بضغطة 'تثبيت' — تنتقل لرأس المال فوراً."
                   >
-                    <span className="opacity-70 font-normal">أرباح:</span>{" "}
-                    {generatedPositive ? "+" : ""}
-                    {formatCurrency(generatedProfit)}
+                    <span className="opacity-70 font-normal">محقق:</span>{" "}
+                    {realizedProfit >= 0 ? "+" : ""}
+                    {formatCurrency(realizedProfit)}
+                  </span>
+                  <span
+                    className="font-mono tabular-nums font-bold text-amber-400"
+                    title="أرباح ورقية (mark-to-market) من الأسهم النشطة. لن تنتقل لرأس المال حتى تبيع السهم — قد ترتفع أو تنخفض مع السوق."
+                  >
+                    <span className="opacity-70 font-normal">غير محقق:</span>{" "}
+                    {unrealizedProfit >= 0 ? "+" : ""}
+                    {formatCurrency(unrealizedProfit)}
                   </span>
                 </div>
               </div>
