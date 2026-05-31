@@ -240,9 +240,9 @@ export default function DashboardPage() {
                 <div className="flex items-baseline gap-3">
                   <span
                     className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`Σ Investment للشركاء (يطابق Total Investment في صفحة الشركاء). الـ basis المتغير (Σ currentBalance): ${formatCurrency(totalAssets)}.`}
+                    title={`القيمة الحية للأصول = رأس المال (${formatCurrency(investmentTotal)}) ± P&L حي. يطابق إجمالي عمود "الرصيد الحالي" في صفحة الشركاء.`}
                   >
-                    {formatWholeNumber(investmentTotal)}
+                    {formatWholeNumber(totalAssets)}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-[10px]">

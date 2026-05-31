@@ -12,8 +12,11 @@ import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatPercent } from "@/lib/utils";
-import { computePartnerDistributionFromTrades } from "@/lib/partner-profit";
+import { formatCurrency, formatPercent, getPartnerInvestment } from "@/lib/utils";
+import {
+  computePartnerDistributionFromTrades,
+  computePortfolioDistribution,
+} from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
@@ -31,30 +34,54 @@ export default function PartnersPage() {
     refetch,
   } = usePartners();
   const { trades, totalProfit } = useTrades();
-  // Build the distribution trade-by-trade so each partner's eligibility
-  // (entry date + last_settlement_date) is honored. After a partner
-  // runs "تثبيت الأرباح", trades closed on/before the settlement
-  // timestamp no longer contribute to their gross, so their Net resets
-  // to $0 until new trades close.
-  const distributionByPartner = useMemo(
+  // Trade-based distribution — respects entry dates and last_settlement_date.
+  // Used to gate the action buttons ("تثبيت" / "إيداع" / "سحب"): only the
+  // profit that's actually sitting in the trade book can be capitalized.
+  // After a partner runs "تثبيت الأرباح", their tradeDistribution.netProfit
+  // resets to $0 until new trades close.
+  const tradeDistribution = useMemo(
     () => computePartnerDistributionFromTrades(partners, trades),
     [partners, trades]
   );
+  // Committed-capital total — Σ getPartnerInvestment. Anchors the
+  // Investment column and is the denominator for ownership %.
+  const investmentTotal = useMemo(
+    () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
+    [partners]
+  );
+  // Live P&L of the fund = AUM − committed capital. This is the surplus
+  // (or deficit) sitting on top of every partner's basis right now, and
+  // it tracks profit withdrawals + capitalizations dynamically.
+  const livePnL = totalAssets - investmentTotal;
+  // Live distribution — slice livePnL across partners by
+  // investment-weighted ownership %, then apply the GP/LP fee transfer.
+  // Drives the GROSS / FEES / NET / Current Balance columns so the
+  // table always mirrors the AUM number in the header. Σ (investment +
+  // netProfit) over all rows equals totalAssets by construction.
+  const liveDistribution = useMemo(
+    () => computePortfolioDistribution(partners, livePnL),
+    [partners, livePnL]
+  );
   // Column totals for the footer row. Fees are summed across LPs only —
-  // GP's feeAmount is the same total (collected = paid), so adding both
-  // would double-count the transfer.
+  // GP's feeAmount equals Σ LP fees (collected = paid), so including
+  // both would double-count the zero-sum transfer.
   const totals = useMemo(() => {
-    const rows = Object.values(distributionByPartner);
+    const rows = Object.values(liveDistribution);
+    const investment = rows.reduce((s, d) => s + d.investment, 0);
+    const net = rows.reduce((s, d) => s + d.netProfit, 0);
     return {
-      investment: rows.reduce((s, d) => s + d.investment, 0),
+      investment,
       ownership: rows.reduce((s, d) => s + d.ownershipPct, 0),
       gross: rows.reduce((s, d) => s + d.grossProfit, 0),
       fees: rows
         .filter((d) => !d.isManager)
         .reduce((s, d) => s + d.feeAmount, 0),
-      net: rows.reduce((s, d) => s + d.netProfit, 0),
+      net,
+      // Σ Current Balance ≡ Σ (investment + netProfit) ≡ totalAssets.
+      // That equality is what makes the footer match the AUM hero.
+      currentBalance: investment + net,
     };
-  }, [distributionByPartner]);
+  }, [liveDistribution]);
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
@@ -94,13 +121,13 @@ export default function PartnersPage() {
   async function onWithdraw(partner: Partner, amount: number) {
     const availableProfit = Math.max(
       0,
-      distributionByPartner[partner.id]?.netProfit ?? 0
+      tradeDistribution[partner.id]?.netProfit ?? 0
     );
     await handleWithdrawal(partner, amount, availableProfit, refetch);
   }
 
   async function onCapitalize(partner: Partner) {
-    const netProfit = distributionByPartner[partner.id]?.netProfit ?? 0;
+    const netProfit = tradeDistribution[partner.id]?.netProfit ?? 0;
     await capitalizeProfits(partner, netProfit, refetch);
   }
 
@@ -110,7 +137,7 @@ export default function PartnersPage() {
 
   async function handleCapitalizeConfirm() {
     if (!capitalizeTarget) return;
-    const netProfit = distributionByPartner[capitalizeTarget.id]?.netProfit ?? 0;
+    const netProfit = tradeDistribution[capitalizeTarget.id]?.netProfit ?? 0;
     setCapitalizing(true);
     try {
       await capitalizeProfits(capitalizeTarget, netProfit, refetch);
@@ -121,11 +148,6 @@ export default function PartnersPage() {
       setCapitalizing(false);
     }
   }
-
-  // The big "Total Partner Assets" number equals the Investment-column
-  // total at the bottom of the table — Σ getPartnerInvestment, the
-  // canonical "money committed" figure.
-  const investmentTotal = totals.investment;
 
   return (
     <AppShell>
@@ -150,7 +172,7 @@ export default function PartnersPage() {
         partner={withdrawTarget}
         remainingProfit={
           withdrawTarget
-            ? (distributionByPartner[withdrawTarget.id]?.netProfit ?? 0)
+            ? (tradeDistribution[withdrawTarget.id]?.netProfit ?? 0)
             : 0
         }
         onClose={() => setWithdrawTarget(null)}
@@ -172,7 +194,7 @@ export default function PartnersPage() {
         partner={ledgerTarget}
         distribution={
           ledgerTarget
-            ? (distributionByPartner[ledgerTarget.id] ?? null)
+            ? (tradeDistribution[ledgerTarget.id] ?? null)
             : null
         }
         totalProfit={fundTotalProfit}
@@ -189,7 +211,7 @@ export default function PartnersPage() {
             ? `هل تريد تحويل أرباح ${capitalizeTarget.name} البالغة ${formatCurrency(
                 Math.max(
                   0,
-                  distributionByPartner[capitalizeTarget.id]?.netProfit ?? 0
+                  tradeDistribution[capitalizeTarget.id]?.netProfit ?? 0
                 )
               )} إلى رأس المال؟`
             : ""
@@ -257,8 +279,11 @@ export default function PartnersPage() {
                   إجمالي أصول الشركاء · Total Partner Assets
                 </span>
                 <div className="flex items-baseline gap-3">
-                  <span className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums">
-                    {formatCurrency(investmentTotal)}
+                  <span
+                    className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
+                    title={`رأس المال (${formatCurrency(investmentTotal)}) ${livePnL >= 0 ? "+" : "−"} P&L حي (${formatCurrency(Math.abs(livePnL))}) = ${formatCurrency(totalAssets)}`}
+                  >
+                    {formatCurrency(totalAssets)}
                   </span>
                 </div>
               </div>
@@ -341,6 +366,9 @@ export default function PartnersPage() {
                 <th className="px-6 py-4 font-semibold">
                   صافي الربح · Net
                 </th>
+                <th className="px-6 py-4 font-semibold">
+                  الرصيد الحالي · Current Balance
+                </th>
                 <th className="px-6 py-4 font-semibold text-left">إجراءات</th>
               </tr>
             </thead>
@@ -348,16 +376,16 @@ export default function PartnersPage() {
               {/* Loading State */}
               {loading && (
                 <>
-                  <TableRowSkeleton cols={7} />
-                  <TableRowSkeleton cols={7} />
-                  <TableRowSkeleton cols={7} />
+                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={8} />
+                  <TableRowSkeleton cols={8} />
                 </>
               )}
 
               {/* Empty State */}
               {!loading && partners.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-20 text-center">
+                  <td colSpan={8} className="px-6 py-20 text-center">
                     <Icon
                       name="group_off"
                       className="!text-5xl text-zinc-700 mb-3 block mx-auto"
@@ -375,7 +403,12 @@ export default function PartnersPage() {
               {/* Data Rows */}
               {!loading &&
                 partners.map((partner) => {
-                  const dist = distributionByPartner[partner.id] ?? {
+                  // dist drives every column in this row: it's the live
+                  // P&L slice (computePortfolioDistribution(livePnL)). The
+                  // action buttons below read tradeNet separately —
+                  // capitalize/deposit gate on what's actually sitting in
+                  // the trade book, not on the live AUM−basis surplus.
+                  const dist = liveDistribution[partner.id] ?? {
                     partnerId: partner.id,
                     investment: 0,
                     ownershipPct: 0,
@@ -387,7 +420,9 @@ export default function PartnersPage() {
                     returnPct: 0,
                     collectedFromLps: [],
                   };
+                  const tradeNet = tradeDistribution[partner.id]?.netProfit ?? 0;
                   const profitPositive = dist.netProfit >= 0;
+                  const currentBalance = dist.investment + dist.netProfit;
                   return (
                     <tr
                       key={partner.id}
@@ -445,13 +480,13 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Gross Profit — share before fees */}
+                      {/* Gross Profit — partner's share of live livePnL before fees */}
                       <td className="px-6 py-4">
                         <span
                           className={`text-sm font-mono tabular-nums font-bold ${
                             dist.grossProfit >= 0
-                              ? "text-white"
-                              : "text-rose-400"
+                              ? "text-emerald-500"
+                              : "text-rose-500"
                           }`}
                         >
                           {dist.grossProfit >= 0 ? "+" : ""}
@@ -491,8 +526,8 @@ export default function PartnersPage() {
                           <span
                             className={`text-sm font-headline font-bold font-mono tabular-nums ${
                               profitPositive
-                                ? "text-emerald-400"
-                                : "text-rose-400"
+                                ? "text-emerald-500"
+                                : "text-rose-500"
                             }`}
                           >
                             {profitPositive ? "+" : ""}
@@ -501,13 +536,28 @@ export default function PartnersPage() {
                           <span
                             className={`text-[10px] font-bold tabular-nums ${
                               profitPositive
-                                ? "text-emerald-400/70"
-                                : "text-rose-400/70"
+                                ? "text-emerald-500/70"
+                                : "text-rose-500/70"
                             }`}
                           >
                             {formatPercent(dist.returnPct)}
                           </span>
                         </div>
+                      </td>
+
+                      {/* Current Balance — Investment + live net P&L share.
+                          Σ over all rows == totalAssets (the AUM hero). */}
+                      <td className="px-6 py-4">
+                        <span
+                          className={`text-sm font-headline font-bold font-mono tabular-nums ${
+                            profitPositive
+                              ? "text-emerald-500"
+                              : "text-rose-500"
+                          }`}
+                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} P&L (${formatCurrency(Math.abs(dist.netProfit))})`}
+                        >
+                          {formatCurrency(currentBalance)}
+                        </span>
                       </td>
 
                       {/* Actions */}
@@ -530,10 +580,10 @@ export default function PartnersPage() {
                           </button>
                           <button
                             onClick={() => setDepositTarget(partner)}
-                            disabled={(dist.netProfit ?? 0) > 0}
+                            disabled={tradeNet > 0}
                             className="flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-emerald-500/25 disabled:hover:bg-emerald-500/5 disabled:hover:text-emerald-300"
                             title={
-                              (dist.netProfit ?? 0) > 0
+                              tradeNet > 0
                                 ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
                                 : "إيداع رأس مال جديد"
                             }
@@ -554,10 +604,10 @@ export default function PartnersPage() {
                           </button>
                           <button
                             onClick={() => setCapitalizeTarget(partner)}
-                            disabled={(dist.netProfit ?? 0) <= 0}
+                            disabled={tradeNet <= 0}
                             className="flex items-center gap-1 rounded-md border border-amber-400/25 bg-amber-400/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-300 transition-all duration-200 hover:scale-[1.03] hover:border-amber-400/50 hover:bg-amber-400/10 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-amber-400/25 disabled:hover:bg-amber-400/5 disabled:hover:text-amber-300"
                             title={
-                              (dist.netProfit ?? 0) > 0
+                              tradeNet > 0
                                 ? "تثبيت الأرباح وتحويلها إلى رأس المال"
                                 : "لا توجد أرباح للتثبيت"
                             }
@@ -607,7 +657,7 @@ export default function PartnersPage() {
                   <td className="px-6 py-4">
                     <span
                       className={`text-sm font-mono tabular-nums font-bold ${
-                        totals.gross >= 0 ? "text-white" : "text-rose-400"
+                        totals.gross >= 0 ? "text-emerald-500" : "text-rose-500"
                       }`}
                     >
                       {totals.gross >= 0 ? "+" : ""}
@@ -625,11 +675,20 @@ export default function PartnersPage() {
                   <td className="px-6 py-4">
                     <span
                       className={`text-sm font-headline font-bold font-mono tabular-nums ${
-                        totals.net >= 0 ? "text-emerald-400" : "text-rose-400"
+                        totals.net >= 0 ? "text-emerald-500" : "text-rose-500"
                       }`}
                     >
                       {totals.net >= 0 ? "+" : ""}
                       {formatCurrency(totals.net)}
+                    </span>
+                  </td>
+                  {/* Current Balance total = Σ (investment + netProfit) — matches totalAssets / AUM. */}
+                  <td className="px-6 py-4">
+                    <span
+                      className="text-sm font-headline font-bold text-white font-mono tabular-nums"
+                      title={`يطابق إجمالي أصول الشركاء (${formatCurrency(totalAssets)})`}
+                    >
+                      {formatCurrency(totals.currentBalance)}
                     </span>
                   </td>
                   <td className="px-6 py-4"></td>
