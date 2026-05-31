@@ -49,10 +49,25 @@ export default function PartnersPage() {
     () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
     [partners]
   );
-  // Live P&L of the fund = AUM − committed capital. This is the surplus
-  // (or deficit) sitting on top of every partner's basis right now, and
-  // it tracks profit withdrawals + capitalizations dynamically.
-  const livePnL = totalAssets - investmentTotal;
+  // Cumulative cash withdrawn by all partners. Subtracted from
+  // committed capital to get a "net cash put in" basis — otherwise a
+  // pure-profit withdrawal would drop currentBalance below
+  // investmentTotal and surface as a phantom trading loss, even though
+  // no trade actually lost money.
+  const totalWithdrawalsSum = useMemo(
+    () => partners.reduce((s, p) => s + (Number(p.totalWithdrawals) || 0), 0),
+    [partners]
+  );
+  // Net capital = Σ deposits − Σ withdrawals. This is the true cash
+  // basis the fund is sitting on, regardless of whether prior
+  // withdrawals came out of profit or principal.
+  const netCapitalTotal = investmentTotal - totalWithdrawalsSum;
+  // Live P&L = current AUM − net cash basis. Strictly reflects open
+  // positions / market fluctuations: cash movements (deposits and
+  // withdrawals) cancel out of the formula by construction. Note
+  // ownership %, fees, and tradeDistribution still key off
+  // investmentTotal (committed capital) so business rules are intact.
+  const livePnL = totalAssets - netCapitalTotal;
   // Live distribution — slice livePnL across partners by
   // investment-weighted ownership %, then apply the GP/LP fee transfer.
   // Drives the GROSS / FEES / NET / Current Balance columns so the
@@ -65,6 +80,13 @@ export default function PartnersPage() {
   // Column totals for the footer row. Fees are summed across LPs only —
   // GP's feeAmount equals Σ LP fees (collected = paid), so including
   // both would double-count the zero-sum transfer.
+  //
+  // Σ Current Balance telescopes by construction:
+  //   Σ (inv + net − w) = investmentTotal + livePnL − totalWithdrawalsSum
+  //                     = netCapitalTotal + livePnL
+  //                     = totalAssets
+  // So the footer Current Balance matches the AUM hero exactly,
+  // without re-introducing the phantom loss.
   const totals = useMemo(() => {
     const rows = Object.values(liveDistribution);
     const investment = rows.reduce((s, d) => s + d.investment, 0);
@@ -77,11 +99,9 @@ export default function PartnersPage() {
         .filter((d) => !d.isManager)
         .reduce((s, d) => s + d.feeAmount, 0),
       net,
-      // Σ Current Balance ≡ Σ (investment + netProfit) ≡ totalAssets.
-      // That equality is what makes the footer match the AUM hero.
-      currentBalance: investment + net,
+      currentBalance: investment + net - totalWithdrawalsSum,
     };
-  }, [liveDistribution]);
+  }, [liveDistribution, totalWithdrawalsSum]);
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
@@ -281,7 +301,7 @@ export default function PartnersPage() {
                 <div className="flex items-baseline gap-3">
                   <span
                     className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`رأس المال (${formatCurrency(investmentTotal)}) ${livePnL >= 0 ? "+" : "−"} P&L حي (${formatCurrency(Math.abs(livePnL))}) = ${formatCurrency(totalAssets)}`}
+                    title={`رأس المال (${formatCurrency(investmentTotal)}) − السحوبات (${formatCurrency(totalWithdrawalsSum)}) ${livePnL >= 0 ? "+" : "−"} P&L حي (${formatCurrency(Math.abs(livePnL))}) = ${formatCurrency(totalAssets)}`}
                   >
                     {formatCurrency(totalAssets)}
                   </span>
@@ -422,7 +442,14 @@ export default function PartnersPage() {
                   };
                   const tradeNet = tradeDistribution[partner.id]?.netProfit ?? 0;
                   const profitPositive = dist.netProfit >= 0;
-                  const currentBalance = dist.investment + dist.netProfit;
+                  // Current stake = investment + live P&L share − the
+                  // partner's own cumulative withdrawals. Subtracting
+                  // withdrawals here is what keeps Σ across rows equal
+                  // to totalAssets after the phantom-loss fix.
+                  const partnerWithdrawals =
+                    Number(partner.totalWithdrawals) || 0;
+                  const currentBalance =
+                    dist.investment + dist.netProfit - partnerWithdrawals;
                   return (
                     <tr
                       key={partner.id}
@@ -545,8 +572,11 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Current Balance — Investment + live net P&L share.
-                          Σ over all rows == totalAssets (the AUM hero). */}
+                      {/* Current Balance — Investment + live P&L share
+                          − this partner's cumulative withdrawals. Σ
+                          across all rows == totalAssets (the AUM hero)
+                          and stays unaffected by phantom losses from
+                          past profit withdrawals. */}
                       <td className="px-6 py-4">
                         <span
                           className={`text-sm font-headline font-bold font-mono tabular-nums ${
@@ -554,7 +584,7 @@ export default function PartnersPage() {
                               ? "text-emerald-500"
                               : "text-rose-500"
                           }`}
-                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} P&L (${formatCurrency(Math.abs(dist.netProfit))})`}
+                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} P&L (${formatCurrency(Math.abs(dist.netProfit))}) − السحوبات (${formatCurrency(partnerWithdrawals)})`}
                         >
                           {formatCurrency(currentBalance)}
                         </span>
