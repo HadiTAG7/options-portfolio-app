@@ -22,6 +22,7 @@ import {
 import {
   computeFundBreakdown,
   computeGpFeeTotal,
+  computePartnerDistributionFromTrades,
   computePortfolioDistribution,
   tradeProfit,
   tradeMonthKey,
@@ -44,15 +45,29 @@ export default function DashboardPage() {
   } = useTrades();
 
   const loading = partnersLoading || tradesLoading;
-  // AUM displayed in the hero card is the canonical "money committed"
-  // figure: Σ Investment across all partners. This matches the
-  // Investment-column total in the Partners table and is stable across
-  // profit withdrawals — currentBalance can drift below baseCapital
-  // when a partner withdraws from profit, but Investment doesn't.
+  // Committed capital — Σ Investment across all partners. Stable across
+  // profit withdrawals (currentBalance can drift below baseCapital, but
+  // Investment doesn't). Single source of truth for the AUM card.
   const investmentTotal = useMemo(
     () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
     [partners]
   );
+  // Realized net profit booked this cycle, summed across partners from
+  // the trade ledger (same engine the Partners table uses). Zero-sum
+  // GP/LP fees cancel, so this equals total eligible realized trade
+  // profit. Resets to $0 after every "تثبيت" / withdrawal settlement.
+  const realizedNetTotal = useMemo(
+    () =>
+      Object.values(
+        computePartnerDistributionFromTrades(partners, trades)
+      ).reduce((s, d) => s + d.netProfit, 0),
+    [partners, trades]
+  );
+  // Book-value AUM = committed capital + realized profit. Mirrors the
+  // Partners page "Total Partner Assets" / Current Balance total to the
+  // cent. Deliberately ignores the broker's live balance (totalAssets)
+  // so unrealized open-position drift isn't booked as managed assets.
+  const bookAUM = investmentTotal + realizedNetTotal;
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
   const gpFeeTotal = computeGpFeeTotal(partners, totalProfit);
   const netProfitAfterFee = totalProfit - gpFeeTotal;
@@ -240,16 +255,16 @@ export default function DashboardPage() {
                 <div className="flex items-baseline gap-3">
                   <span
                     className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`القيمة الحية للأصول = رأس المال (${formatCurrency(investmentTotal)}) ± P&L حي. يطابق إجمالي عمود "الرصيد الحالي" في صفحة الشركاء.`}
+                    title={`القيمة الدفترية = رأس المال (${formatCurrency(investmentTotal)}) + الأرباح المحققة (${formatCurrency(realizedNetTotal)}). يطابق إجمالي "الرصيد الحالي" في صفحة الشركاء.`}
                   >
-                    {formatWholeNumber(totalAssets)}
+                    {formatWholeNumber(bookAUM)}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-[10px]">
                   <span className="text-zinc-500">
                     <span className="opacity-70">رأس المال:</span>{" "}
                     <span className="text-zinc-300 font-mono tabular-nums">
-                      {formatCompactCurrency(fundBreakdown.originalCapital)}
+                      {formatCompactCurrency(investmentTotal)}
                     </span>
                   </span>
                   <span className="text-zinc-600">|</span>
