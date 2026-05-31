@@ -49,46 +49,57 @@ export default function PartnersPage() {
     () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
     [partners]
   );
-  // Live P&L of the fund = AUM − committed capital. A single global
-  // number that captures every cash/market delta sitting on top of
-  // committed basis — withdrawals, capitalizations, mark-to-market.
-  // It's distributed across partners pro-rata via ownership inside
-  // computePortfolioDistribution, so a fund-wide drawdown of −$568
-  // becomes ~35.6% Hadi / 5.3% Noor / etc., not "all of it on Noor."
+  // Live P&L of the fund = AUM − committed capital. Unrealized,
+  // mark-to-market fluctuation on open positions (premium drift, etc).
+  // This is NOT realized trading performance — it must never color the
+  // GROSS / NET / FEES columns. It only feeds "Current Balance", the
+  // live liquidation value of each stake.
   const livePnL = totalAssets - investmentTotal;
-  // Live distribution — slice livePnL across partners by
-  // investment-weighted ownership %, then apply the GP/LP fee transfer.
-  // Drives the GROSS / FEES / NET / Current Balance columns so the
-  // table always mirrors the AUM number in the header. Σ (investment +
-  // netProfit) over all rows equals totalAssets by construction.
+  // Live distribution — slices livePnL across partners pro-rata by
+  // investment-weighted ownership. We read ONLY `grossProfit` from
+  // this (= ownership × livePnL, the raw liquidation share). Fees are
+  // intentionally not applied to unrealized fluctuation. Used solely
+  // for the Current Balance column so its Σ mirrors the AUM hero.
   const liveDistribution = useMemo(
     () => computePortfolioDistribution(partners, livePnL),
     [partners, livePnL]
   );
-  // Column totals for the footer row. Fees are summed across LPs only —
-  // GP's feeAmount equals Σ LP fees (collected = paid), so including
-  // both would double-count the zero-sum transfer.
-  //
-  // Σ Current Balance telescopes by construction:
-  //   Σ (inv_i + netProfit_i) = investmentTotal + Σ netProfit
-  //                           = investmentTotal + livePnL  (fees zero-sum)
-  //                           = totalAssets
-  // So the footer Current Balance matches the AUM hero exactly.
+  // Per-partner live liquidation share = ownership × livePnL.
+  // Σ over all partners == livePnL (ownership sums to 100%), so
+  // Σ (investment + liveShare) == investmentTotal + livePnL == totalAssets.
+  const liveShareByPartner = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const d of Object.values(liveDistribution)) {
+      map[d.partnerId] = d.grossProfit;
+    }
+    return map;
+  }, [liveDistribution]);
+  // Column totals for the footer row.
+  //   - GROSS / NET / FEES come from REALIZED trade performance
+  //     (tradeDistribution) — they stay $0 when no trade settled this
+  //     cycle, regardless of open-position mark-to-market.
+  //   - Current Balance telescopes to the AUM hero:
+  //       Σ (inv_i + liveShare_i) = investmentTotal + livePnL = totalAssets
+  // Fees are summed across LPs only — GP's feeAmount equals Σ LP fees
+  // (collected = paid), so including both would double-count.
   const totals = useMemo(() => {
-    const rows = Object.values(liveDistribution);
-    const investment = rows.reduce((s, d) => s + d.investment, 0);
-    const net = rows.reduce((s, d) => s + d.netProfit, 0);
+    const tradeRows = Object.values(tradeDistribution);
+    const investment = tradeRows.reduce((s, d) => s + d.investment, 0);
+    const liveShareSum = Object.values(liveShareByPartner).reduce(
+      (s, v) => s + v,
+      0
+    );
     return {
       investment,
-      ownership: rows.reduce((s, d) => s + d.ownershipPct, 0),
-      gross: rows.reduce((s, d) => s + d.grossProfit, 0),
-      fees: rows
+      ownership: tradeRows.reduce((s, d) => s + d.ownershipPct, 0),
+      gross: tradeRows.reduce((s, d) => s + d.grossProfit, 0),
+      fees: tradeRows
         .filter((d) => !d.isManager)
         .reduce((s, d) => s + d.feeAmount, 0),
-      net,
-      currentBalance: investment + net,
+      net: tradeRows.reduce((s, d) => s + d.netProfit, 0),
+      currentBalance: investment + liveShareSum,
     };
-  }, [liveDistribution]);
+  }, [tradeDistribution, liveShareByPartner]);
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
@@ -410,12 +421,12 @@ export default function PartnersPage() {
               {/* Data Rows */}
               {!loading &&
                 partners.map((partner) => {
-                  // dist drives every column in this row: it's the live
-                  // P&L slice (computePortfolioDistribution(livePnL)). The
-                  // action buttons below read tradeNet separately —
-                  // capitalize/deposit gate on what's actually sitting in
-                  // the trade book, not on the live AUM−basis surplus.
-                  const dist = liveDistribution[partner.id] ?? {
+                  // dist drives the REALIZED performance columns
+                  // (Investment, Ownership, GROSS, FEES, NET). It's the
+                  // trade-based distribution, so it reads $0 when no
+                  // trade settled this cycle — open-position
+                  // mark-to-market never bleeds into these columns.
+                  const dist = tradeDistribution[partner.id] ?? {
                     partnerId: partner.id,
                     investment: 0,
                     ownershipPct: 0,
@@ -427,14 +438,15 @@ export default function PartnersPage() {
                     returnPct: 0,
                     collectedFromLps: [],
                   };
-                  const tradeNet = tradeDistribution[partner.id]?.netProfit ?? 0;
+                  const tradeNet = dist.netProfit;
                   const profitPositive = dist.netProfit >= 0;
-                  // Universal formula for every row — Investment plus
-                  // this partner's pro-rata share of the fund-wide
-                  // livePnL. No per-row withdrawal subtraction: the
-                  // drawdown is already distributed across all
-                  // partners by ownership weight inside dist.netProfit.
-                  const currentBalance = dist.investment + dist.netProfit;
+                  // Current Balance is the ONLY column that absorbs live
+                  // liquidation value: Investment + this partner's
+                  // pro-rata share (ownership × livePnL). Σ across rows
+                  // == investmentTotal + livePnL == totalAssets.
+                  const liveShare = liveShareByPartner[partner.id] ?? 0;
+                  const currentBalance = dist.investment + liveShare;
+                  const liveSharePositive = liveShare >= 0;
                   return (
                     <tr
                       key={partner.id}
@@ -492,12 +504,15 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Gross Profit — partner's share of live livePnL before fees */}
+                      {/* Gross Profit — REALIZED share before fees.
+                          Neutral white when flat/positive, rose only on
+                          an actual realized loss. Unrealized
+                          mark-to-market lives in Current Balance, not here. */}
                       <td className="px-6 py-4">
                         <span
                           className={`text-sm font-mono tabular-nums font-bold ${
                             dist.grossProfit >= 0
-                              ? "text-emerald-500"
+                              ? "text-white"
                               : "text-rose-500"
                           }`}
                         >
@@ -532,7 +547,9 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Net Profit — what the partner actually earns */}
+                      {/* Net Profit — REALIZED earnings this cycle
+                          (after fees). $0 until a trade settles —
+                          unrealized drift never shows here. */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span
@@ -557,19 +574,19 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Current Balance — Investment + live P&L share
-                          − this partner's cumulative withdrawals. Σ
-                          across all rows == totalAssets (the AUM hero)
-                          and stays unaffected by phantom losses from
-                          past profit withdrawals. */}
+                      {/* Current Balance — live liquidation value:
+                          Investment + ownership × livePnL (unrealized
+                          mark-to-market). The ONLY column that moves
+                          with open-position drift. Σ across all rows ==
+                          totalAssets (the AUM hero). */}
                       <td className="px-6 py-4">
                         <span
                           className={`text-sm font-headline font-bold font-mono tabular-nums ${
-                            profitPositive
+                            liveSharePositive
                               ? "text-emerald-500"
                               : "text-rose-500"
                           }`}
-                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} P&L (${formatCurrency(Math.abs(dist.netProfit))})`}
+                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${liveSharePositive ? "+" : "−"} تذبذب حي (${formatCurrency(Math.abs(liveShare))})`}
                         >
                           {formatCurrency(currentBalance)}
                         </span>
@@ -672,7 +689,7 @@ export default function PartnersPage() {
                   <td className="px-6 py-4">
                     <span
                       className={`text-sm font-mono tabular-nums font-bold ${
-                        totals.gross >= 0 ? "text-emerald-500" : "text-rose-500"
+                        totals.gross >= 0 ? "text-white" : "text-rose-500"
                       }`}
                     >
                       {totals.gross >= 0 ? "+" : ""}
@@ -697,7 +714,7 @@ export default function PartnersPage() {
                       {formatCurrency(totals.net)}
                     </span>
                   </td>
-                  {/* Current Balance total = Σ (investment + netProfit) — matches totalAssets / AUM. */}
+                  {/* Current Balance total = Σ (investment + liveShare) — matches totalAssets / AUM hero. */}
                   <td className="px-6 py-4">
                     <span
                       className="text-sm font-headline font-bold text-white font-mono tabular-nums"
