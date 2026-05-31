@@ -13,10 +13,7 @@ import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent, getPartnerInvestment } from "@/lib/utils";
-import {
-  computePartnerDistributionFromTrades,
-  computePortfolioDistribution,
-} from "@/lib/partner-profit";
+import { computePartnerDistributionFromTrades } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
@@ -27,7 +24,6 @@ export default function PartnersPage() {
     partners,
     loading,
     error,
-    totalAssets,
     deletePartner,
     addPartner,
     updatePartner,
@@ -49,46 +45,26 @@ export default function PartnersPage() {
     () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
     [partners]
   );
-  // Live P&L of the fund = AUM − committed capital. Unrealized,
-  // mark-to-market fluctuation on open positions (premium drift, etc).
-  // This is NOT realized trading performance — it must never color the
-  // GROSS / NET / FEES columns. It only feeds "Current Balance", the
-  // live liquidation value of each stake.
-  const livePnL = totalAssets - investmentTotal;
-  // Live distribution — slices livePnL across partners pro-rata by
-  // investment-weighted ownership. We read ONLY `grossProfit` from
-  // this (= ownership × livePnL, the raw liquidation share). Fees are
-  // intentionally not applied to unrealized fluctuation. Used solely
-  // for the Current Balance column so its Σ mirrors the AUM hero.
-  const liveDistribution = useMemo(
-    () => computePortfolioDistribution(partners, livePnL),
-    [partners, livePnL]
-  );
-  // Per-partner live liquidation share = ownership × livePnL.
-  // Σ over all partners == livePnL (ownership sums to 100%), so
-  // Σ (investment + liveShare) == investmentTotal + livePnL == totalAssets.
-  const liveShareByPartner = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const d of Object.values(liveDistribution)) {
-      map[d.partnerId] = d.grossProfit;
-    }
-    return map;
-  }, [liveDistribution]);
-  // Column totals for the footer row.
-  //   - GROSS / NET / FEES come from REALIZED trade performance
-  //     (tradeDistribution) — they stay $0 when no trade settled this
-  //     cycle, regardless of open-position mark-to-market.
-  //   - Current Balance telescopes to the AUM hero:
-  //       Σ (inv_i + liveShare_i) = investmentTotal + livePnL = totalAssets
+  // Column totals for the footer row. Everything is built from the
+  // REALIZED trade distribution + committed capital — NOT from the
+  // broker's live balance (totalAssets). Open-position mark-to-market
+  // drift is unrealized and is deliberately excluded from every column
+  // so the table reflects book value (cost basis + realized gains),
+  // not liquidation value.
+  //
+  //   Current Balance = investment + realized netProfit
+  //
+  // Withdrawals need no extra term here: a capital withdrawal already
+  // shrinks getPartnerInvestment (totalDeposits), and a profit
+  // withdrawal stamps last_settlement_date so netProfit resets to $0 —
+  // both leave Current Balance == the partner's true remaining stake.
+  //
   // Fees are summed across LPs only — GP's feeAmount equals Σ LP fees
   // (collected = paid), so including both would double-count.
   const totals = useMemo(() => {
     const tradeRows = Object.values(tradeDistribution);
     const investment = tradeRows.reduce((s, d) => s + d.investment, 0);
-    const liveShareSum = Object.values(liveShareByPartner).reduce(
-      (s, v) => s + v,
-      0
-    );
+    const net = tradeRows.reduce((s, d) => s + d.netProfit, 0);
     return {
       investment,
       ownership: tradeRows.reduce((s, d) => s + d.ownershipPct, 0),
@@ -96,10 +72,15 @@ export default function PartnersPage() {
       fees: tradeRows
         .filter((d) => !d.isManager)
         .reduce((s, d) => s + d.feeAmount, 0),
-      net: tradeRows.reduce((s, d) => s + d.netProfit, 0),
-      currentBalance: investment + liveShareSum,
+      net,
+      currentBalance: investment + net,
     };
-  }, [tradeDistribution, liveShareByPartner]);
+  }, [tradeDistribution]);
+  // The Total Partner Assets hero shows the sum of the Current Balance
+  // column (Σ investment + Σ realized net), so the card and the footer
+  // are guaranteed identical down to the cent. This intentionally
+  // ignores the broker's live balance — unrealized drift is not booked.
+  const totalCurrentBalanceSum = totals.currentBalance;
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
@@ -299,9 +280,9 @@ export default function PartnersPage() {
                 <div className="flex items-baseline gap-3">
                   <span
                     className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`رأس المال (${formatCurrency(investmentTotal)}) ${livePnL >= 0 ? "+" : "−"} P&L حي (${formatCurrency(Math.abs(livePnL))}) = ${formatCurrency(totalAssets)}`}
+                    title={`مجموع الرصيد الحالي = رأس المال (${formatCurrency(investmentTotal)}) + الأرباح المحققة (${formatCurrency(totals.net)})`}
                   >
-                    {formatCurrency(totalAssets)}
+                    {formatCurrency(totalCurrentBalanceSum)}
                   </span>
                 </div>
               </div>
@@ -440,13 +421,11 @@ export default function PartnersPage() {
                   };
                   const tradeNet = dist.netProfit;
                   const profitPositive = dist.netProfit >= 0;
-                  // Current Balance is the ONLY column that absorbs live
-                  // liquidation value: Investment + this partner's
-                  // pro-rata share (ownership × livePnL). Σ across rows
-                  // == investmentTotal + livePnL == totalAssets.
-                  const liveShare = liveShareByPartner[partner.id] ?? 0;
-                  const currentBalance = dist.investment + liveShare;
-                  const liveSharePositive = liveShare >= 0;
+                  // Current Balance = Investment + realized net profit.
+                  // No livePnL / broker-balance back-calculation — when
+                  // nothing has settled this cycle (netProfit == 0) the
+                  // balance equals the Investment column to the cent.
+                  const currentBalance = dist.investment + dist.netProfit;
                   return (
                     <tr
                       key={partner.id}
@@ -574,19 +553,17 @@ export default function PartnersPage() {
                         </div>
                       </td>
 
-                      {/* Current Balance — live liquidation value:
-                          Investment + ownership × livePnL (unrealized
-                          mark-to-market). The ONLY column that moves
-                          with open-position drift. Σ across all rows ==
-                          totalAssets (the AUM hero). */}
+                      {/* Current Balance — Investment + realized net
+                          profit. Equals Investment exactly until a trade
+                          settles. Σ across all rows == the AUM hero. */}
                       <td className="px-6 py-4">
                         <span
                           className={`text-sm font-headline font-bold font-mono tabular-nums ${
-                            liveSharePositive
+                            profitPositive
                               ? "text-emerald-500"
                               : "text-rose-500"
                           }`}
-                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${liveSharePositive ? "+" : "−"} تذبذب حي (${formatCurrency(Math.abs(liveShare))})`}
+                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} الربح المحقق (${formatCurrency(Math.abs(dist.netProfit))})`}
                         >
                           {formatCurrency(currentBalance)}
                         </span>
@@ -714,11 +691,11 @@ export default function PartnersPage() {
                       {formatCurrency(totals.net)}
                     </span>
                   </td>
-                  {/* Current Balance total = Σ (investment + liveShare) — matches totalAssets / AUM hero. */}
+                  {/* Current Balance total = Σ (investment + realized net) — identical to the AUM hero. */}
                   <td className="px-6 py-4">
                     <span
                       className="text-sm font-headline font-bold text-white font-mono tabular-nums"
-                      title={`يطابق إجمالي أصول الشركاء (${formatCurrency(totalAssets)})`}
+                      title={`يطابق إجمالي أصول الشركاء (${formatCurrency(totalCurrentBalanceSum)})`}
                     >
                       {formatCurrency(totals.currentBalance)}
                     </span>
