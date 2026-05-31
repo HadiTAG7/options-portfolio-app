@@ -49,45 +49,13 @@ export default function PartnersPage() {
     () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
     [partners]
   );
-  // Active-cycle withdrawals per partner, scoped to the period since
-  // the last basis reset (a Capitalize event syncs totalDeposits to
-  // currentBalance, zeroing the gap; subsequent profit withdrawals
-  // shrink currentBalance only, widening the gap; capital withdrawals
-  // shrink both equally and leave the gap untouched but have already
-  // reduced totalDeposits so they're accounted for via investmentTotal
-  // shrinking).
-  //
-  // Using partner.totalWithdrawals here was wrong — that field is
-  // LIFETIME cumulative and never resets, so after a Capitalize it
-  // double-counts prior cycles' withdrawals against a freshly-reset
-  // basis and surfaces a phantom profit. The gap formula resets with
-  // every Capitalize by construction.
-  const cycleWithdrawalsByPartner = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const p of partners) {
-      map[p.id] = Math.max(
-        0,
-        (Number(p.totalDeposits) || 0) - (Number(p.currentBalance) || 0)
-      );
-    }
-    return map;
-  }, [partners]);
-  const totalCycleWithdrawalsSum = useMemo(
-    () =>
-      Object.values(cycleWithdrawalsByPartner).reduce((s, v) => s + v, 0),
-    [cycleWithdrawalsByPartner]
-  );
-  // Net capital = committed basis − active-cycle profit withdrawals.
-  // Capital-portion withdrawals already shrank investmentTotal so they
-  // don't need a second subtraction here; that's the key to not
-  // re-introducing phantom profits.
-  const netCapitalTotal = investmentTotal - totalCycleWithdrawalsSum;
-  // Live P&L = current AUM − net cash basis. Strictly reflects open
-  // positions / market fluctuations: cash movements cancel out of the
-  // formula by construction. Note ownership %, fees, and
-  // tradeDistribution still key off investmentTotal (committed
-  // capital) so business rules are intact.
-  const livePnL = totalAssets - netCapitalTotal;
+  // Live P&L of the fund = AUM − committed capital. A single global
+  // number that captures every cash/market delta sitting on top of
+  // committed basis — withdrawals, capitalizations, mark-to-market.
+  // It's distributed across partners pro-rata via ownership inside
+  // computePortfolioDistribution, so a fund-wide drawdown of −$568
+  // becomes ~35.6% Hadi / 5.3% Noor / etc., not "all of it on Noor."
+  const livePnL = totalAssets - investmentTotal;
   // Live distribution — slice livePnL across partners by
   // investment-weighted ownership %, then apply the GP/LP fee transfer.
   // Drives the GROSS / FEES / NET / Current Balance columns so the
@@ -102,11 +70,10 @@ export default function PartnersPage() {
   // both would double-count the zero-sum transfer.
   //
   // Σ Current Balance telescopes by construction:
-  //   Σ (inv + net − w) = investmentTotal + livePnL − totalCycleWithdrawalsSum
-  //                     = netCapitalTotal + livePnL
-  //                     = totalAssets
-  // So the footer Current Balance matches the AUM hero exactly,
-  // without re-introducing the phantom loss.
+  //   Σ (inv_i + netProfit_i) = investmentTotal + Σ netProfit
+  //                           = investmentTotal + livePnL  (fees zero-sum)
+  //                           = totalAssets
+  // So the footer Current Balance matches the AUM hero exactly.
   const totals = useMemo(() => {
     const rows = Object.values(liveDistribution);
     const investment = rows.reduce((s, d) => s + d.investment, 0);
@@ -119,9 +86,9 @@ export default function PartnersPage() {
         .filter((d) => !d.isManager)
         .reduce((s, d) => s + d.feeAmount, 0),
       net,
-      currentBalance: investment + net - totalCycleWithdrawalsSum,
+      currentBalance: investment + net,
     };
-  }, [liveDistribution, totalCycleWithdrawalsSum]);
+  }, [liveDistribution]);
   // Fund-level total profit drives the header card. Using the single
   // `totalProfit` number keeps this page in lockstep with the trades
   // page summary cards — when one moves, both move.
@@ -321,7 +288,7 @@ export default function PartnersPage() {
                 <div className="flex items-baseline gap-3">
                   <span
                     className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums"
-                    title={`رأس المال (${formatCurrency(investmentTotal)}) − سحوبات الدورة (${formatCurrency(totalCycleWithdrawalsSum)}) ${livePnL >= 0 ? "+" : "−"} P&L حي (${formatCurrency(Math.abs(livePnL))}) = ${formatCurrency(totalAssets)}`}
+                    title={`رأس المال (${formatCurrency(investmentTotal)}) ${livePnL >= 0 ? "+" : "−"} P&L حي (${formatCurrency(Math.abs(livePnL))}) = ${formatCurrency(totalAssets)}`}
                   >
                     {formatCurrency(totalAssets)}
                   </span>
@@ -462,17 +429,12 @@ export default function PartnersPage() {
                   };
                   const tradeNet = tradeDistribution[partner.id]?.netProfit ?? 0;
                   const profitPositive = dist.netProfit >= 0;
-                  // Subtract only this partner's CYCLE withdrawals
-                  // (since their last basis reset), not lifetime
-                  // totalWithdrawals — otherwise a post-Capitalize row
-                  // would double-count old cycles and surface a
-                  // phantom profit.
-                  const partnerCycleWithdrawals =
-                    cycleWithdrawalsByPartner[partner.id] ?? 0;
-                  const currentBalance =
-                    dist.investment +
-                    dist.netProfit -
-                    partnerCycleWithdrawals;
+                  // Universal formula for every row — Investment plus
+                  // this partner's pro-rata share of the fund-wide
+                  // livePnL. No per-row withdrawal subtraction: the
+                  // drawdown is already distributed across all
+                  // partners by ownership weight inside dist.netProfit.
+                  const currentBalance = dist.investment + dist.netProfit;
                   return (
                     <tr
                       key={partner.id}
@@ -607,7 +569,7 @@ export default function PartnersPage() {
                               ? "text-emerald-500"
                               : "text-rose-500"
                           }`}
-                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} P&L (${formatCurrency(Math.abs(dist.netProfit))}) − سحوبات الدورة (${formatCurrency(partnerCycleWithdrawals)})`}
+                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} P&L (${formatCurrency(Math.abs(dist.netProfit))})`}
                         >
                           {formatCurrency(currentBalance)}
                         </span>
