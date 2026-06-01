@@ -13,6 +13,7 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
+import { MonthlyBreakdownDialog } from "@/components/ui/monthly-breakdown-dialog";
 import {
   formatWholeNumber,
   formatCompactCurrency,
@@ -79,6 +80,12 @@ export default function DashboardPage() {
 
   // ── Selected month state (drives distribution + donut center) ──
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  // Which breakdown dialog (if any) is open. Driven by clicking the
+  // Total Yield / Management Fees hero cards — both surface the same
+  // monthlyLedger data filtered by mode.
+  const [breakdownMode, setBreakdownMode] = useState<
+    "profit" | "fees" | null
+  >(null);
 
   // ── Monthly profit buckets (shared by chart, ledger, distribution) ──
   // Bucket by trade entry date — premium is collected on entry, not at
@@ -226,6 +233,14 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
+      {/* Monthly breakdown — opens from the Total Yield / Management Fees cards */}
+      <MonthlyBreakdownDialog
+        open={breakdownMode !== null}
+        mode={breakdownMode ?? "profit"}
+        rows={monthlyLedger}
+        onClose={() => setBreakdownMode(null)}
+      />
+
       {/* ═══════ Hero Cards ═══════ */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
         {loading ? (
@@ -279,7 +294,12 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Total Yield ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
+            <button
+              type="button"
+              onClick={() => setBreakdownMode("profit")}
+              title="عرض الأرباح الشهرية"
+              className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 text-right backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 cursor-pointer"
+            >
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <TrendingUp size={72} strokeWidth={1} />
@@ -328,10 +348,15 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* ── Management Fees Total ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
+            <button
+              type="button"
+              onClick={() => setBreakdownMode("fees")}
+              title="عرض الرسوم الشهرية"
+              className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 text-right backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 cursor-pointer"
+            >
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Receipt size={72} strokeWidth={1} />
@@ -370,7 +395,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* ── Active Positions ── */}
             <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
