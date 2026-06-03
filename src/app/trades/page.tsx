@@ -788,6 +788,7 @@ export default function TradesPage() {
         loading={loading}
         valueColumn="result"
         onDelete={setDeletingTrade}
+        groupByMonth
       />
 
       <TradeSection
@@ -918,6 +919,7 @@ function TradeSection({
   valueColumn,
   onEdit,
   onDelete,
+  groupByMonth = false,
 }: {
   title: string;
   subtitle: string;
@@ -928,11 +930,48 @@ function TradeSection({
   valueColumn: "premium" | "result";
   onEdit?: (trade: Trade) => void;
   onDelete?: (trade: Trade) => void;
+  // When true, rows are split into month buckets (newest first) with a
+  // sub-header per month showing the count + the month's total PnL.
+  groupByMonth?: boolean;
 }) {
   const isResult = valueColumn === "result";
   const valueLabelEn = isResult ? "Result" : "Premium";
   const hasActions = Boolean(onEdit || onDelete);
   const colCount = hasActions ? 9 : 8;
+
+  // Bucket trades by entry-month (tradeMonthKey) when grouping is on.
+  // Returns [{ key, labelAr, labelEn, total, trades }] sorted newest
+  // first. A null/unknown month key lands in an "غير مؤرخ" bucket so
+  // nothing silently disappears.
+  const monthGroups = useMemo(() => {
+    if (!groupByMonth) return null;
+    const buckets: Record<string, Trade[]> = {};
+    for (const t of trades) {
+      const key = tradeMonthKey(t) ?? "unknown";
+      (buckets[key] ??= []).push(t);
+    }
+    return Object.keys(buckets)
+      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)) // newest first; "unknown" sorts last
+      .map((key) => {
+        const rows = buckets[key];
+        const total = rows.reduce((s, t) => s + tradeProfit(t), 0);
+        let labelAr = "غير مؤرخ";
+        let labelEn = "Undated";
+        if (key !== "unknown") {
+          const [y, m] = key.split("-");
+          const d = new Date(Number(y), Number(m) - 1);
+          labelAr = d.toLocaleString("ar-SA", {
+            month: "long",
+            year: "numeric",
+          });
+          labelEn = d.toLocaleString("en-US", {
+            month: "short",
+            year: "numeric",
+          });
+        }
+        return { key, labelAr, labelEn, total, trades: rows };
+      });
+  }, [groupByMonth, trades]);
 
   const accentRing =
     accent === "emerald"
@@ -940,6 +979,93 @@ function TradeSection({
       : accent === "rose"
         ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
         : "border-cyan-400/30 bg-cyan-500/10 text-cyan-300";
+
+  // Single source for a trade row so flat + grouped layouts stay
+  // identical. `idx` only drives the zebra stripe.
+  const renderRow = (trade: Trade, idx: number) => {
+    const valueRaw = isResult ? trade.result : trade.premium;
+    const valueClass = isResult
+      ? valueRaw >= 0
+        ? "text-emerald-400"
+        : "text-rose-400"
+      : "text-emerald-400";
+    const pnl = tradeProfit(trade);
+    const pnlPositive = pnl >= 0;
+    const zebra = idx % 2 === 0 ? "bg-transparent" : "bg-zinc-900/30";
+    return (
+      <tr
+        key={trade.id}
+        className={`border-t border-zinc-800/50 transition-colors hover:bg-emerald-500/[0.04] ${zebra}`}
+      >
+        <td className="px-4 py-3 font-mono font-bold tracking-wider text-white">
+          {trade.ticker}
+        </td>
+        <td className="px-4 py-3">
+          <span
+            className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${typeBadgeClass(trade.type)}`}
+          >
+            {trade.type}
+          </span>
+        </td>
+        <td className="px-4 py-3 font-mono tabular-nums text-zinc-300">
+          {trade.quantity}
+        </td>
+        <td className="px-4 py-3 font-mono tabular-nums text-zinc-400">
+          {trade.strike > 0 ? formatCurrency(trade.strike) : "—"}
+        </td>
+        <td className={`px-4 py-3 font-mono tabular-nums ${valueClass}`}>
+          {isResult && valueRaw >= 0 ? "+" : ""}
+          {formatCurrency(valueRaw)}
+        </td>
+        <td
+          className={`px-4 py-3 font-mono font-bold tabular-nums ${
+            pnlPositive ? "text-emerald-400" : "text-rose-400"
+          }`}
+          title="Premium × Quantity"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            {pnlPositive ? (
+              <ArrowUpRight size={12} />
+            ) : (
+              <ArrowDownRight size={12} />
+            )}
+            {pnlPositive ? "+" : ""}
+            {formatCurrency(pnl)}
+          </span>
+        </td>
+        <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-400">
+          {formatExpiration(trade)}
+        </td>
+        <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-500">
+          {trade.date}
+        </td>
+        {hasActions && (
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-1">
+              {onEdit && (
+                <button
+                  onClick={() => onEdit(trade)}
+                  className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                  title="تعديل الصفقة"
+                >
+                  <Pencil size={12} />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(trade)}
+                  className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
+                  title="حذف الصفقة"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
+          </td>
+        )}
+      </tr>
+    );
+  };
 
   return (
     <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 to-zinc-950/80 backdrop-blur-sm">
@@ -999,90 +1125,49 @@ function TradeSection({
               </tr>
             )}
 
+            {/* Flat layout */}
             {!loading &&
-              trades.map((trade, idx) => {
-                const valueRaw = isResult ? trade.result : trade.premium;
-                const valueClass = isResult
-                  ? valueRaw >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-                  : "text-emerald-400";
-                const pnl = tradeProfit(trade);
-                const pnlPositive = pnl >= 0;
-                const zebra =
-                  idx % 2 === 0 ? "bg-transparent" : "bg-zinc-900/30";
+              !monthGroups &&
+              trades.map((trade, idx) => renderRow(trade, idx))}
+
+            {/* Month-grouped layout — sub-header per month, then its rows */}
+            {!loading &&
+              monthGroups &&
+              monthGroups.map((group) => {
+                const groupPositive = group.total >= 0;
                 return (
-                  <tr
-                    key={trade.id}
-                    className={`border-t border-zinc-800/50 transition-colors hover:bg-emerald-500/[0.04] ${zebra}`}
-                  >
-                    <td className="px-4 py-3 font-mono font-bold tracking-wider text-white">
-                      {trade.ticker}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${typeBadgeClass(trade.type)}`}
+                  <React.Fragment key={group.key}>
+                    <tr className="border-t border-zinc-800/60 bg-zinc-900/50">
+                      <td
+                        colSpan={colCount}
+                        className="px-4 py-2.5"
                       >
-                        {trade.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono tabular-nums text-zinc-300">
-                      {trade.quantity}
-                    </td>
-                    <td className="px-4 py-3 font-mono tabular-nums text-zinc-400">
-                      {trade.strike > 0 ? formatCurrency(trade.strike) : "—"}
-                    </td>
-                    <td className={`px-4 py-3 font-mono tabular-nums ${valueClass}`}>
-                      {isResult && valueRaw >= 0 ? "+" : ""}
-                      {formatCurrency(valueRaw)}
-                    </td>
-                    <td
-                      className={`px-4 py-3 font-mono font-bold tabular-nums ${
-                        pnlPositive ? "text-emerald-400" : "text-rose-400"
-                      }`}
-                      title="Premium × Quantity"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        {pnlPositive ? (
-                          <ArrowUpRight size={12} />
-                        ) : (
-                          <ArrowDownRight size={12} />
-                        )}
-                        {pnlPositive ? "+" : ""}
-                        {formatCurrency(pnl)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-400">
-                      {formatExpiration(trade)}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-500">
-                      {trade.date}
-                    </td>
-                    {hasActions && (
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          {onEdit && (
-                            <button
-                              onClick={() => onEdit(trade)}
-                              className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
-                              title="تعديل الصفقة"
-                            >
-                              <Pencil size={12} />
-                            </button>
-                          )}
-                          {onDelete && (
-                            <button
-                              onClick={() => onDelete(trade)}
-                              className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
-                              title="حذف الصفقة"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-headline font-bold uppercase tracking-[0.18em] text-zinc-300">
+                              {group.labelAr}
+                            </span>
+                            <span className="text-[9px] uppercase tracking-widest text-zinc-600 font-mono">
+                              {group.labelEn}
+                            </span>
+                            <span className="rounded-full border border-zinc-700/60 bg-zinc-900/60 px-2 py-0.5 text-[10px] font-bold tabular-nums text-zinc-400">
+                              {group.trades.length}
+                            </span>
+                          </div>
+                          <span
+                            className={`font-mono text-xs font-bold tabular-nums ${
+                              groupPositive ? "text-emerald-400" : "text-rose-400"
+                            }`}
+                            title="إجمالي ربح الشهر · Month total PnL"
+                          >
+                            {groupPositive ? "+" : ""}
+                            {formatCurrency(group.total)}
+                          </span>
                         </div>
                       </td>
-                    )}
-                  </tr>
+                    </tr>
+                    {group.trades.map((trade, idx) => renderRow(trade, idx))}
+                  </React.Fragment>
                 );
               })}
           </tbody>
