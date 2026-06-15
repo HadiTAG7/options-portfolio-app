@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/utils";
@@ -41,9 +41,13 @@ function partnerFriendlyType(type: string): { ar: string; en: string } {
   return { ar: type, en: "" };
 }
 
-export default function PartnerDetailPage() {
-  const params = useParams<{ id: string }>();
-  const partnerId = params?.id ?? "";
+// Inner component reads the partner id from the URL query string. Split
+// out from the default export so we can wrap it in <Suspense> — that's
+// required by useSearchParams during prerender (the static-export build
+// would otherwise bail with a "missing Suspense boundary" error).
+function PartnerDetailInner() {
+  const searchParams = useSearchParams();
+  const partnerId = searchParams.get("id") ?? "";
 
   const { partners, loading: partnersLoading, totalAssets } = usePartners();
   const { sellPuts, sellCalls, activeStocks, loading: tradesLoading } = useTrades();
@@ -166,28 +170,24 @@ export default function PartnerDetailPage() {
 
   if (loading) {
     return (
-      <AppShell>
-        <div className="py-24 text-center text-on-surface-variant text-sm">
-          جاري التحميل...
-        </div>
-      </AppShell>
+      <div className="py-24 text-center text-on-surface-variant text-sm">
+        جاري التحميل...
+      </div>
     );
   }
 
   if (!partner) {
     return (
-      <AppShell>
-        <div className="py-24 text-center">
-          <Icon
-            name="person_off"
-            className="!text-5xl text-on-surface-variant/30 block mx-auto mb-3"
-          />
-          <p className="text-sm text-on-surface">لم يتم العثور على الشريك</p>
-          <p className="text-[10px] text-on-surface-variant mt-1 font-mono">
-            {partnerId}
-          </p>
-        </div>
-      </AppShell>
+      <div className="py-24 text-center">
+        <Icon
+          name="person_off"
+          className="!text-5xl text-on-surface-variant/30 block mx-auto mb-3"
+        />
+        <p className="text-sm text-on-surface">لم يتم العثور على الشريك</p>
+        <p className="text-[10px] text-on-surface-variant mt-1 font-mono">
+          {partnerId}
+        </p>
+      </div>
     );
   }
 
@@ -195,7 +195,7 @@ export default function PartnerDetailPage() {
     partner.totalNetProfit >= 0 ? "text-primary" : "text-secondary";
 
   return (
-    <AppShell>
+    <>
       {/* Breadcrumb + Header */}
       <div className="flex justify-between items-start mb-8">
         <div>
@@ -605,6 +605,22 @@ export default function PartnerDetailPage() {
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+export default function PartnerDetailPage() {
+  return (
+    <AppShell>
+      <Suspense
+        fallback={
+          <div className="py-24 text-center text-on-surface-variant text-sm">
+            جاري التحميل...
+          </div>
+        }
+      >
+        <PartnerDetailInner />
+      </Suspense>
     </AppShell>
   );
 }

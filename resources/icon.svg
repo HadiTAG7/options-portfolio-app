@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Brand mark for the Alghanim Options Desk app. Emerald-on-zinc
+       palette matches the dashboard's AUM card and the PWA manifest
+       theme_color so the splash + system chrome blend in. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1118"/>
+      <stop offset="100%" stop-color="#020409"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="24" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background: full bleed dark canvas. -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Subtle emerald glow halo, top-right. -->
+  <circle cx="780" cy="240" r="220" fill="#10b981" opacity="0.18"/>
+
+  <!-- Wallet body. -->
+  <g filter="url(#glow)">
+    <rect x="232" y="332" width="560" height="380" rx="56" ry="56"
+          fill="url(#accent)" opacity="0.95"/>
+    <!-- Wallet flap. -->
+    <rect x="232" y="332" width="560" height="80" rx="40" ry="40"
+          fill="#065f46" opacity="0.55"/>
+    <!-- Card slot accent. -->
+    <rect x="588" y="478" width="148" height="86" rx="20" ry="20"
+          fill="#022c1f" opacity="0.85"/>
+    <circle cx="662" cy="521" r="22" fill="#34d399" opacity="0.95"/>
+  </g>
+
+  <!-- Subtle base ring. -->
+  <circle cx="512" cy="512" r="468" fill="none" stroke="#10b981"
+          stroke-opacity="0.10" stroke-width="2"/>
+</svg>

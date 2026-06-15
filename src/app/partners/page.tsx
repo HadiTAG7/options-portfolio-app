@@ -625,7 +625,7 @@ export default function PartnersPage() {
                             تثبيت
                           </button>
                           <Link
-                            href={`/partners/${partner.id}`}
+                            href={`/partners/details?id=${partner.id}`}
                             className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
                           >
                             التفاصيل

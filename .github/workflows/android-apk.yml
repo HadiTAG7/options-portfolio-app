@@ -1,0 +1,77 @@
+# Build a debug Android APK and upload it as a workflow artifact.
+#
+# Trigger manually from the Actions tab (workflow_dispatch). The job:
+#   1. Builds the Next.js static export (out/) with MOBILE_BUILD=1.
+#   2. Initialises the Android Capacitor project (cap add android is
+#      idempotent — runs on first invocation, no-op on later runs).
+#   3. Syncs out/ into android/app/src/main/assets/public/.
+#   4. Runs ./gradlew assembleDebug to produce app-debug.apk.
+#   5. Uploads the .apk as a downloadable artifact (30-day retention).
+#
+# Supabase credentials are passed at build time as NEXT_PUBLIC_*
+# variables, so they get baked into the static bundle. Store them as
+# repository secrets named SUPABASE_URL and SUPABASE_ANON_KEY before
+# running the workflow.
+#
+# This produces an UNSIGNED debug APK. Suitable for sideload + internal
+# testing. For Play Store distribution, swap assembleDebug for
+# assembleRelease and add a signing-key step.
+
+name: Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: npm run build:mobile
+
+      # cap add is idempotent on already-initialised projects but errors
+      # if no android/ folder exists. Touch the folder on first run.
+      - name: Initialise Android project (first run only)
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: Sync web bundle into Android project
+        run: npm run cap:sync
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error

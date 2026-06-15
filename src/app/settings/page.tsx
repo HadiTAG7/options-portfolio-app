@@ -264,14 +264,20 @@ export default function SettingsPage() {
           </div>
         </SettingsCard>
 
-        {/* ═══════ Monthly Reports ═══════ */}
-        <SettingsCard
-          icon={<Mail size={14} className="text-cyan-300" />}
-          title="Monthly Reports"
-          subtitle="التقارير الشهرية"
-        >
-          <MonthlyReportSender />
-        </SettingsCard>
+        {/* ═══════ Monthly Reports ═══════
+            Hidden in the Capacitor build (MOBILE_BUILD=1 sets
+            NEXT_PUBLIC_PLATFORM=mobile) — the underlying
+            /api/reports/send-monthly route uses nodemailer + Gmail
+            secrets and isn't shipped with the static export. */}
+        {process.env.NEXT_PUBLIC_PLATFORM !== "mobile" && (
+          <SettingsCard
+            icon={<Mail size={14} className="text-cyan-300" />}
+            title="Monthly Reports"
+            subtitle="التقارير الشهرية"
+          >
+            <MonthlyReportSender />
+          </SettingsCard>
+        )}
 
         {/* ═══════ Maintenance ═══════ */}
         <SettingsCard
