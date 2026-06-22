@@ -377,6 +377,12 @@ export function useTrades() {
         // so the row actually persists. Only fall back to local-only
         // state if the DB rejects it (missing table, RLS, offline).
         const stockPayload = {
+          // Client-generated UUID so the insert doesn't depend on the
+          // active_stocks.id column having `default gen_random_uuid()`.
+          // Some Supabase environments were created before migration
+          // 009 added that default — see
+          // migrations/010_fix_active_stocks_id_default.sql.
+          id: crypto.randomUUID(),
           ticker,
           quantity: payload.quantity,
           purchasePrice: payload.price,
