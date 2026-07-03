@@ -99,9 +99,14 @@ export async function POST(request: NextRequest) {
       auth: { user: gmailUser, pass: gmailAppPassword },
     });
 
+    // Server-side reads. After migration 013 locks RLS, anon reads
+    // nothing — set SUPABASE_SERVICE_ROLE_KEY (server-only env, never
+    // NEXT_PUBLIC_*) so this route keeps working; falls back to the
+    // anon key on pre-013 environments.
     const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
     // Fetch partners

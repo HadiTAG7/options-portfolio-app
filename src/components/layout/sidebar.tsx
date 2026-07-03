@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 import { useSidebar } from "./sidebar-context";
 
 interface NavItem {
@@ -195,13 +196,19 @@ export function Sidebar() {
           collapsed={collapsed}
         />
 
-        {/* Logout */}
+        {/* Logout — signs out of Supabase Auth. Harmless no-op flow
+            when auth enforcement is off (no session exists). */}
         <FooterButton
           icon={LogOut}
           label="تسجيل الخروج"
           tooltip="Logout · تسجيل الخروج"
           tone="rose"
           collapsed={collapsed}
+          onClick={() => {
+            void supabase.auth.signOut().then(() => {
+              window.location.href = "/login";
+            });
+          }}
         />
 
         {/* Version / terminal heartbeat */}
@@ -327,12 +334,14 @@ function FooterButton({
   tooltip,
   tone,
   collapsed,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
   tooltip: string;
   tone: "rose" | "zinc";
   collapsed: boolean;
+  onClick?: () => void;
 }) {
   const hover =
     tone === "rose"
@@ -342,6 +351,7 @@ function FooterButton({
     tone === "rose" ? "group-hover:text-rose-400" : "group-hover:text-zinc-300";
   const content = (
     <button
+      onClick={onClick}
       className={cn(
         "group flex items-center rounded-md w-full text-zinc-500 transition-all duration-200 cursor-pointer",
         hover,

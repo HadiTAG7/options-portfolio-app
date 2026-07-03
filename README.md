@@ -87,3 +87,17 @@ The app talks to Supabase with the **anon key**, and the current RLS policies (s
 - The `/api/reports/send-monthly` endpoint emails partner statements. Set the `REPORT_SECRET` env var in your deployment and send the same value in the `x-report-secret` header to lock it; without the env var the endpoint is open.
 
 Before distributing the APK beyond trusted devices, move to Supabase Auth with owner-scoped RLS policies (each request authenticated, policies keyed to `auth.uid()`), and rotate the anon key afterwards.
+
+### Enabling partner logins (the fix)
+
+The code for authenticated access ships dormant. Activation order matters — flipping the switch early locks everyone out:
+
+1. **Deploy** the current code. Nothing changes yet (`NEXT_PUBLIC_AUTH_ENFORCED` unset → app behaves as before; `/login` exists but is not required).
+2. **Create accounts**: Supabase Dashboard → Authentication → Users → *Add user* — one per partner (email + password). Email confirmation can be disabled for manual provisioning.
+3. **Link accounts to partners** in the SQL editor (template in `supabase/migrations/013_auth_and_rls.sql`):
+   ```sql
+   update public.partners set auth_user_id = '<auth user id>' where id = '<partner id>';
+   ```
+4. **Run `supabase/migrations/013_auth_and_rls.sql`** — replaces the permissive anon policies: authenticated partners read everything (`transactions`: own rows only), **only the GP writes**, anon reads nothing.
+5. **Rebuild & redeploy** web + APK with env `NEXT_PUBLIC_AUTH_ENFORCED=1` (add it to the GitHub Actions build env and your web host). The app now requires sign-in; the GP gets the full terminal, each LP lands on their own details page only.
+6. **Set `SUPABASE_SERVICE_ROLE_KEY`** in the server env (web host only — never in the APK/client) so `/api/reports/send-monthly` can still read data, and **rotate the anon key**.

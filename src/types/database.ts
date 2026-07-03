@@ -37,6 +37,8 @@ export interface Database {
           last_settlement_date: string | null;
           archived_at: string | null;
           email: string | null;
+          // Supabase Auth linkage (migration 013) — absent before it runs.
+          auth_user_id?: string | null;
         };
         Insert: {
           id?: string;
