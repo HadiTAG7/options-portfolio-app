@@ -64,6 +64,15 @@ interface Notification {
   message: string;
 }
 
+// GP performance-fee transfer that must accompany an LP settlement.
+// When an LP capitalizes or withdraws profit, their pending trades get
+// stamped settled and stop generating the GP's fee — so the fee has to
+// be credited to the GP's row at that exact moment or it evaporates.
+export interface FeeTransfer {
+  amount: number; // the settling LP's feeAmount from the distribution
+  gpId: string; // partner id of the General Partner row to credit
+}
+
 interface PartnersState {
   partners: Partner[];
   loading: boolean;
@@ -75,12 +84,14 @@ interface PartnersState {
     partner: Partner,
     amount: number,
     availableProfit: number,
-    onDone?: () => Promise<void>
+    onDone?: () => Promise<void>,
+    feeTransfer?: FeeTransfer | null
   ) => Promise<void>;
   capitalizeProfits: (
     partner: Partner,
     netProfitAmount: number,
-    onDone?: () => Promise<void>
+    onDone?: () => Promise<void>,
+    feeTransfer?: FeeTransfer | null
   ) => Promise<void>;
   handleDeposit: (
     partner: Partner,
@@ -88,6 +99,67 @@ interface PartnersState {
     onDone?: () => Promise<void>
   ) => Promise<void>;
   clearNotification: () => void;
+}
+
+// Credit the GP's capital with a settling LP's performance fee and log
+// it as a 'Fee' transaction. Reads the GP row fresh from the DB (the
+// store's cached copy may be stale) and adds the fee to every balance
+// column so the Investment/Current Balance views pick it up
+// immediately. Non-fatal by design: the LP's own settlement has
+// already committed, so a failure here is surfaced loudly in the
+// console but doesn't roll anything back.
+async function creditGpFee(transfer: FeeTransfer): Promise<boolean> {
+  const fee = Number(transfer.amount) || 0;
+  if (fee <= 0 || !transfer.gpId) return false;
+
+  const { data: gpRow, error: gpFetchError } = await supabase
+    .from("partners")
+    .select("*")
+    .eq("id", transfer.gpId)
+    .single();
+
+  if (gpFetchError || !gpRow) {
+    console.error(
+      "[creditGpFee] Could not load GP row — fee NOT credited:",
+      gpFetchError
+    );
+    return false;
+  }
+
+  const { error: gpUpdateError } = await supabase
+    .from("partners")
+    .update({
+      currentBalance: safeNumber(gpRow.currentBalance) + fee,
+      total_balance: safeNumber(gpRow.total_balance) + fee,
+      totalDeposits: safeNumber(gpRow.totalDeposits) + fee,
+      baseCapital: safeNumber(gpRow.baseCapital) + fee,
+    })
+    .eq("id", transfer.gpId);
+
+  if (gpUpdateError) {
+    console.error(
+      "[creditGpFee] GP update failed — fee NOT credited:",
+      gpUpdateError
+    );
+    return false;
+  }
+
+  // Ledger entry. Requires migration 011 (adds 'Fee' to the
+  // transactions type check); tolerated as non-fatal if missing.
+  const { error: txError } = await supabase.from("transactions").insert({
+    investorId: transfer.gpId,
+    amount: fee,
+    type: "Fee" as const,
+    date: new Date().toISOString().split("T")[0],
+  });
+  if (txError) {
+    console.warn(
+      "[creditGpFee] Fee transaction log failed (non-fatal — run migration 011):",
+      txError.message
+    );
+  }
+
+  return true;
 }
 
 export const usePartnersStore = create<PartnersState>((set, get) => ({
@@ -120,7 +192,8 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     partner: Partner,
     amount: number,
     availableProfit: number,
-    onDone?: () => Promise<void>
+    onDone?: () => Promise<void>,
+    feeTransfer?: FeeTransfer | null
   ) => {
     set({ error: null, notification: null });
 
@@ -142,28 +215,35 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     }
 
     // Split the withdrawal: profit first, then capital.
-    //  - profitPortion  → paid out of realized trade gains. It does NOT
-    //    reduce the investment (totalDeposits / baseCapital). It only
-    //    reduces currentBalance + total_balance by the same amount the
-    //    distribution engine would have added when capitalized.
-    //  - capitalPortion → the slice that exceeds available profit. This
+    //  - profitPortion    → paid out of realized trade gains. Profit was
+    //    never inside currentBalance, so paying it out doesn't touch the
+    //    balance columns.
+    //  - capitalPortion   → the slice that exceeds available profit. This
     //    IS a principal reduction: it reduces currentBalance AND the
     //    investment columns (totalDeposits / baseCapital) so future
     //    ownership % is computed against the smaller stake.
+    //  - profitRemainder  → pending profit the partner did NOT withdraw.
+    //    The settlement stamp below wipes ALL pending trade profit, so
+    //    the remainder must be capitalized into the balance columns in
+    //    the same update — otherwise a partial profit withdrawal would
+    //    silently forfeit the rest (it would be neither paid out nor
+    //    added to capital).
     const profitPortion = Math.min(amount, profit);
     const capitalPortion = Math.max(0, amount - profitPortion);
+    const profitRemainder = Math.max(0, profit - profitPortion);
 
-    const newCurrentBalance = balance - capitalPortion;
-    const newTotalBalance = safeNumber(partner.totalBalance) - capitalPortion;
+    const newCurrentBalance = balance - capitalPortion + profitRemainder;
+    const newTotalBalance =
+      safeNumber(partner.totalBalance) - capitalPortion + profitRemainder;
     const newTotalWithdrawals = safeNumber(partner.totalWithdrawals) + amount;
-    const newTotalDeposits = Math.max(
-      0,
-      safeNumber(partner.totalDeposits) - capitalPortion
-    );
-    const newBaseCapital = Math.max(
-      0,
-      (safeNumber(partner.baseCapital) || balance) - capitalPortion
-    );
+    const newTotalDeposits =
+      Math.max(0, safeNumber(partner.totalDeposits) - capitalPortion) +
+      profitRemainder;
+    const newBaseCapital =
+      Math.max(
+        0,
+        (safeNumber(partner.baseCapital) || balance) - capitalPortion
+      ) + profitRemainder;
     const today = new Date().toISOString().split("T")[0];
 
     const newHistoryEntry: BalanceHistoryEntry = {
@@ -294,15 +374,31 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       );
     }
 
-    // --- 4. Success! Update UI immediately ---
+    // --- 4. Credit the GP's performance fee for the settled profit ---
+    // The settlement stamp above just wiped this partner's pending
+    // trade profit; the GP's fee claim on it dies with it unless we
+    // move the fee into the GP's capital right now.
+    let feeCredited = false;
+    if (profit > 0 && feeTransfer && feeTransfer.gpId !== partner.id) {
+      feeCredited = await creditGpFee(feeTransfer);
+    }
+
+    // --- 5. Success! Update UI immediately ---
+    const remainderNote =
+      profitRemainder > 0
+        ? ` وتم تثبيت باقي الأرباح (${formatCurrency(profitRemainder)}) في رأس المال`
+        : "";
+    const feeNote = feeCredited
+      ? ` — رسوم الأداء (${formatCurrency(feeTransfer!.amount)}) قُيدت للمدير`
+      : "";
     set({
       notification: {
         type: "success",
-        message: `تم سحب $${amount.toLocaleString()} من حساب ${partner.name} بنجاح`,
+        message: `تم سحب $${amount.toLocaleString()} من حساب ${partner.name} بنجاح${remainderNote}${feeNote}`,
       },
     });
 
-    // --- 5. Refetch to sync with server ---
+    // --- 6. Refetch to sync with server ---
     if (onDone) {
       await onDone();
     }
@@ -312,10 +408,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
   // Capitalize ("fix") a partner's profits: add the trade-based net
   // profit to their balance and cost basis, then stamp a settlement
   // date so the distribution engine stops crediting old trades.
+  // For an LP, the caller must pass feeTransfer so the GP's performance
+  // fee on the settled profit is credited in the same operation.
   capitalizeProfits: async (
     partner: Partner,
     netProfitAmount: number,
-    onDone?: () => Promise<void>
+    onDone?: () => Promise<void>,
+    feeTransfer?: FeeTransfer | null
   ) => {
     set({ error: null, notification: null });
 
@@ -378,10 +477,21 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       last_settlement_date: data.last_settlement_date,
     });
 
+    // Credit the GP's performance fee for the profit that was just
+    // settled — the settlement stamp stops these trades from
+    // generating the fee, so this is the moment it must move.
+    let feeCredited = false;
+    if (feeTransfer && feeTransfer.gpId !== partner.id) {
+      feeCredited = await creditGpFee(feeTransfer);
+    }
+
+    const feeNote = feeCredited
+      ? ` — رسوم الأداء (${formatCurrency(feeTransfer!.amount)}) قُيدت للمدير`
+      : "";
     set({
       notification: {
         type: "success",
-        message: `تم تثبيت أرباح ${partner.name} (${formatCurrency(netProfitAmount)}) وإضافتها لرأس المال`,
+        message: `تم تثبيت أرباح ${partner.name} (${formatCurrency(netProfitAmount)}) وإضافتها لرأس المال${feeNote}`,
       },
     });
 

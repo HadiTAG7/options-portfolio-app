@@ -68,18 +68,31 @@ export function tradeMonthKey(t: Trade): string | null {
 
 // Two checks gate per-trade eligibility:
 //   1. Entry-date:    partner joined on or before the trade resolved (closeDate)
-//   2. Settlement:    profit was earned strictly AFTER the last capitalization
+//   2. Settlement:    profit was recorded strictly AFTER the last capitalization
 //
 // `profitDate` is the date the money was earned — for open options this is
 // the trade date (when premium was collected), not the future expiration.
-// Using Date objects for the settlement comparison avoids timezone mismatches
-// between the ISO-timestamped last_settlement_date and YYYY-MM-DD trade dates.
-function isEligible(partner: Partner, closeDate: string, profitDate: string): boolean {
+//
+// The settlement comparison prefers `recordedAt` (trades.created_at, a full
+// timestamp) over the date-only profitDate. A bare YYYY-MM-DD parses as UTC
+// midnight, which made every trade dated the same day as a settlement look
+// "already settled" — even one entered hours AFTER the settlement — so its
+// profit silently vanished from the distribution. With created_at, same-day
+// events order correctly; legacy rows (null created_at) are backfilled to
+// midnight of their trade date by migration 011, preserving their historical
+// behavior.
+function isEligible(
+  partner: Partner,
+  closeDate: string,
+  profitDate: string,
+  recordedAt?: string | null
+): boolean {
   const entry = partner.entryDate?.trim();
   if (entry && entry > closeDate) return false;
   const settlement = partner.lastSettlementDate?.trim();
   if (settlement) {
-    if (new Date(profitDate) <= new Date(settlement)) return false;
+    const profitStamp = recordedAt?.trim() || profitDate;
+    if (new Date(profitStamp) <= new Date(settlement)) return false;
   }
   return true;
 }
@@ -130,7 +143,7 @@ export function computePartnerProfits(
     if (totalInvestment <= 0) continue;
 
     for (const p of partners) {
-      if (!isEligible(p, closeDate, profitDate)) continue;
+      if (!isEligible(p, closeDate, profitDate, t.createdAt)) continue;
       const share = getPartnerInvestment(p) / totalInvestment;
       grossById[p.id] += profit * share;
     }
@@ -277,6 +290,15 @@ export interface PartnerDistribution {
   returnPct: number;
   // For the GP only: which LP each collected fee came from. Empty for LPs.
   collectedFromLps: { partnerId: string; amount: number }[];
+  // The amount a settlement action (تثبيت / profit withdrawal) may
+  // actually move for this partner:
+  //   LP: netProfit (gross − fee)
+  //   GP: grossProfit ONLY — LP fees are excluded because they are
+  //       credited to the GP's capital automatically when each LP
+  //       settles. Letting the GP settle gross+fees would double-pay
+  //       (and, since fees stay pending until LPs settle, would let
+  //       the GP re-capitalize the same fees repeatedly).
+  settleableNet: number;
 }
 
 // Distribute a single fund-wide profit number (`totalProfit`) across the
@@ -364,6 +386,7 @@ export function computePortfolioDistribution(
       isManager,
       returnPct,
       collectedFromLps,
+      settleableNet: isManager ? gross : netProfit,
     };
   }
 
@@ -402,7 +425,7 @@ export function computePartnerDistributionFromTrades(
     if (totalInvestment <= 0) continue;
 
     for (const p of partners) {
-      if (!isEligible(p, closeDate, profitDate)) continue;
+      if (!isEligible(p, closeDate, profitDate, t.createdAt)) continue;
       const share = getPartnerInvestment(p) / totalInvestment;
       grossById[p.id] += profit * share;
     }
@@ -455,6 +478,7 @@ export function computePartnerDistributionFromTrades(
       isManager,
       returnPct,
       collectedFromLps,
+      settleableNet: isManager ? gross : netProfit,
     };
   }
 

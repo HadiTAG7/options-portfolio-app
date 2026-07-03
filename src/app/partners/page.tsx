@@ -13,7 +13,10 @@ import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent, getPartnerInvestment } from "@/lib/utils";
-import { computePartnerDistributionFromTrades } from "@/lib/partner-profit";
+import {
+  computePartnerDistributionFromTrades,
+  isManagerPartner,
+} from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
@@ -117,17 +120,45 @@ export default function PartnersPage() {
     setDeleteTarget(null);
   }
 
+  // Settlement amounts use settleableNet, not netProfit:
+  //  - LP: identical (gross − fee)
+  //  - GP: gross only. LP fees are excluded from the GP's own
+  //    settlements because they're credited automatically when each LP
+  //    settles (feeTransferFor below) — settling gross+fees would
+  //    double-pay and allow re-capitalizing the same fees repeatedly.
+  function settleableFor(partnerId: string): number {
+    return tradeDistribution[partnerId]?.settleableNet ?? 0;
+  }
+
+  // GP fee transfer accompanying an LP settlement. Null for the GP's
+  // own settlements or when there's no fee to move.
+  function feeTransferFor(partnerId: string) {
+    const dist = tradeDistribution[partnerId];
+    if (!dist || dist.isManager) return null;
+    const gp = partners.find(isManagerPartner);
+    if (!gp || dist.feeAmount <= 0) return null;
+    return { amount: dist.feeAmount, gpId: gp.id };
+  }
+
   async function onWithdraw(partner: Partner, amount: number) {
-    const availableProfit = Math.max(
-      0,
-      tradeDistribution[partner.id]?.netProfit ?? 0
+    const availableProfit = Math.max(0, settleableFor(partner.id));
+    await handleWithdrawal(
+      partner,
+      amount,
+      availableProfit,
+      refetch,
+      feeTransferFor(partner.id)
     );
-    await handleWithdrawal(partner, amount, availableProfit, refetch);
   }
 
   async function onCapitalize(partner: Partner) {
-    const netProfit = tradeDistribution[partner.id]?.netProfit ?? 0;
-    await capitalizeProfits(partner, netProfit, refetch);
+    const netProfit = settleableFor(partner.id);
+    await capitalizeProfits(
+      partner,
+      netProfit,
+      refetch,
+      feeTransferFor(partner.id)
+    );
   }
 
   async function onDeposit(partner: Partner, amount: number) {
@@ -136,10 +167,15 @@ export default function PartnersPage() {
 
   async function handleCapitalizeConfirm() {
     if (!capitalizeTarget) return;
-    const netProfit = tradeDistribution[capitalizeTarget.id]?.netProfit ?? 0;
+    const netProfit = settleableFor(capitalizeTarget.id);
     setCapitalizing(true);
     try {
-      await capitalizeProfits(capitalizeTarget, netProfit, refetch);
+      await capitalizeProfits(
+        capitalizeTarget,
+        netProfit,
+        refetch,
+        feeTransferFor(capitalizeTarget.id)
+      );
       setCapitalizeTarget(null);
     } catch {
       // error surfaced via notification
@@ -170,9 +206,7 @@ export default function PartnersPage() {
         open={withdrawTarget !== null}
         partner={withdrawTarget}
         remainingProfit={
-          withdrawTarget
-            ? (tradeDistribution[withdrawTarget.id]?.netProfit ?? 0)
-            : 0
+          withdrawTarget ? settleableFor(withdrawTarget.id) : 0
         }
         onClose={() => setWithdrawTarget(null)}
         onSubmit={onWithdraw}
@@ -208,10 +242,7 @@ export default function PartnersPage() {
         description={
           capitalizeTarget
             ? `هل تريد تحويل أرباح ${capitalizeTarget.name} البالغة ${formatCurrency(
-                Math.max(
-                  0,
-                  tradeDistribution[capitalizeTarget.id]?.netProfit ?? 0
-                )
+                Math.max(0, settleableFor(capitalizeTarget.id))
               )} إلى رأس المال؟`
             : ""
         }
@@ -418,8 +449,13 @@ export default function PartnersPage() {
                     isManager: false,
                     returnPct: 0,
                     collectedFromLps: [],
+                    settleableNet: 0,
                   };
-                  const tradeNet = dist.netProfit;
+                  // Gates the تثبيت/إيداع buttons. settleableNet, not
+                  // netProfit: for the GP, pending LP fees are not
+                  // settleable (they arrive via LP settlements), so
+                  // they must not enable another تثبيت.
+                  const tradeNet = dist.settleableNet;
                   const profitPositive = dist.netProfit >= 0;
                   // Current Balance = Investment + realized net profit.
                   // No livePnL / broker-balance back-calculation — when

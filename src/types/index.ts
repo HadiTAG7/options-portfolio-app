@@ -92,6 +92,11 @@ export interface Trade {
   date: string;
   status: TradeStatus;
   autoClosed: boolean;
+  // Exact recording timestamp (trades.created_at). Used to order
+  // same-day events against last_settlement_date in the eligibility
+  // engine. Null/absent on rows that predate migration 011 and on
+  // seed/local-fallback rows — consumers must fall back to `date`.
+  createdAt?: string | null;
 }
 
 // ============================================================

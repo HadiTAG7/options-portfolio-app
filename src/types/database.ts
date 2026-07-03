@@ -82,6 +82,10 @@ export interface Database {
           date: string;
           status: "open" | "closed";
           autoClosed: boolean;
+          // Nullable + optional: rows created before migration 011 are
+          // backfilled to midnight of their trade date, and the column
+          // is entirely absent on un-migrated environments.
+          created_at?: string | null;
         };
         Insert: {
           id?: string;
@@ -95,6 +99,7 @@ export interface Database {
           date: string;
           status?: "open" | "closed";
           autoClosed?: boolean;
+          created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];
@@ -128,7 +133,7 @@ export interface Database {
           id: string;
           investorId: string;
           amount: number;
-          type: "Deposit" | "Withdrawal";
+          type: "Deposit" | "Withdrawal" | "Fee";
           date: string;
           created_at: string;
         };
@@ -136,7 +141,7 @@ export interface Database {
           id?: string;
           investorId: string;
           amount: number;
-          type: "Deposit" | "Withdrawal";
+          type: "Deposit" | "Withdrawal" | "Fee";
           date?: string;
           created_at?: string;
         };

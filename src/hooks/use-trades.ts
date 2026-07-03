@@ -22,6 +22,7 @@ function rowToTrade(row: TradeRow): Trade {
     date: row.date,
     status: row.status ?? "open",
     autoClosed: row.autoClosed ?? false,
+    createdAt: row.created_at ?? null,
   };
 }
 
