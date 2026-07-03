@@ -30,6 +30,7 @@ import type { StockEditPayload } from "@/components/ui/edit-stock-dialog";
 import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
+import { ExpiryAlert } from "@/components/ui/expiry-alert";
 import { formatCurrency } from "@/lib/utils";
 import { tradeProfit, tradeMonthKey } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
@@ -88,6 +89,20 @@ export default function TradesPage() {
   } = useTrades();
 
   const { partners } = usePartners();
+
+  // Active stocks whose live price reached the user's target sell
+  // price. Feeds the banner above the table and the row highlight.
+  const targetHits = useMemo(
+    () =>
+      activeStocks.filter(
+        (s) =>
+          typeof s.currentPrice === "number" &&
+          Number.isFinite(s.currentPrice) &&
+          s.targetSellPrice > 0 &&
+          s.currentPrice >= s.targetSellPrice
+      ),
+    [activeStocks]
+  );
 
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.
@@ -207,6 +222,31 @@ export default function TradesPage() {
       {error && (
         <div className="mb-6 flex items-center gap-3 rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300 backdrop-blur-sm">
           <span className="font-mono">{error}</span>
+        </div>
+      )}
+
+      {/* Options expiring within the week */}
+      <ExpiryAlert openOptions={[...sellPuts, ...sellCalls]} />
+
+      {/* Active stocks that reached their target sell price */}
+      {targetHits.length > 0 && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200 backdrop-blur-sm">
+          <TrendingUp size={18} className="mt-0.5 shrink-0 text-emerald-300" />
+          <div className="flex-1">
+            <p className="font-bold">
+              {targetHits.length === 1
+                ? "سهم بلغ سعره المستهدف"
+                : `${targetHits.length} أسهم بلغت سعرها المستهدف`}
+            </p>
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-emerald-200/80">
+              {targetHits.map((s) => (
+                <span key={s.id} className="font-mono tabular-nums">
+                  {s.ticker} · ${s.currentPrice?.toFixed(2)} ≥ $
+                  {s.targetSellPrice.toFixed(2)}
+                </span>
+              ))}
+            </p>
+          </div>
         </div>
       )}
 
@@ -358,6 +398,10 @@ export default function TradesPage() {
                       stock.quantity
                     : 0;
                   const potentialPositive = potential >= 0;
+                  const hitTarget =
+                    hasTarget &&
+                    hasLivePrice &&
+                    stock.currentPrice! >= stock.targetSellPrice;
                   const zebra = idx % 2 === 0 ? "bg-transparent" : "bg-zinc-900/30";
                   const isExpanded = expandedRows.has(stock.id);
                   const relatedOptions =
@@ -367,7 +411,7 @@ export default function TradesPage() {
                       <tr
                         className={`border-t border-zinc-800/50 transition-colors hover:bg-emerald-500/[0.04] cursor-pointer ${zebra} ${
                           isExpanded ? "bg-zinc-900/40" : ""
-                        }`}
+                        } ${hitTarget ? "bg-emerald-500/[0.06]" : ""}`}
                         onClick={() => toggleRow(stock.id)}
                       >
                         <td className="px-4 py-3">
@@ -382,6 +426,11 @@ export default function TradesPage() {
                             <span className="font-mono font-bold tracking-wider text-white">
                               {stock.ticker}
                             </span>
+                            {hitTarget && (
+                              <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-emerald-300">
+                                بلغ الهدف
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 font-mono tabular-nums text-zinc-300">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, safeNumber, getPartnerInvestment } from "@/lib/utils";
+import { formatCurrency, getPartnerInvestment } from "@/lib/utils";
 import type { Partner } from "@/types";
 
 interface WithdrawalDialogProps {

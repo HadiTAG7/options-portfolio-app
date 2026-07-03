@@ -104,6 +104,9 @@ export default function PartnersPage() {
   const [ledgerTarget, setLedgerTarget] = useState<Partner | null>(null);
   const [capitalizeTarget, setCapitalizeTarget] = useState<Partner | null>(null);
   const [capitalizing, setCapitalizing] = useState(false);
+  // Table search — toggled by the filter icon in the table header.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Auto-dismiss success notification
   useEffect(() => {
@@ -151,6 +154,17 @@ export default function PartnersPage() {
       Object.values(tradeDistribution).some((d) => d.settleableNet > 0),
     [tradeDistribution]
   );
+
+  // Rows actually rendered — name/code search from the header filter.
+  const visiblePartners = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return partners;
+    return partners.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.code ?? "").toLowerCase().includes(q)
+    );
+  }, [partners, searchQuery]);
 
   async function onWithdraw(partner: Partner, amount: number) {
     const availableProfit = Math.max(0, settleableFor(partner.id));
@@ -373,11 +387,35 @@ export default function PartnersPage() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {searchOpen && (
+              <input
+                autoFocus
+                dir="rtl"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearchQuery("");
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder="بحث بالاسم أو الكود..."
+                className="w-48 rounded-md border border-zinc-700/60 bg-zinc-950/80 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:outline-none"
+              />
+            )}
             <button
-              className="rounded-md p-2 text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200"
-              title="Filter"
+              onClick={() => {
+                if (searchOpen) setSearchQuery("");
+                setSearchOpen((v) => !v);
+              }}
+              className={`rounded-md p-2 transition-colors hover:bg-white/5 ${
+                searchOpen || searchQuery
+                  ? "text-emerald-400"
+                  : "text-zinc-500 hover:text-zinc-200"
+              }`}
+              title="بحث في الشركاء"
             >
-              <Icon name="filter_list" className="!text-lg" />
+              <Icon name={searchOpen ? "close" : "search"} className="!text-lg" />
             </button>
             <button
               onClick={() => setShowAddDialog(true)}
@@ -442,9 +480,24 @@ export default function PartnersPage() {
                 </tr>
               )}
 
+              {/* No search matches */}
+              {!loading && partners.length > 0 && visiblePartners.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-16 text-center">
+                    <Icon
+                      name="search_off"
+                      className="!text-4xl text-zinc-700 mb-2 block mx-auto"
+                    />
+                    <p className="text-sm text-zinc-300">
+                      لا توجد نتائج لـ &quot;{searchQuery}&quot;
+                    </p>
+                  </td>
+                </tr>
+              )}
+
               {/* Data Rows */}
               {!loading &&
-                partners.map((partner) => {
+                visiblePartners.map((partner) => {
                   // dist drives the REALIZED performance columns
                   // (Investment, Ownership, GROSS, FEES, NET). It's the
                   // trade-based distribution, so it reads $0 when no
@@ -757,19 +810,15 @@ export default function PartnersPage() {
           </table>
         </div>
 
-        {/* Footer / Pagination */}
+        {/* Footer */}
         <div className="flex items-center justify-between border-t border-zinc-800/60 bg-zinc-950/60 px-4 py-3 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
           <span>
-            عرض <span className="text-zinc-300 tabular-nums">{partners.length}</span> شريك
+            عرض{" "}
+            <span className="text-zinc-300 tabular-nums">
+              {visiblePartners.length}
+            </span>{" "}
+            {searchQuery ? `من ${partners.length} ` : ""}شريك
           </span>
-          <div className="flex gap-4">
-            <button className="transition-colors hover:text-zinc-200">
-              السابق
-            </button>
-            <button className="text-emerald-400 transition-colors hover:text-emerald-300 font-bold">
-              التالي
-            </button>
-          </div>
         </div>
       </section>
     </AppShell>

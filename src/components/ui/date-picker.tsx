@@ -47,7 +47,6 @@ interface DatePickerProps {
   onChange: (iso: string) => void;
   disabled?: boolean;
   placeholder?: string;
-  label?: string;
   id?: string;
 }
 
@@ -56,7 +55,6 @@ export function DatePicker({
   onChange,
   disabled = false,
   placeholder = "اختر تاريخ",
-  label,
   id,
 }: DatePickerProps) {
   const parsed = value ? parseIso(value) : null;

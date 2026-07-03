@@ -14,6 +14,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { MonthlyBreakdownDialog } from "@/components/ui/monthly-breakdown-dialog";
+import { ExpiryAlert } from "@/components/ui/expiry-alert";
 import {
   formatWholeNumber,
   formatCompactCurrency,
@@ -281,6 +282,9 @@ export default function DashboardPage() {
         rows={monthlyLedger}
         onClose={() => setBreakdownMode(null)}
       />
+
+      {/* Options expiring within the week */}
+      <ExpiryAlert openOptions={[...sellPuts, ...sellCalls]} />
 
       {/* ═══════ Hero Cards ═══════ */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
