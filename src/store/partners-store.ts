@@ -71,6 +71,34 @@ interface Notification {
 export interface FeeTransfer {
   amount: number; // the settling LP's feeAmount from the distribution
   gpId: string; // partner id of the General Partner row to credit
+  lpId: string; // the settling LP — journaled on the Fee transaction
+  lpName: string; // for the Fee transaction's human-readable note
+}
+
+// Journal a settlement event into the transactions table. Non-fatal by
+// design (the balance updates already committed); requires migration
+// 012 for the 'Capitalize' type and the note/related columns.
+async function logTransaction(row: {
+  investorId: string;
+  amount: number;
+  type: "Deposit" | "Withdrawal" | "Fee" | "Capitalize";
+  note?: string;
+  relatedPartnerId?: string;
+}): Promise<void> {
+  const { error } = await supabase.from("transactions").insert({
+    investorId: row.investorId,
+    amount: row.amount,
+    type: row.type,
+    date: new Date().toISOString().split("T")[0],
+    note: row.note ?? null,
+    related_partner_id: row.relatedPartnerId ?? null,
+  });
+  if (error) {
+    console.warn(
+      `[logTransaction] ${row.type} journal failed (non-fatal — run migration 012):`,
+      error.message
+    );
+  }
 }
 
 interface PartnersState {
@@ -144,20 +172,14 @@ async function creditGpFee(transfer: FeeTransfer): Promise<boolean> {
     return false;
   }
 
-  // Ledger entry. Requires migration 011 (adds 'Fee' to the
-  // transactions type check); tolerated as non-fatal if missing.
-  const { error: txError } = await supabase.from("transactions").insert({
+  // Ledger entry — names the LP whose settlement generated the fee.
+  await logTransaction({
     investorId: transfer.gpId,
     amount: fee,
-    type: "Fee" as const,
-    date: new Date().toISOString().split("T")[0],
+    type: "Fee",
+    note: `رسوم أداء من تسوية ${transfer.lpName}`,
+    relatedPartnerId: transfer.lpId,
   });
-  if (txError) {
-    console.warn(
-      "[creditGpFee] Fee transaction log failed (non-fatal — run migration 011):",
-      txError.message
-    );
-  }
 
   return true;
 }
@@ -379,7 +401,17 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       );
     }
 
-    // --- 4. Credit the GP's performance fee for the settled profit ---
+    // --- 4. Journal the auto-capitalized remainder ---
+    if (profitRemainder > 0) {
+      await logTransaction({
+        investorId: partner.id,
+        amount: profitRemainder,
+        type: "Capitalize",
+        note: "تثبيت تلقائي لباقي الأرباح عند السحب",
+      });
+    }
+
+    // --- 5. Credit the GP's performance fee for the settled profit ---
     // The settlement stamp above just wiped this partner's pending
     // trade profit; the GP's fee claim on it dies with it unless we
     // move the fee into the GP's capital right now.
@@ -388,7 +420,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       feeCredited = await creditGpFee(feeTransfer);
     }
 
-    // --- 5. Success! Update UI immediately ---
+    // --- 6. Success! Update UI immediately ---
     const remainderNote =
       profitRemainder > 0
         ? ` وتم تثبيت باقي الأرباح (${formatCurrency(profitRemainder)}) في رأس المال`
@@ -403,7 +435,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       },
     });
 
-    // --- 6. Refetch to sync with server ---
+    // --- 7. Refetch to sync with server ---
     if (onDone) {
       await onDone();
     }
@@ -480,6 +512,14 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       currentBalance: data.currentBalance,
       totalDeposits: data.totalDeposits,
       last_settlement_date: data.last_settlement_date,
+    });
+
+    // Journal the capitalization itself.
+    await logTransaction({
+      investorId: partner.id,
+      amount: netProfitAmount,
+      type: "Capitalize",
+      note: "تثبيت الأرباح في رأس المال",
     });
 
     // Credit the GP's performance fee for the profit that was just

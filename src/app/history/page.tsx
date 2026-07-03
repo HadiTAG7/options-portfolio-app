@@ -15,6 +15,7 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
+import { toCsv, downloadCsv } from "@/lib/export-csv";
 import { tradeProfit } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
 import type { Trade } from "@/types";
@@ -137,7 +138,33 @@ export default function HistoryPage() {
               <span className="text-zinc-400 font-light">السجل</span>
             </h1>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-900/40 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-900/80 hover:text-white">
+          <button
+            onClick={() => {
+              const csv = toCsv(
+                [
+                  "التاريخ",
+                  "الرمز",
+                  "النوع",
+                  "الكمية",
+                  "Strike/شراء",
+                  "النتيجة",
+                  "إغلاق تلقائي",
+                ],
+                visible.map((e) => [
+                  e.closedDate,
+                  e.ticker,
+                  e.type,
+                  e.quantity,
+                  e.strikeOrBuy ?? "",
+                  e.result.toFixed(2),
+                  e.autoClosed ? "نعم" : "لا",
+                ])
+              );
+              downloadCsv(`trade-history-${filter}.csv`, csv);
+            }}
+            disabled={visible.length === 0}
+            className="inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-900/40 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-900/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
             <Download size={12} />
             Export CSV
           </button>

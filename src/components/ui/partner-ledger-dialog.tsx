@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { BookOpen, Crown, TrendingDown, TrendingUp, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  BookOpen,
+  Crown,
+  Download,
+  History,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import type { Partner } from "@/types";
+import { toCsv, downloadCsv } from "@/lib/export-csv";
+import { useTransactions } from "@/hooks/use-transactions";
+import type { FundTransaction, Partner } from "@/types";
 import type { PartnerDistribution } from "@/lib/partner-profit";
 
 interface PartnerLedgerDialogProps {
@@ -15,6 +25,36 @@ interface PartnerLedgerDialogProps {
   onClose: () => void;
 }
 
+const TX_LABELS: Record<
+  FundTransaction["type"],
+  { ar: string; badge: string; sign: string; tone: string }
+> = {
+  Deposit: {
+    ar: "إيداع",
+    badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    sign: "+",
+    tone: "text-emerald-300",
+  },
+  Withdrawal: {
+    ar: "سحب",
+    badge: "border-rose-500/30 bg-rose-500/10 text-rose-300",
+    sign: "−",
+    tone: "text-rose-400",
+  },
+  Capitalize: {
+    ar: "تثبيت",
+    badge: "border-amber-400/30 bg-amber-400/10 text-amber-300",
+    sign: "+",
+    tone: "text-amber-300",
+  },
+  Fee: {
+    ar: "رسوم",
+    badge: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
+    sign: "+",
+    tone: "text-cyan-300",
+  },
+};
+
 export function PartnerLedgerDialog({
   open,
   partner,
@@ -23,6 +63,20 @@ export function PartnerLedgerDialog({
   partners,
   onClose,
 }: PartnerLedgerDialogProps) {
+  const [tab, setTab] = useState<"distribution" | "history">("distribution");
+  // Reset to the first tab on every open — render-phase state
+  // adjustment (the React "derive state from props" pattern), which
+  // avoids a setState inside the effect below.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setTab("distribution");
+  }
+  // Fetch only while the dialog is open for a specific partner.
+  const { transactions, loading: txLoading } = useTransactions(
+    open ? (partner?.id ?? null) : null
+  );
+
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
@@ -36,6 +90,20 @@ export function PartnerLedgerDialog({
 
   const partnerById = new Map(partners.map((p) => [p.id, p]));
   const netPositive = distribution.netProfit >= 0;
+
+  function exportStatement() {
+    if (!partner) return;
+    const csv = toCsv(
+      ["التاريخ", "النوع", "المبلغ", "ملاحظة"],
+      transactions.map((t) => [
+        t.date,
+        TX_LABELS[t.type].ar,
+        `${TX_LABELS[t.type].sign}${t.amount.toFixed(2)}`,
+        t.note ?? "",
+      ])
+    );
+    downloadCsv(`statement-${partner.code || partner.name}.csv`, csv);
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -85,6 +153,99 @@ export function PartnerLedgerDialog({
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b border-zinc-800/70 bg-zinc-950/40 px-6">
+          <button
+            onClick={() => setTab("distribution")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              tab === "distribution"
+                ? "border-emerald-400 text-emerald-300"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <BookOpen size={11} />
+            التوزيع الحالي
+          </button>
+          <button
+            onClick={() => setTab("history")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+              tab === "history"
+                ? "border-emerald-400 text-emerald-300"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <History size={11} />
+            سجل الحركات
+          </button>
+        </div>
+
+        {tab === "history" ? (
+          <div className="p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+                {txLoading
+                  ? "جاري التحميل..."
+                  : `${transactions.length} حركة مسجلة`}
+              </p>
+              <button
+                onClick={exportStatement}
+                disabled={transactions.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800/70 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download size={11} />
+                تصدير CSV
+              </button>
+            </div>
+            <div className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+              {!txLoading && transactions.length === 0 && (
+                <p className="py-10 text-center text-xs text-zinc-500">
+                  لا توجد حركات مسجلة لهذا الشريك بعد
+                </p>
+              )}
+              {transactions.map((t) => {
+                const meta = TX_LABELS[t.type];
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between rounded-md border border-zinc-800/60 bg-zinc-950/40 px-4 py-2.5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`inline-flex w-14 justify-center rounded-full border px-2 py-[2px] text-[9px] font-bold uppercase tracking-widest ${meta.badge}`}
+                      >
+                        {meta.ar}
+                      </span>
+                      <div>
+                        <p className="font-mono text-[10px] tabular-nums text-zinc-400">
+                          {t.date}
+                        </p>
+                        {t.note && (
+                          <p className="mt-0.5 text-[10px] text-zinc-500">
+                            {t.note}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className={`font-mono text-sm font-bold tabular-nums ${meta.tone}`}
+                    >
+                      {meta.sign}
+                      {formatCurrency(t.amount)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={onClose}
+                className="w-full rounded-md border border-zinc-800/70 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-4 p-6">
           {/* Step 1 — pool */}
           <LedgerRow
@@ -217,6 +378,7 @@ export function PartnerLedgerDialog({
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

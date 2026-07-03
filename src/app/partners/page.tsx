@@ -140,7 +140,13 @@ export default function PartnersPage() {
     if (!dist || dist.isManager) return null;
     const gp = partners.find(isManagerPartner);
     if (!gp || dist.feeAmount <= 0) return null;
-    return { amount: dist.feeAmount, gpId: gp.id };
+    const lp = partners.find((p) => p.id === partnerId);
+    return {
+      amount: dist.feeAmount,
+      gpId: gp.id,
+      lpId: partnerId,
+      lpName: lp?.name ?? "",
+    };
   }
 
   // Fund-wide Clean-Slate rule for deposits: a deposit changes
@@ -234,6 +240,11 @@ export default function PartnersPage() {
         remainingProfit={
           withdrawTarget ? settleableFor(withdrawTarget.id) : 0
         }
+        feeAmount={
+          withdrawTarget
+            ? (feeTransferFor(withdrawTarget.id)?.amount ?? 0)
+            : 0
+        }
         onClose={() => setWithdrawTarget(null)}
         onSubmit={onWithdraw}
         onCapitalize={onCapitalize}
@@ -261,15 +272,55 @@ export default function PartnersPage() {
         onClose={() => setLedgerTarget(null)}
       />
 
-      {/* Capitalize Profits Confirmation */}
+      {/* Capitalize Profits Confirmation — full settlement preview:
+          exactly which rows change and by how much, before the
+          irreversible stamp. */}
       <ConfirmDialog
         open={capitalizeTarget !== null}
         title="تثبيت الأرباح"
         description={
           capitalizeTarget
-            ? `هل تريد تحويل أرباح ${capitalizeTarget.name} البالغة ${formatCurrency(
-                Math.max(0, settleableFor(capitalizeTarget.id))
-              )} إلى رأس المال؟`
+            ? (() => {
+                const dist = tradeDistribution[capitalizeTarget.id];
+                const amount = Math.max(0, dist?.settleableNet ?? 0);
+                const fee = feeTransferFor(capitalizeTarget.id);
+                const gp = partners.find(isManagerPartner);
+                const newCapital =
+                  getPartnerInvestment(capitalizeTarget) + amount;
+                return (
+                  <div className="space-y-2 text-right">
+                    <p className="mb-3 text-center">
+                      معاينة التسوية — هذه العملية غير قابلة للتراجع:
+                    </p>
+                    <div className="flex items-center justify-between rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-xs">
+                      <span className="text-zinc-300">
+                        {capitalizeTarget.name} — يُثبت في رأس المال
+                      </span>
+                      <span className="font-mono font-bold tabular-nums text-emerald-300">
+                        +{formatCurrency(amount)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-zinc-800/60 bg-zinc-950/40 px-3 py-2 text-xs">
+                      <span className="text-zinc-500">
+                        رأس ماله بعد التثبيت
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {formatCurrency(newCapital)}
+                      </span>
+                    </div>
+                    {fee && gp && (
+                      <div className="flex items-center justify-between rounded-md border border-cyan-400/25 bg-cyan-500/5 px-3 py-2 text-xs">
+                        <span className="text-zinc-300">
+                          {gp.name} (GP) — رسوم أداء تُقيد لرأس ماله
+                        </span>
+                        <span className="font-mono font-bold tabular-nums text-cyan-300">
+                          +{formatCurrency(fee.amount)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             : ""
         }
         confirmLabel={capitalizing ? "جاري التثبيت..." : "تأكيد التثبيت"}

@@ -97,6 +97,22 @@ export interface Trade {
   // engine. Null/absent on rows that predate migration 011 and on
   // seed/local-fallback rows — consumers must fall back to `date`.
   createdAt?: string | null;
+  // Covered-call linkage: id of the active stock lot this Sell Call is
+  // written against. Null/absent for everything else.
+  linkedStockId?: string | null;
+}
+
+// Journal row from the transactions table — the partner statement's
+// data source. Types: Deposit / Withdrawal / Fee / Capitalize.
+export interface FundTransaction {
+  id: string;
+  investorId: string;
+  amount: number;
+  type: "Deposit" | "Withdrawal" | "Fee" | "Capitalize";
+  date: string;
+  createdAt: string;
+  note: string | null;
+  relatedPartnerId: string | null;
 }
 
 // ============================================================

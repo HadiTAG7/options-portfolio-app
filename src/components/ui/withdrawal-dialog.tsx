@@ -9,6 +9,9 @@ interface WithdrawalDialogProps {
   open: boolean;
   partner: Partner | null;
   remainingProfit?: number;
+  // GP performance fee that will be credited to the manager when this
+  // partner's profit settles (0 for the GP's own withdrawals).
+  feeAmount?: number;
   onClose: () => void;
   onSubmit: (partner: Partner, amount: number) => Promise<void>;
   onCapitalize?: (partner: Partner) => Promise<void>;
@@ -18,6 +21,7 @@ export function WithdrawalDialog({
   open,
   partner,
   remainingProfit = 0,
+  feeAmount = 0,
   onClose,
   onSubmit,
   onCapitalize,
@@ -62,7 +66,12 @@ export function WithdrawalDialog({
   const safeAmount = !isNaN(numericAmount) && numericAmount > 0 ? numericAmount : 0;
   const profitPortion = Math.min(safeAmount, availableProfit);
   const capitalPortion = Math.max(0, safeAmount - profitPortion);
-  const newCapitalBalance = balance - capitalPortion;
+  // Withdrawal settles ALL pending profit: whatever the partner doesn't
+  // take in cash is auto-capitalized into their investment by the store.
+  const profitRemainder =
+    profitPortion > 0 ? Math.max(0, availableProfit - profitPortion) : 0;
+  const settlesProfit = availableProfit > 0 && safeAmount > 0;
+  const newCapitalBalance = balance - capitalPortion + profitRemainder;
   const percentage =
     !isNaN(numericAmount) && maxWithdrawable > 0
       ? Math.min((numericAmount / maxWithdrawable) * 100, 100)
@@ -373,6 +382,26 @@ export function WithdrawalDialog({
                     </span>
                   </div>
                 )}
+                {profitRemainder > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-on-surface-variant">
+                      باقي الأرباح — يُثبت تلقائياً في رأس المال
+                    </span>
+                    <span className="font-mono text-primary font-bold">
+                      +{formatCurrency(profitRemainder)}
+                    </span>
+                  </div>
+                )}
+                {settlesProfit && feeAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-tertiary/90">
+                      رسوم الأداء — تُقيد للمدير (GP)
+                    </span>
+                    <span className="font-mono text-tertiary font-bold">
+                      {formatCurrency(feeAmount)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between pt-1.5 border-t border-white/5">
                   <span className="text-on-surface-variant/80">
                     الاستثمار بعد السحب (New Investment)
@@ -385,7 +414,7 @@ export function WithdrawalDialog({
                     {formatCurrency(newCapitalBalance)}
                   </span>
                 </div>
-                {capitalPortion === 0 && (
+                {capitalPortion === 0 && profitRemainder === 0 && (
                   <div className="flex items-center gap-1 pt-1 text-primary/90">
                     <Icon name="check_circle" className="!text-xs" />
                     <span>رأس المال (الاستثمار) لن يتأثر</span>

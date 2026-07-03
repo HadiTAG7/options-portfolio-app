@@ -6,7 +6,8 @@ import { Icon } from "@/components/ui/icon";
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  description: string;
+  // Plain string or rich JSX (e.g. the settlement-preview table).
+  description: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   onConfirm: () => void;
@@ -60,9 +61,10 @@ export function ConfirmDialog({
         <h3 className="text-lg font-headline font-bold text-white text-center mb-2">
           {title}
         </h3>
-        <p className="text-sm text-on-surface-variant text-center leading-relaxed mb-6">
+        {/* div, not p: description may carry block-level JSX (preview tables) */}
+        <div className="text-sm text-on-surface-variant text-center leading-relaxed mb-6">
           {description}
-        </p>
+        </div>
 
         {/* Actions */}
         <div className="flex gap-3">

@@ -23,6 +23,7 @@ function rowToTrade(row: TradeRow): Trade {
     status: row.status ?? "open",
     autoClosed: row.autoClosed ?? false,
     createdAt: row.created_at ?? null,
+    linkedStockId: row.linked_stock_id ?? null,
   };
 }
 

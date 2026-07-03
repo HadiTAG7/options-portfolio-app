@@ -86,6 +86,9 @@ export interface Database {
           // backfilled to midnight of their trade date, and the column
           // is entirely absent on un-migrated environments.
           created_at?: string | null;
+          // Covered-call linkage (migration 012): the active stock lot
+          // this Sell Call is written against.
+          linked_stock_id?: string | null;
         };
         Insert: {
           id?: string;
@@ -100,6 +103,7 @@ export interface Database {
           status?: "open" | "closed";
           autoClosed?: boolean;
           created_at?: string | null;
+          linked_stock_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];
@@ -133,17 +137,23 @@ export interface Database {
           id: string;
           investorId: string;
           amount: number;
-          type: "Deposit" | "Withdrawal" | "Fee";
+          type: "Deposit" | "Withdrawal" | "Fee" | "Capitalize";
           date: string;
           created_at: string;
+          // Context columns from migration 012 — absent on
+          // un-migrated environments.
+          note?: string | null;
+          related_partner_id?: string | null;
         };
         Insert: {
           id?: string;
           investorId: string;
           amount: number;
-          type: "Deposit" | "Withdrawal" | "Fee";
+          type: "Deposit" | "Withdrawal" | "Fee" | "Capitalize";
           date?: string;
           created_at?: string;
+          note?: string | null;
+          related_partner_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["transactions"]["Insert"]>;
         Relationships: [];
