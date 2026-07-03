@@ -215,10 +215,13 @@ export function useTrades() {
   //   (skipped when using seed data since those rows don't exist in DB).
   // - Also mirrors the change into local state so the UI updates even
   //   when the DB write is skipped.
+  // Returns how many were closed plus the tickers that could not be
+  // checked against a live price (their full-premium result may be
+  // wrong if the option actually expired in-the-money).
   const checkAndCloseExpiredTrades = useCallback(
-    async (trades: Trade[]) => {
+    async (trades: Trade[], stocks: ActiveStock[]) => {
       const expired = trades.filter((t) => isExpiredOption(t));
-      if (expired.length === 0) return 0;
+      if (expired.length === 0) return { closed: 0, unverified: [] as string[] };
 
       console.log(
         "[useTrades] expiring",
@@ -227,11 +230,50 @@ export function useTrades() {
         expired.map((t) => `${t.ticker} ${t.type} @ ${t.expiration}`)
       );
 
-      // Short options expiring OTM: profit = premium * quantity.
+      // Last known spot per ticker, from the active stock book's live
+      // quotes. Used to detect in-the-money expiries.
+      const spotByTicker: Record<string, number> = {};
+      for (const s of stocks) {
+        const px = s.currentPrice;
+        if (typeof px === "number" && Number.isFinite(px) && px > 0) {
+          spotByTicker[s.ticker.toUpperCase()] = px;
+        }
+      }
+
+      // Result of an expired short option.
       // `quantity` already stores total shares (100, 200, ...), not # of
       // contracts, so we must NOT multiply by 100 again.
-      const computeResult = (t: Trade) =>
-        Number(t.premium) * Number(t.quantity);
+      //  - OTM (or no spot available): full premium is kept.
+      //  - ITM (spot known): intrinsic value is surrendered against the
+      //    premium — (premium − intrinsic) × qty, which can go negative.
+      //    Booking full premium on an ITM expiry fabricated profit on
+      //    losing positions.
+      const computeResult = (t: Trade) => {
+        const premium = Number(t.premium) || 0;
+        const qty = Number(t.quantity) || 0;
+        const spot = spotByTicker[t.ticker.toUpperCase()];
+        if (typeof spot === "number") {
+          const strike = Number(t.strike) || 0;
+          const intrinsic =
+            t.type === "Sell Put"
+              ? Math.max(0, strike - spot)
+              : Math.max(0, spot - strike);
+          return (premium - intrinsic) * qty;
+        }
+        return premium * qty;
+      };
+
+      // Tickers auto-closed blind (no live quote) — surfaced to the user
+      // so they can correct the result manually if the expiry was ITM.
+      const unverified = [
+        ...new Set(
+          expired
+            .filter(
+              (t) => spotByTicker[t.ticker.toUpperCase()] === undefined
+            )
+            .map((t) => t.ticker)
+        ),
+      ];
 
       if (!usingSeedData) {
         // Per-row updates because each expired trade has a different result.
@@ -270,7 +312,7 @@ export function useTrades() {
         )
       );
 
-      return expired.length;
+      return { closed: expired.length, unverified };
     },
     [usingSeedData]
   );
@@ -295,12 +337,25 @@ export function useTrades() {
     setExpirationRan(key);
 
     void (async () => {
-      const n = await checkAndCloseExpiredTrades(tradesList);
-      if (n > 0) {
-        setToast(`تم إغلاق ${n} صفقة منتهية — لم تتغير الأرباح`);
+      const { closed, unverified } = await checkAndCloseExpiredTrades(
+        tradesList,
+        activeStocksList
+      );
+      if (closed > 0) {
+        setToast(
+          unverified.length > 0
+            ? `تم إغلاق ${closed} صفقة منتهية — لا يوجد سعر مرجعي لـ ${unverified.join("، ")}: راجع النتيجة يدوياً إذا انتهى العقد ITM`
+            : `تم إغلاق ${closed} صفقة منتهية وفق آخر سعر معروف`
+        );
       }
     })();
-  }, [loading, tradesList, expirationRan, checkAndCloseExpiredTrades]);
+  }, [
+    loading,
+    tradesList,
+    activeStocksList,
+    expirationRan,
+    checkAndCloseExpiredTrades,
+  ]);
 
   // One-shot heal for a historical bug where auto-closed option results
   // were saved as premium * quantity * 100 (off by 100x). If the stored

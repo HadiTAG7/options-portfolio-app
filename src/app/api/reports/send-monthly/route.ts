@@ -5,8 +5,9 @@ import type { Database } from "@/types/database";
 import type { Partner, Trade } from "@/types";
 import { safeNumber, getPartnerInvestment } from "@/lib/utils";
 import {
-  computePortfolioDistribution,
+  computePartnerDistributionFromTrades,
   tradeProfit,
+  tradeProfitDate,
   tradeMonthKey,
 } from "@/lib/partner-profit";
 import {
@@ -51,18 +52,23 @@ function rowToPartner(row: PartnerRow): Partner {
   };
 }
 
-function computeMonthlyBuckets(trades: Trade[]): Record<string, number> {
-  const buckets: Record<string, number> = {};
-  for (const t of trades) {
-    const key = tradeMonthKey(t);
-    if (!key) continue;
-    buckets[key] = (buckets[key] ?? 0) + tradeProfit(t);
-  }
-  return buckets;
-}
-
 export async function POST(request: NextRequest) {
   try {
+    // Optional shared-secret guard. This endpoint is otherwise
+    // unauthenticated and can email every partner — set REPORT_SECRET
+    // in the deployment env and the same value must arrive in the
+    // x-report-secret header. Left unset, the guard is off (dev mode).
+    const requiredSecret = process.env.REPORT_SECRET;
+    if (requiredSecret) {
+      const provided = request.headers.get("x-report-secret");
+      if (provided !== requiredSecret) {
+        return Response.json(
+          { success: false, error: "Unauthorized." },
+          { status: 401 }
+        );
+      }
+    }
+
     const { month, partnerId } = (await request.json()) as {
       month: string;
       partnerId?: string;
@@ -140,26 +146,39 @@ export async function POST(request: NextRequest) {
       date: r.date,
       status: r.status,
       autoClosed: r.autoClosed,
+      createdAt: r.created_at ?? null,
     }));
 
-    // Compute monthly profit
-    const buckets = computeMonthlyBuckets(trades);
-    const monthProfit = buckets[month] ?? 0;
+    // Trades whose profit belongs to the selected month — same
+    // bucketing (tradeMonthKey) the dashboard uses.
+    const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
 
-    // Compute per-partner distribution
-    const distribution = computePortfolioDistribution(partners, monthProfit);
+    // Per-partner distribution for the STATEMENT month, built
+    // trade-by-trade so entry-date eligibility is honored: a partner
+    // who joined in June must not receive a March report crediting
+    // them with March profit. The flat ownership × monthProfit split
+    // used previously ignored entry dates entirely.
+    //
+    // lastSettlementDate is deliberately nulled: this is a historical
+    // statement of what was EARNED in the month. A later settlement
+    // moved that profit into capital — it doesn't un-earn it, and a
+    // settled partner's statement must not read $0.
+    const statementPartners = partners.map((p) => ({
+      ...p,
+      lastSettlementDate: null,
+    }));
+    const distribution = computePartnerDistributionFromTrades(
+      statementPartners,
+      tradesInMonth
+    );
 
-    // Use the same investment-weighted ownership the dashboard's
-    // distribution engine uses, so a partner's per-trade share in the
-    // PDF matches what they see on the Partners page to the penny.
+    // Same investment-weighted ownership the distribution engine uses,
+    // so a partner's per-trade share in the PDF matches their
+    // grossProfit to the penny.
     const totalInvestment = partners.reduce(
       (sum, p) => sum + getPartnerInvestment(p),
       0
     );
-
-    // Pre-compute the trades active in the selected month — same date logic
-    // as computeMonthlyBuckets so position-share totals match monthProfit.
-    const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
 
     // Period label
     const [y, m] = month.split("-");
@@ -199,19 +218,26 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // This partner's slice of each trade = ownership × trade P&L.
-      // Ownership is investment-weighted (same formula as
-      // computePortfolioDistribution) so the per-trade shares in the
-      // PDF sum to the partner's grossProfit shown on the dashboard.
+      // This partner's slice of each trade = ownership × trade P&L,
+      // restricted to trades earned on/after their entry date — the
+      // same gate the distribution engine applies, so the per-trade
+      // shares sum to dist.grossProfit exactly.
       const ownershipShare =
         totalInvestment > 0
           ? getPartnerInvestment(partner) / totalInvestment
           : 0;
-      const positions: PartnerPosition[] = tradesInMonth.map((t) => ({
-        ticker: t.ticker,
-        type: t.type,
-        share: tradeProfit(t) * ownershipShare,
-      }));
+      const entry = partner.entryDate?.trim();
+      const positions: PartnerPosition[] = tradesInMonth
+        .filter((t) => {
+          const profitDate = tradeProfitDate(t);
+          if (!profitDate) return false;
+          return !entry || entry <= profitDate;
+        })
+        .map((t) => ({
+          ticker: t.ticker,
+          type: t.type,
+          share: tradeProfit(t) * ownershipShare,
+        }));
 
       const reportData: MonthlyReportData = {
         periodLabel,

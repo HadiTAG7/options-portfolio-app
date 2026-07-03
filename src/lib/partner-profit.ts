@@ -67,8 +67,13 @@ export function tradeMonthKey(t: Trade): string | null {
 }
 
 // Two checks gate per-trade eligibility:
-//   1. Entry-date:    partner joined on or before the trade resolved (closeDate)
-//   2. Settlement:    profit was recorded strictly AFTER the last capitalization
+//   1. Entry-date:    partner joined on or before the profit was EARNED
+//                     (profitDate). Comparing against the option's
+//                     expiration instead used to credit late joiners
+//                     with premium collected before they had any money
+//                     in the fund.
+//   2. Settlement:    profit was recorded strictly AFTER the last
+//                     capitalization.
 //
 // `profitDate` is the date the money was earned — for open options this is
 // the trade date (when premium was collected), not the future expiration.
@@ -83,12 +88,11 @@ export function tradeMonthKey(t: Trade): string | null {
 // behavior.
 function isEligible(
   partner: Partner,
-  closeDate: string,
   profitDate: string,
   recordedAt?: string | null
 ): boolean {
   const entry = partner.entryDate?.trim();
-  if (entry && entry > closeDate) return false;
+  if (entry && entry > profitDate) return false;
   const settlement = partner.lastSettlementDate?.trim();
   if (settlement) {
     const profitStamp = recordedAt?.trim() || profitDate;
@@ -136,14 +140,13 @@ export function computePartnerProfits(
     const profit = tradeProfit(t);
     if (profit === 0) continue;
 
-    const closeDate = tradeCloseDate(t);
-    if (!closeDate) continue;
-    const profitDate = tradeProfitDate(t) ?? closeDate;
+    const profitDate = tradeProfitDate(t);
+    if (!profitDate) continue;
 
     if (totalInvestment <= 0) continue;
 
     for (const p of partners) {
-      if (!isEligible(p, closeDate, profitDate, t.createdAt)) continue;
+      if (!isEligible(p, profitDate, t.createdAt)) continue;
       const share = getPartnerInvestment(p) / totalInvestment;
       grossById[p.id] += profit * share;
     }
@@ -418,14 +421,13 @@ export function computePartnerDistributionFromTrades(
     const profit = tradeProfit(t);
     if (profit === 0) continue;
 
-    const closeDate = tradeCloseDate(t);
-    if (!closeDate) continue;
-    const profitDate = tradeProfitDate(t) ?? closeDate;
+    const profitDate = tradeProfitDate(t);
+    if (!profitDate) continue;
 
     if (totalInvestment <= 0) continue;
 
     for (const p of partners) {
-      if (!isEligible(p, closeDate, profitDate, t.createdAt)) continue;
+      if (!isEligible(p, profitDate, t.createdAt)) continue;
       const share = getPartnerInvestment(p) / totalInvestment;
       grossById[p.id] += profit * share;
     }

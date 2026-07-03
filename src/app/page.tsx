@@ -22,7 +22,6 @@ import {
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
-  computeGpFeeTotal,
   computePartnerDistributionFromTrades,
   computePortfolioDistribution,
   tradeProfit,
@@ -53,16 +52,36 @@ export default function DashboardPage() {
     () => partners.reduce((s, p) => s + getPartnerInvestment(p), 0),
     [partners]
   );
-  // Realized net profit booked this cycle, summed across partners from
-  // the trade ledger (same engine the Partners table uses). Zero-sum
-  // GP/LP fees cancel, so this equals total eligible realized trade
-  // profit. Resets to $0 after every "تثبيت" / withdrawal settlement.
+  // Realized trade distribution — the same settlement-aware engine the
+  // Partners table renders from. Drives both the book-value AUM and
+  // the Management Fees card so every hero number reconciles with the
+  // Partners page.
+  const realizedDistribution = useMemo(
+    () => computePartnerDistributionFromTrades(partners, trades),
+    [partners, trades]
+  );
+  // Realized net profit booked this cycle. Zero-sum GP/LP fees cancel,
+  // so this equals total eligible realized trade profit. Resets to $0
+  // after every "تثبيت" / withdrawal settlement.
   const realizedNetTotal = useMemo(
     () =>
-      Object.values(
-        computePartnerDistributionFromTrades(partners, trades)
-      ).reduce((s, d) => s + d.netProfit, 0),
-    [partners, trades]
+      Object.values(realizedDistribution).reduce(
+        (s, d) => s + d.netProfit,
+        0
+      ),
+    [realizedDistribution]
+  );
+  // Pending GP performance fees on REALIZED profit only (Σ LP
+  // feeAmount). The old computeGpFeeTotal(partners, totalProfit) taxed
+  // unrealized mark-to-market and open premium and ignored settlement,
+  // so the card overstated collectable fees and never reconciled with
+  // the Partners table.
+  const gpFeeTotal = useMemo(
+    () =>
+      Object.values(realizedDistribution)
+        .filter((d) => !d.isManager)
+        .reduce((s, d) => s + d.feeAmount, 0),
+    [realizedDistribution]
   );
   // Book-value AUM = committed capital + realized profit. Mirrors the
   // Partners page "Total Partner Assets" / Current Balance total to the
@@ -70,7 +89,8 @@ export default function DashboardPage() {
   // so unrealized open-position drift isn't booked as managed assets.
   const bookAUM = investmentTotal + realizedNetTotal;
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
-  const gpFeeTotal = computeGpFeeTotal(partners, totalProfit);
+  // Fees only accrue on realized profit, so netting the all-in yield
+  // figure with the realized fee total is the honest "after fees" view.
   const netProfitAfterFee = totalProfit - gpFeeTotal;
   const profitPositive = totalProfit >= 0;
   const yieldPct =
@@ -117,6 +137,11 @@ export default function DashboardPage() {
   }, [monthlyProfitBuckets]);
 
   // ── Monthly ledger for summary table (newest first) ──
+  // Per-month GP fees come from the trade-based distribution over that
+  // month's trades, with entry-date gates active but settlement stamps
+  // nulled: this is a HISTORICAL record of fees generated in the month,
+  // and a later settlement (which moved those fees into GP capital)
+  // must not erase the ledger line.
   const monthlyLedger = useMemo(() => {
     const now = new Date();
     const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -124,6 +149,16 @@ export default function DashboardPage() {
       (s, p) => s + (Number(p.currentBalance) || 0),
       0
     );
+    const statementPartners = partners.map((p) => ({
+      ...p,
+      lastSettlementDate: null,
+    }));
+    const tradesByMonth: Record<string, typeof trades> = {};
+    for (const t of trades) {
+      const key = tradeMonthKey(t);
+      if (!key) continue;
+      (tradesByMonth[key] ??= []).push(t);
+    }
     return Object.keys(monthlyProfitBuckets)
       .sort()
       .reverse()
@@ -136,7 +171,13 @@ export default function DashboardPage() {
           year: "numeric",
         });
         const quarter = `Q${Math.ceil(Number(m) / 3)} ${y}`;
-        const gpFees = computeGpFeeTotal(partners, profit);
+        const monthDist = computePartnerDistributionFromTrades(
+          statementPartners,
+          tradesByMonth[key] ?? []
+        );
+        const gpFees = Object.values(monthDist)
+          .filter((d) => !d.isManager)
+          .reduce((s, d) => s + d.feeAmount, 0);
         return {
           key,
           labelAr,
@@ -147,7 +188,7 @@ export default function DashboardPage() {
           status: (key === currentKey ? "Active" : "Settled") as "Active" | "Settled",
         };
       });
-  }, [monthlyProfitBuckets, partners]);
+  }, [monthlyProfitBuckets, partners, trades]);
 
   // ── Profit for selected month (or all-time) ──
   const selectedMonthProfit = useMemo(() => {
@@ -1130,16 +1171,26 @@ function PortfolioComposition({
   const CX = SIZE / 2;
   const CY = SIZE / 2;
 
-  // Build arc segments
+  // Build arc segments. reduce keeps the running offset inside the
+  // accumulator instead of a closure-mutated variable, which the
+  // react-hooks/immutability rule (correctly) flags inside useMemo.
   const arcs = useMemo(() => {
-    let offset = 0;
-    return slices.map((s) => {
-      const len = (s.pct / 100) * CIRCUMFERENCE;
-      const gap = slices.length > 1 ? 3 : 0;
-      const arc = { ...s, dashoffset: -offset, dashlen: Math.max(0, len - gap) };
-      offset += len;
-      return arc;
-    });
+    const gap = slices.length > 1 ? 3 : 0;
+    return slices.reduce<{
+      offset: number;
+      arcs: (AllocSlice & { dashoffset: number; dashlen: number })[];
+    }>(
+      (acc, s) => {
+        const len = (s.pct / 100) * CIRCUMFERENCE;
+        acc.arcs.push({
+          ...s,
+          dashoffset: -acc.offset,
+          dashlen: Math.max(0, len - gap),
+        });
+        return { offset: acc.offset + len, arcs: acc.arcs };
+      },
+      { offset: 0, arcs: [] }
+    ).arcs;
   }, [slices, CIRCUMFERENCE]);
 
   return (
