@@ -5,22 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/utils";
-import { isManagerPartner } from "@/lib/partner-profit";
+import {
+  computePartnerDistributionFromTrades,
+  isManagerPartner,
+} from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
-
-// GP/LP performance fee. Must match the distribution engine.
-const PERFORMANCE_FEE = 0.2;
-
-// Partner's take-home share of a dollar amount X after the 20% GP fee.
-//  - LP: gets their ownership slice × 80%
-//  - GP: gets their own slice at 100% + 20% skimmed from every LP
-function partnerNetOf(total: number, partnerShare: number, isGP: boolean): number {
-  if (isGP) {
-    return total * (partnerShare + PERFORMANCE_FEE * (1 - partnerShare));
-  }
-  return total * partnerShare * (1 - PERFORMANCE_FEE);
-}
 
 // Format "$120 | 15 Nov" from a strike and an ISO-ish expiry string.
 function formatExpiry(expiry: string): string {
@@ -50,22 +40,47 @@ function PartnerDetailInner() {
   const partnerId = searchParams.get("id") ?? "";
 
   const { partners, loading: partnersLoading, totalAssets } = usePartners();
-  const { sellPuts, sellCalls, activeStocks, loading: tradesLoading } = useTrades();
+  const {
+    trades,
+    sellPuts,
+    sellCalls,
+    activeStocks,
+    loading: tradesLoading,
+  } = useTrades();
 
   const partner = useMemo(
     () => partners.find((p) => p.id === partnerId),
     [partners, partnerId]
   );
 
-  // Ownership is always derived from the partner's currentBalance over
-  // the total global fund balance so the number stays in sync even when
-  // the stored column is stale.
-  const ownershipPct = useMemo(() => {
-    if (!partner || totalAssets <= 0) return 0;
-    return (partner.currentBalance / totalAssets) * 100;
-  }, [partner, totalAssets]);
+  // Single source of truth: the same trade-based distribution engine
+  // the Partners table renders from. This replaces the page's old
+  // local math (hardcoded 20% fee + currentBalance/totalAssets
+  // ownership), which showed a different ownership % and ignored each
+  // partner's configurable managementFeeRate.
+  const dist = useMemo(
+    () => computePartnerDistributionFromTrades(partners, trades)[partnerId],
+    [partners, trades, partnerId]
+  );
+
+  // Investment-weighted ownership — identical to the نسبة الملكية
+  // column on the Partners page.
+  const ownershipPct = dist?.ownershipPct ?? 0;
+  const feeRatePct = dist?.feeRatePct ?? 0;
 
   const isGP = partner ? isManagerPartner(partner) : false;
+
+  // Partner's take-home slice of a fund-wide dollar amount, using
+  // THEIR fee rate from the distribution engine:
+  //  - LP: ownership slice × (1 − feeRate)
+  //  - GP: ownership slice only (gross). LP fees are credited to the
+  //    GP's capital when each LP settles, so they're not shown as part
+  //    of per-position projections here.
+  const partnerNetOf = useMemo(() => {
+    const share = ownershipPct / 100;
+    const feeKeep = isGP ? 1 : 1 - feeRatePct / 100;
+    return (total: number) => total * share * feeKeep;
+  }, [ownershipPct, feeRatePct, isGP]);
 
   // Open option positions with partner-specific net metrics.
   // Uses intrinsic value (underlying spot − strike) as the unrealized-P&L
@@ -101,8 +116,8 @@ function PartnerDetailInner() {
       }
       const globalUnrealized = (premium - intrinsicPerShare) * qty;
 
-      const partnerNetPremium = partnerNetOf(totalPremium, share, isGP);
-      const partnerNetUnrealized = partnerNetOf(globalUnrealized, share, isGP);
+      const partnerNetPremium = partnerNetOf(totalPremium);
+      const partnerNetUnrealized = partnerNetOf(globalUnrealized);
 
       // Partner-centric view: how many underlying shares they're exposed
       // to, and how much of their cash is locked as collateral at the
@@ -128,7 +143,7 @@ function PartnerDetailInner() {
         partnerNetUnrealized,
       };
     });
-  }, [partner, ownershipPct, sellPuts, sellCalls, activeStocks, isGP]);
+  }, [partner, partnerNetOf, ownershipPct, sellPuts, sellCalls, activeStocks]);
 
   // Stock holdings — partner-centric view with live pricing + P&L.
   // If the live quote is missing we leave currentPrice null so the UI
@@ -191,8 +206,13 @@ function PartnerDetailInner() {
     );
   }
 
-  const netProfitTone =
-    partner.totalNetProfit >= 0 ? "text-primary" : "text-secondary";
+  // Realized pending net from the distribution engine — the same
+  // number the Partners table shows in its NET column. The old code
+  // rendered partner.totalNetProfit / partner.managementFeesPaid,
+  // columns nothing in the app ever writes, so they read 0 forever.
+  const pendingNet = dist?.netProfit ?? 0;
+  const pendingFee = dist?.feeAmount ?? 0;
+  const netProfitTone = pendingNet >= 0 ? "text-primary" : "text-secondary";
 
   return (
     <>
@@ -261,13 +281,13 @@ function PartnerDetailInner() {
             </div>
             <div className="text-left">
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-2">
-                صافي الربح/الخسارة
+                صافي الربح المعلق · هذه الدورة
               </span>
               <span
                 className={`text-3xl font-headline font-bold font-mono ${netProfitTone}`}
               >
-                {partner.totalNetProfit >= 0 ? "+" : ""}
-                {formatCurrency(partner.totalNetProfit)}
+                {pendingNet >= 0 ? "+" : ""}
+                {formatCurrency(pendingNet)}
               </span>
             </div>
           </div>
@@ -275,19 +295,23 @@ function PartnerDetailInner() {
 
         {/* Side Cards */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-          {/* Fees Paid */}
+          {/* Pending performance fee (this cycle) */}
           <div className="bg-surface-container p-6 rounded-sm border border-white/5 border-r-2 border-r-tertiary">
             <div className="flex items-center gap-3 mb-3">
               <Icon name="payments" className="text-tertiary" />
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-                إجمالي الرسوم المدفوعة
+                {isGP
+                  ? "رسوم الأداء المحصّلة (معلقة)"
+                  : "رسوم الأداء المعلقة"}
               </span>
             </div>
             <span className="text-2xl font-headline font-bold text-white block font-mono">
-              {formatCurrency(partner.managementFeesPaid)}
+              {formatCurrency(pendingFee)}
             </span>
             <span className="text-[10px] text-on-surface-variant mt-1 block">
-              رسوم الإدارة عبر كل الفترات
+              {isGP
+                ? "تُقيد لرأس مالك عند تسوية كل شريك"
+                : `${feeRatePct.toFixed(0)}٪ من الربح المعلق — تُخصم عند التسوية`}
             </span>
           </div>
 
@@ -320,12 +344,12 @@ function PartnerDetailInner() {
               </span>
               {isGP && (
                 <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-300">
-                  GP · صافي بعد 20٪ رسوم الأداء من جميع الشركاء
+                  GP · حصة إجمالية — الرسوم تُقيد عند تسوية الشركاء
                 </span>
               )}
               {!isGP && (
                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
-                  LP · صافي بعد رسوم الأداء 20٪
+                  LP · صافي بعد رسوم الأداء {feeRatePct.toFixed(0)}٪
                 </span>
               )}
             </div>

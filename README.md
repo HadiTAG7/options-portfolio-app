@@ -67,7 +67,9 @@ npm run cap:open
 
 ### PWA install (no APK needed)
 
-When deployed over HTTPS, the app is also a Progressive Web App. Open in Chrome on Android → menu → **Install app** / **Add to home screen**. The manifest at `/manifest.webmanifest` and the icons under `public/icons/` drive the installed-app branding.
+When deployed over HTTPS, the app can be installed from Chrome on Android → menu → **Install app** / **Add to home screen**. The manifest at `/manifest.webmanifest` and the icons under `public/icons/` drive the installed-app branding.
+
+**Scope note:** this is a home-screen install (manifest only) — there is **no service worker**, so the browser-installed version does not cache the shell and needs a connection to load. The Capacitor APK does not have this limitation: its bundle (HTML/JS/fonts/icons) ships inside the APK, so the shell opens offline and only the Supabase data calls need a network.
 
 ### App icons
 
@@ -76,3 +78,12 @@ Replace `resources/icon.png` (1024×1024) and optionally `resources/splash.png` 
 ```bash
 npx @capacitor/assets generate --android
 ```
+
+## ⚠️ Security model (read before distributing the APK)
+
+The app talks to Supabase with the **anon key**, and the current RLS policies (see `supabase/migrations/008` / `009`) grant that key **full read/write/delete** on `partners`, `trades`, `transactions`, and `active_stocks`. That was an acceptable dev-stage shortcut for a private web deployment, but note:
+
+- The anon key is **baked into every APK and every web bundle**. Anyone who obtains the APK file can extract the key and read or modify the fund's entire books with any HTTP client.
+- The `/api/reports/send-monthly` endpoint emails partner statements. Set the `REPORT_SECRET` env var in your deployment and send the same value in the `x-report-secret` header to lock it; without the env var the endpoint is open.
+
+Before distributing the APK beyond trusted devices, move to Supabase Auth with owner-scoped RLS policies (each request authenticated, policies keyed to `auth.uid()`), and rotate the anon key afterwards.

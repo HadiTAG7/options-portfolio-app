@@ -24,18 +24,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // JetBrains Mono + Material Symbols are self-hosted from
+  // public/fonts/ via @font-face in globals.css (see the font blocks
+  // there). No CDN <link> tags: the Capacitor APK must render numbers
+  // and icons with zero network access.
   return (
     <html lang="ar" dir="rtl" className="dark">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body className="bg-background text-on-surface antialiased overflow-x-hidden">
         {children}
       </body>
