@@ -140,6 +140,18 @@ export default function PartnersPage() {
     return { amount: dist.feeAmount, gpId: gp.id };
   }
 
+  // Fund-wide Clean-Slate rule for deposits: a deposit changes
+  // totalDeposits, and the distribution engine weights EVERY
+  // unsettled historical trade by today's investments — so any deposit
+  // retroactively re-weights (dilutes) OTHER partners' already-earned
+  // pending profit. Deposits are therefore blocked until every
+  // partner's pending profit is settled, not just the depositor's.
+  const anyPendingProfit = useMemo(
+    () =>
+      Object.values(tradeDistribution).some((d) => d.settleableNet > 0),
+    [tradeDistribution]
+  );
+
   async function onWithdraw(partner: Partner, amount: number) {
     const availableProfit = Math.max(0, settleableFor(partner.id));
     await handleWithdrawal(
@@ -625,11 +637,13 @@ export default function PartnersPage() {
                           </button>
                           <button
                             onClick={() => setDepositTarget(partner)}
-                            disabled={tradeNet > 0}
+                            disabled={anyPendingProfit}
                             className="flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-emerald-500/25 disabled:hover:bg-emerald-500/5 disabled:hover:text-emerald-300"
                             title={
-                              tradeNet > 0
-                                ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
+                              anyPendingProfit
+                                ? tradeNet > 0
+                                  ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
+                                  : "يوجد شركاء بأرباح معلقة — الإيداع الآن يعيد توزيع حصصهم. سوِّ أرباح الجميع أولاً"
                                 : "إيداع رأس مال جديد"
                             }
                           >

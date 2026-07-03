@@ -91,14 +91,6 @@ export function usePartners() {
       const mapped = withDerivedOwnership((data ?? []).map(rowToPartner));
       console.log("[fetchPartners] Partners loaded:", mapped.map(p => `${p.name} (${p.id})`));
       setPartners(mapped);
-
-      // Snapshot to localStorage as a backup against accidental data loss
-      try {
-        localStorage.setItem(
-          "kt.fund.partners.snapshot.v1",
-          JSON.stringify({ ts: new Date().toISOString(), partners: mapped })
-        );
-      } catch { /* quota exceeded — ignore */ }
     }
 
     setLoading(false);

@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
-import { safeNumber, formatCurrency } from "@/lib/utils";
+import { safeNumber, formatCurrency, getPartnerInvestment } from "@/lib/utils";
 import type { Partner } from "@/types";
 import type { PartnerRow, BalanceHistoryEntry } from "@/types/database";
 
@@ -198,9 +198,14 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     set({ error: null, notification: null });
 
     // --- Client-side validation ---
+    // Validate against the same capital basis the WithdrawalDialog
+    // shows (getPartnerInvestment) so the store never rejects or
+    // mis-splits an amount the dialog presented as valid. Balance
+    // mutations below still operate on currentBalance.
     const balance = safeNumber(partner.currentBalance);
+    const capitalBasis = getPartnerInvestment(partner);
     const profit = Math.max(0, availableProfit);
-    const maxWithdrawable = balance + profit;
+    const maxWithdrawable = capitalBasis + profit;
 
     if (amount <= 0) {
       const msg = "مبلغ السحب يجب أن يكون أكبر من صفر";

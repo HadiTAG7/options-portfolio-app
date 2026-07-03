@@ -54,10 +54,18 @@ export function formatNumber(value: number | null | undefined): string {
 // the partner record with no extra math — both the deposit and
 // withdrawal dialogs, and the distribution engine's `investment`
 // field, must pick from this same function so they never drift.
+//
+// A present, finite totalDeposits is authoritative — INCLUDING an
+// explicit 0 (a partner who withdrew all their capital). The old `||`
+// chain treated 0 as "missing" and fell back to a stale baseCapital /
+// currentBalance, so a fully divested partner kept a phantom
+// investment and siphoned ownership-weighted profit from the active
+// partners. Fallbacks now apply only when the field is genuinely
+// absent (legacy rows created before the column existed).
 export function getPartnerInvestment(partner: Partner): number {
-  return (
-    safeNumber(partner.totalDeposits) ||
-    safeNumber(partner.baseCapital) ||
-    safeNumber(partner.currentBalance)
-  );
+  const td = partner.totalDeposits;
+  if (td !== null && td !== undefined && Number.isFinite(Number(td))) {
+    return safeNumber(td);
+  }
+  return safeNumber(partner.baseCapital) || safeNumber(partner.currentBalance);
 }
