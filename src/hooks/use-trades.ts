@@ -424,6 +424,9 @@ export function useTrades() {
       strike?: number;
       expiration?: string;
       date: string;
+      // Covered-call linkage: the active stock lot this Sell Call is
+      // written against (optional).
+      linkedStockId?: string | null;
     }) => {
       setError(null);
       const ticker = payload.ticker.trim().toUpperCase();
@@ -492,6 +495,7 @@ export function useTrades() {
         expiration: payload.expiration ?? "",
         date: payload.date,
         status: "open" as const,
+        linked_stock_id: payload.linkedStockId ?? null,
       };
 
       // ALWAYS attempt the Supabase insert first — even in seed mode —
@@ -523,6 +527,7 @@ export function useTrades() {
           date: payload.date,
           status: "open",
           autoClosed: false,
+          linkedStockId: payload.linkedStockId ?? null,
         };
         setTradesList((prev) => [newTrade, ...prev]);
         throw insertError;
@@ -678,6 +683,72 @@ export function useTrades() {
     [usingSeedData]
   );
 
+  // Record a put assignment: the short put was exercised, so the fund
+  // buys the underlying at the strike. Creates an active_stocks lot
+  // (priced at the strike — the collected premium stays booked on the
+  // option trade itself as its result) and closes the option if it's
+  // still open.
+  const recordAssignment = useCallback(
+    async (
+      trade: Trade,
+      opts: { quantity: number; price: number; date: string }
+    ) => {
+      setError(null);
+
+      const stockPayload = {
+        id: crypto.randomUUID(),
+        ticker: trade.ticker.toUpperCase(),
+        quantity: opts.quantity,
+        purchasePrice: opts.price,
+        purchaseDate: opts.date,
+      };
+
+      const { data, error: insertError } = await supabase
+        .from("active_stocks")
+        .insert(stockPayload)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("[recordAssignment] stock insert failed:", insertError);
+        setError(`فشل تسجيل الـ Assignment: ${insertError.message}`);
+        throw insertError;
+      }
+
+      const newStock = rowToActiveStock(data as ActiveStockRow);
+      setActiveStocksList((prev) => [...prev, newStock]);
+      void enrichWithLivePrices([newStock]);
+
+      // Close the option if still open — premium × quantity is the
+      // realized result (the premium was kept; the assignment cost is
+      // carried by the new stock lot's basis).
+      if (trade.status === "open") {
+        const result = (Number(trade.premium) || 0) * (Number(trade.quantity) || 0);
+        if (!usingSeedData) {
+          const { error: upErr } = await supabase
+            .from("trades")
+            .update({ status: "closed", autoClosed: false, result })
+            .eq("id", trade.id);
+          if (upErr) {
+            console.error("[recordAssignment] trade close failed:", upErr);
+          }
+        }
+        setTradesList((prev) =>
+          prev.map((t) =>
+            t.id === trade.id
+              ? { ...t, status: "closed", autoClosed: false, result }
+              : t
+          )
+        );
+      }
+
+      setToast(
+        `تم تسجيل Assignment: ${opts.quantity} سهم ${trade.ticker.toUpperCase()} @ ${opts.price}`
+      );
+    },
+    [usingSeedData, enrichWithLivePrices]
+  );
+
   // Only OPEN option positions show up in the active tables
   const sellPuts = useMemo(
     () =>
@@ -796,6 +867,7 @@ export function useTrades() {
     updateStock,
     addTrade,
     deleteTrade,
+    recordAssignment,
     toast,
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,

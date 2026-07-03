@@ -11,6 +11,7 @@ import {
   Save,
 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import type { ActiveStock } from "@/types";
 
 export interface AddTradePayload {
   type: "Stock" | "Sell Call" | "Sell Put";
@@ -20,12 +21,18 @@ export interface AddTradePayload {
   strike?: number;
   expiration?: string;
   date: string;
+  // Covered-call linkage: active stock lot this Sell Call is written
+  // against (optional).
+  linkedStockId?: string | null;
 }
 
 interface AddTradeDialogProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (payload: AddTradePayload) => Promise<void>;
+  // Open stock lots — offered as covered-call link targets when the
+  // trade type is Sell Call and a lot matches the typed ticker.
+  activeStocks?: ActiveStock[];
 }
 
 const TRADE_TYPES = [
@@ -42,6 +49,7 @@ export function AddTradeDialog({
   open,
   onClose,
   onSubmit,
+  activeStocks = [],
 }: AddTradeDialogProps) {
   const [type, setType] = useState<AddTradePayload["type"]>("Stock");
   const [ticker, setTicker] = useState("");
@@ -50,6 +58,7 @@ export function AddTradeDialog({
   const [strike, setStrike] = useState("");
   const [expiration, setExpiration] = useState("");
   const [date, setDate] = useState(todayISO());
+  const [linkedStockId, setLinkedStockId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tickerRef = useRef<HTMLInputElement>(null);
@@ -63,10 +72,19 @@ export function AddTradeDialog({
     setStrike("");
     setExpiration("");
     setDate(todayISO());
+    setLinkedStockId("");
     setError(null);
     setSubmitting(false);
     setTimeout(() => tickerRef.current?.focus(), 50);
   }, [open]);
+
+  // Stock lots matching the typed ticker — covered-call link targets.
+  const linkableStocks =
+    type === "Sell Call"
+      ? activeStocks.filter(
+          (s) => s.ticker.toUpperCase() === ticker.trim().toUpperCase()
+        )
+      : [];
 
   useEffect(() => {
     if (!open) return;
@@ -135,6 +153,8 @@ export function AddTradeDialog({
         strike: strikeNum,
         expiration: expirationVal,
         date,
+        linkedStockId:
+          type === "Sell Call" && linkedStockId ? linkedStockId : null,
       });
       onClose();
     } catch (err: unknown) {
@@ -330,6 +350,35 @@ export function AddTradeDialog({
                   onChange={setExpiration}
                   disabled={submitting}
                   placeholder="اختر تاريخ الانتهاء"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Covered-call linkage — Sell Call with a matching stock lot */}
+          {type === "Sell Call" && linkableStocks.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                مرتبط بسهم{" "}
+                <span className="text-zinc-600">(Covered · اختياري)</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={linkedStockId}
+                  onChange={(e) => setLinkedStockId(e.target.value)}
+                  disabled={submitting}
+                  className={`${inputBase} appearance-none pr-4`}
+                >
+                  <option value="">— غير مغطى (Naked)</option>
+                  {linkableStocks.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.ticker} · {s.quantity} سهم @ ${s.purchasePrice}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600"
                 />
               </div>
             </div>

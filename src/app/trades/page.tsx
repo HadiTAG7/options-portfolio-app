@@ -31,6 +31,13 @@ import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
 import { ExpiryAlert } from "@/components/ui/expiry-alert";
+import { AssignmentDialog } from "@/components/ui/assignment-dialog";
+import {
+  annualizedRoc,
+  optionCollateral,
+  optionDays,
+  computeWheelSummary,
+} from "@/lib/wheel-analytics";
 import { formatCurrency } from "@/lib/utils";
 import { tradeProfit, tradeMonthKey } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
@@ -82,6 +89,7 @@ export default function TradesPage() {
     updateStock,
     addTrade,
     deleteTrade,
+    recordAssignment,
     toast,
     dismissToast,
     refreshPrices,
@@ -124,8 +132,25 @@ export default function TradesPage() {
   const [editingStock, setEditingStock] = useState<ActiveStock | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
+  const [assigningTrade, setAssigningTrade] = useState<Trade | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const pricesRefreshing = activeStocks.some((s) => s.priceLoading);
+
+  // Wheel-strategy stats: annualized return on locked collateral,
+  // win rate over closed options, collateral currently committed.
+  const wheelSummary = useMemo(
+    () => computeWheelSummary([...sellPuts, ...sellCalls], closedOptions),
+    [sellPuts, sellCalls, closedOptions]
+  );
+
+  // Stock lots covered by an open Sell Call (linked via linked_stock_id).
+  const coveredCallByStockId = useMemo(() => {
+    const map: Record<string, Trade> = {};
+    for (const t of sellCalls) {
+      if (t.linkedStockId) map[t.linkedStockId] = t;
+    }
+    return map;
+  }, [sellCalls]);
 
   // Group open option positions by ticker for the expanded row detail
   const optionsByTicker = useMemo(() => {
@@ -282,6 +307,45 @@ export default function TradesPage() {
         />
       </div>
 
+      {/* Wheel strategy stats */}
+      {(wheelSummary.openCount > 0 || wheelSummary.closedCount > 0) && (
+        <div className="mb-8 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 to-zinc-950/80 px-6 py-4 backdrop-blur-sm">
+          <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">
+            Wheel Stats · إحصائيات الاستراتيجية
+          </span>
+          <span className="text-xs text-zinc-400">
+            <span className="opacity-70">متوسط ROC السنوي (مرجح بالضمان):</span>{" "}
+            <span
+              className={`font-mono font-bold tabular-nums ${
+                wheelSummary.avgAnnualizedRoc === null
+                  ? "text-zinc-600"
+                  : wheelSummary.avgAnnualizedRoc >= 20
+                    ? "text-emerald-400"
+                    : "text-zinc-200"
+              }`}
+            >
+              {wheelSummary.avgAnnualizedRoc === null
+                ? "—"
+                : `${wheelSummary.avgAnnualizedRoc.toFixed(1)}%`}
+            </span>
+          </span>
+          <span className="text-xs text-zinc-400">
+            <span className="opacity-70">win rate:</span>{" "}
+            <span className="font-mono font-bold tabular-nums text-zinc-200">
+              {wheelSummary.winRate === null
+                ? "—"
+                : `${wheelSummary.winRate.toFixed(0)}% (${wheelSummary.closedCount} صفقة)`}
+            </span>
+          </span>
+          <span className="text-xs text-zinc-400">
+            <span className="opacity-70">الضمان المحجوز حالياً:</span>{" "}
+            <span className="font-mono font-bold tabular-nums text-cyan-300">
+              {formatCurrency(wheelSummary.lockedCollateral)}
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* Active Stocks - Trading Pit */}
       <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.15)]">
         <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
@@ -429,6 +493,14 @@ export default function TradesPage() {
                             {hitTarget && (
                               <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-emerald-300">
                                 بلغ الهدف
+                              </span>
+                            )}
+                            {coveredCallByStockId[stock.id] && (
+                              <span
+                                className="inline-flex items-center rounded-full border border-cyan-400/40 bg-cyan-500/10 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-cyan-300"
+                                title={`مغطى بـ Sell Call @ $${coveredCallByStockId[stock.id].strike} حتى ${coveredCallByStockId[stock.id].expiration}`}
+                              >
+                                مغطى
                               </span>
                             )}
                           </div>
@@ -814,6 +886,8 @@ export default function TradesPage() {
         valueColumn="premium"
         onEdit={setEditingTrade}
         onDelete={setDeletingTrade}
+        onAssign={setAssigningTrade}
+        showRoc
       />
 
       <TradeSection
@@ -826,6 +900,7 @@ export default function TradesPage() {
         valueColumn="premium"
         onEdit={setEditingTrade}
         onDelete={setDeletingTrade}
+        showRoc
       />
 
       <TradeSection
@@ -837,6 +912,7 @@ export default function TradesPage() {
         loading={loading}
         valueColumn="result"
         onDelete={setDeletingTrade}
+        onAssign={setAssigningTrade}
         groupByMonth
       />
 
@@ -866,6 +942,14 @@ export default function TradesPage() {
         open={addDialogOpen}
         onClose={() => setAddDialogOpen(false)}
         onSubmit={addTrade}
+        activeStocks={activeStocks}
+      />
+
+      <AssignmentDialog
+        open={assigningTrade !== null}
+        trade={assigningTrade}
+        onClose={() => setAssigningTrade(null)}
+        onSubmit={recordAssignment}
       />
 
       <EditTradeDialog
@@ -968,7 +1052,9 @@ function TradeSection({
   valueColumn,
   onEdit,
   onDelete,
+  onAssign,
   groupByMonth = false,
+  showRoc = false,
 }: {
   title: string;
   subtitle: string;
@@ -979,14 +1065,18 @@ function TradeSection({
   valueColumn: "premium" | "result";
   onEdit?: (trade: Trade) => void;
   onDelete?: (trade: Trade) => void;
+  // Record a put assignment — button rendered on Sell Put rows only.
+  onAssign?: (trade: Trade) => void;
   // When true, rows are split into month buckets (newest first) with a
   // sub-header per month showing the count + the month's total PnL.
   groupByMonth?: boolean;
+  // Adds the annualized return-on-collateral column (open options).
+  showRoc?: boolean;
 }) {
   const isResult = valueColumn === "result";
   const valueLabelEn = isResult ? "Result" : "Premium";
-  const hasActions = Boolean(onEdit || onDelete);
-  const colCount = hasActions ? 9 : 8;
+  const hasActions = Boolean(onEdit || onDelete || onAssign);
+  const colCount = (hasActions ? 9 : 8) + (showRoc ? 1 : 0);
 
   // Bucket trades by entry-month (tradeMonthKey) when grouping is on.
   // Returns [{ key, labelAr, labelEn, total, trades }] sorted newest
@@ -1082,6 +1172,30 @@ function TradeSection({
             {formatCurrency(pnl)}
           </span>
         </td>
+        {showRoc &&
+          (() => {
+            const roc = annualizedRoc(trade);
+            const rocClass =
+              roc === null
+                ? "text-zinc-600"
+                : roc >= 20
+                  ? "text-emerald-400"
+                  : roc >= 10
+                    ? "text-zinc-200"
+                    : "text-zinc-500";
+            return (
+              <td
+                className={`px-4 py-3 font-mono tabular-nums font-bold ${rocClass}`}
+                title={
+                  roc === null
+                    ? "لا يمكن الحساب (strike أو كمية مفقودة)"
+                    : `ضمان ${formatCurrency(optionCollateral(trade))} × ${optionDays(trade)} يوم`
+                }
+              >
+                {roc === null ? "—" : `${roc.toFixed(1)}%`}
+              </td>
+            );
+          })()}
         <td className="px-4 py-3 font-mono text-xs tabular-nums text-zinc-400">
           {formatExpiration(trade)}
         </td>
@@ -1091,6 +1205,15 @@ function TradeSection({
         {hasActions && (
           <td className="px-4 py-3">
             <div className="flex items-center gap-1">
+              {onAssign && trade.type === "Sell Put" && (
+                <button
+                  onClick={() => onAssign(trade)}
+                  className="rounded-md border border-amber-400/25 bg-amber-400/5 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-amber-300 transition-all duration-200 hover:scale-[1.03] hover:border-amber-400/50 hover:bg-amber-400/10"
+                  title="تسجيل Assignment — تحويل العقد لمركز سهم"
+                >
+                  Assign
+                </button>
+              )}
               {onEdit && (
                 <button
                   onClick={() => onEdit(trade)}
@@ -1150,6 +1273,14 @@ function TradeSection({
                 {valueLabelEn}
               </th>
               <th className="px-4 py-3 text-start font-semibold">Total PnL</th>
+              {showRoc && (
+                <th
+                  className="px-4 py-3 text-start font-semibold"
+                  title="العائد السنوي على الضمان المحجوز · (premium ÷ collateral) × (365 ÷ days)"
+                >
+                  ROC سنوي
+                </th>
+              )}
               <th className="px-4 py-3 text-start font-semibold">Expiration</th>
               <th className="px-4 py-3 text-start font-semibold">Date</th>
               {hasActions && <th className="px-4 py-3 w-20 text-start" />}
