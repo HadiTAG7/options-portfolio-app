@@ -238,7 +238,7 @@ function PartnerDetailInner() {
             </p>
           )}
         </div>
-        <div className="bg-surface-container-highest px-6 py-4 border-r-4 border-primary rounded-sm">
+        <div className="bg-surface-container-highest px-6 py-4 border-r-4 border-primary rounded-xl">
           <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-1">
             نسبة الملكية
           </span>
@@ -249,7 +249,7 @@ function PartnerDetailInner() {
       </div>
 
       {/* Eligibility disclaimer */}
-      <div className="mb-6 flex items-start gap-3 p-4 rounded-sm bg-surface-container-low border border-white/5 border-r-2 border-r-tertiary/60">
+      <div className="mb-6 flex items-start gap-3 p-4 rounded-xl bg-surface-container-low border border-zinc-800/60 border-r-2 border-r-tertiary/60">
         <Icon name="info" className="text-tertiary !text-base mt-0.5" />
         <div className="text-[11px] leading-relaxed text-on-surface-variant">
           <span className="font-bold text-on-surface">ملاحظة مهمة: </span>
@@ -265,7 +265,7 @@ function PartnerDetailInner() {
       {/* Bento Grid */}
       <div className="grid grid-cols-12 gap-6">
         {/* Main Equity Card */}
-        <div className="col-span-12 lg:col-span-8 bg-surface-variant/60 backdrop-blur-xl p-8 rounded-sm border border-white/5 relative overflow-hidden">
+        <div className="col-span-12 lg:col-span-8 bg-surface-variant/60 backdrop-blur-xl p-8 rounded-xl border border-zinc-800/60 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-primary to-transparent" />
           <div className="flex justify-between items-start">
             <div>
@@ -296,7 +296,7 @@ function PartnerDetailInner() {
         {/* Side Cards */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
           {/* Pending performance fee (this cycle) */}
-          <div className="bg-surface-container p-6 rounded-sm border border-white/5 border-r-2 border-r-tertiary">
+          <div className="bg-surface-container p-6 rounded-xl border border-zinc-800/60 border-r-2 border-r-tertiary">
             <div className="flex items-center gap-3 mb-3">
               <Icon name="payments" className="text-tertiary" />
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
@@ -316,7 +316,7 @@ function PartnerDetailInner() {
           </div>
 
           {/* Base Capital */}
-          <div className="bg-surface-container p-6 rounded-sm border border-white/5 border-r-2 border-r-primary-container">
+          <div className="bg-surface-container p-6 rounded-xl border border-zinc-800/60 border-r-2 border-r-primary-container">
             <div className="flex items-center gap-3 mb-3">
               <Icon name="account_balance" className="text-primary-container" />
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
@@ -333,8 +333,8 @@ function PartnerDetailInner() {
         </div>
 
         {/* Active Options Table — option-specific per-partner metrics */}
-        <div className="col-span-12 bg-surface-container rounded-sm border border-white/5 overflow-hidden">
-          <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-surface-container-high">
+        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
                 عقود الخيارات النشطة ({ownershipPct.toFixed(2)}%)
@@ -380,7 +380,7 @@ function PartnerDetailInner() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-zinc-800/50">
                 {optionPositions.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center">
@@ -408,7 +408,7 @@ function PartnerDetailInner() {
                       </td>
                       <td className="px-4 py-3">
                         <div
-                          className={`inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded-sm border ${
+                          className={`inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded-md border ${
                             isPut
                               ? "border-secondary/50"
                               : "border-primary/50"
@@ -494,8 +494,8 @@ function PartnerDetailInner() {
         </div>
 
         {/* Stock Holdings Table — partner share of open stock positions */}
-        <div className="col-span-12 bg-surface-container rounded-sm border border-white/5 overflow-hidden">
-          <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-surface-container-high">
+        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
                 الأسهم المحتفظ بها
@@ -525,7 +525,7 @@ function PartnerDetailInner() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-zinc-800/50">
                 {stockPositions.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center">

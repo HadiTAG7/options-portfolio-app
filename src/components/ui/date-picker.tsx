@@ -205,10 +205,10 @@ export function DatePicker({
         type="button"
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
-        className={`w-full flex items-center justify-between bg-surface-container-low border rounded-sm px-4 py-3 text-sm font-mono outline-none transition-all disabled:opacity-50 ${
+        className={`w-full flex items-center justify-between bg-zinc-950/80 border rounded-md px-4 py-3 text-sm font-mono outline-none transition-all disabled:opacity-50 ${
           open
             ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
-            : "border-white/10 hover:border-emerald-500/40"
+            : "border-zinc-700/60 hover:border-emerald-500/40"
         } ${displayText ? "text-white" : "text-on-surface-variant/40"}`}
       >
         <span>{displayText || placeholder}</span>
@@ -237,7 +237,7 @@ export function DatePicker({
             <button
               type="button"
               onClick={prevMonth}
-              className="rounded-sm p-1 text-on-surface-variant hover:bg-white/5 hover:text-white transition-colors"
+              className="rounded-md p-1 text-on-surface-variant hover:bg-white/5 hover:text-white transition-colors"
             >
               <Icon name="chevron_right" className="!text-lg" />
             </button>
@@ -247,7 +247,7 @@ export function DatePicker({
             <button
               type="button"
               onClick={nextMonth}
-              className="rounded-sm p-1 text-on-surface-variant hover:bg-white/5 hover:text-white transition-colors"
+              className="rounded-md p-1 text-on-surface-variant hover:bg-white/5 hover:text-white transition-colors"
             >
               <Icon name="chevron_left" className="!text-lg" />
             </button>
@@ -280,7 +280,7 @@ export function DatePicker({
                   key={iso}
                   type="button"
                   onClick={() => selectDay(day)}
-                  className={`relative h-8 w-full rounded-sm text-xs font-mono transition-all duration-100 ${
+                  className={`relative h-8 w-full rounded-md text-xs font-mono transition-all duration-100 ${
                     isSelected
                       ? "bg-emerald-500 text-black font-bold shadow-[0_0_12px_rgba(52,211,153,0.4)]"
                       : isToday

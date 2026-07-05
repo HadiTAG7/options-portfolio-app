@@ -164,41 +164,41 @@ export function WithdrawalDialog({
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/80 backdrop-blur-md"
         onClick={() => !busy && onClose()}
       />
 
-      {/* Dialog */}
+      {/* Dialog — rose accents: withdrawals move money OUT */}
       <div
         role="dialog"
         aria-modal="true"
-        className="relative bg-surface-container-high border border-white/10 rounded-sm w-full max-w-lg mx-4 shadow-2xl shadow-black/50 overflow-hidden"
+        className="relative w-full max-w-lg mx-4 overflow-hidden rounded-xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/95 via-zinc-950/95 to-black shadow-[0_0_60px_-12px_rgba(244,63,94,0.25)] backdrop-blur-xl"
       >
         {/* Header */}
-        <div className="px-6 py-4 bg-surface-container-highest border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-zinc-800/70 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/10">
               <Icon name="account_balance" className="text-secondary !text-lg" />
             </div>
             <div>
               <h3 className="text-sm font-headline font-bold text-white">
                 سحب أموال
               </h3>
-              <p className="text-[10px] text-on-surface-variant">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500">
                 Withdraw Funds
               </p>
             </div>
           </div>
           <button
             onClick={() => !busy && onClose()}
-            className="p-1 text-on-surface-variant hover:text-white transition-colors"
+            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-white/5 hover:text-white"
           >
             <Icon name="close" className="!text-xl" />
           </button>
         </div>
 
         {/* Partner Info */}
-        <div className="px-6 py-4 border-b border-white/5 flex items-center gap-4">
+        <div className="px-6 py-4 border-b border-zinc-800/60 flex items-center gap-4">
           <div className="w-11 h-11 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
             {partner.initials}
           </div>
@@ -224,7 +224,7 @@ export function WithdrawalDialog({
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {/* Profit actions — visible only when partner has remaining profit */}
           {showProfitActions && (
-            <div className="p-4 rounded-sm bg-surface-container-low border border-white/5 border-r-2 border-r-primary/60 space-y-3">
+            <div className="p-4 rounded-md bg-surface-container-low border border-zinc-800/60 border-r-2 border-r-primary/60 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
@@ -250,7 +250,7 @@ export function WithdrawalDialog({
                       type="button"
                       onClick={() => !busy && setConfirmCapitalize(false)}
                       disabled={busy}
-                      className="flex-1 px-3 py-2 rounded-sm border border-white/10 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50"
+                      className="flex-1 px-3 py-2 rounded-md border border-zinc-800/70 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50"
                     >
                       إلغاء
                     </button>
@@ -258,7 +258,7 @@ export function WithdrawalDialog({
                       type="button"
                       onClick={handleCapitalize}
                       disabled={busy}
-                      className="flex-1 px-3 py-2 rounded-sm bg-primary text-on-primary text-[10px] font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-70 flex items-center justify-center gap-1.5"
+                      className="flex-1 px-3 py-2 rounded-md bg-primary text-on-primary text-[10px] font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-70 flex items-center justify-center gap-1.5"
                     >
                       {capitalizing ? (
                         <>
@@ -280,7 +280,7 @@ export function WithdrawalDialog({
                     type="button"
                     onClick={fillProfitAmount}
                     disabled={busy}
-                    className="flex-1 px-3 py-2 rounded-sm border border-secondary/30 text-secondary text-[10px] font-bold uppercase tracking-widest hover:bg-secondary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    className="flex-1 px-3 py-2 rounded-md border border-secondary/30 text-secondary text-[10px] font-bold uppercase tracking-widest hover:bg-secondary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
                     title="تعبئة المبلغ بقيمة الأرباح المتبقية"
                   >
                     <Icon name="payments" className="!text-sm" />
@@ -290,7 +290,7 @@ export function WithdrawalDialog({
                     type="button"
                     onClick={() => !busy && setConfirmCapitalize(true)}
                     disabled={busy}
-                    className="flex-1 px-3 py-2 rounded-sm border border-primary/30 text-primary text-[10px] font-bold uppercase tracking-widest hover:bg-primary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    className="flex-1 px-3 py-2 rounded-md border border-primary/30 text-primary text-[10px] font-bold uppercase tracking-widest hover:bg-primary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
                     title="إضافة الأرباح إلى رأس المال الأساسي"
                   >
                     <Icon name="savings" className="!text-sm" />
@@ -333,10 +333,10 @@ export function WithdrawalDialog({
                 max={maxWithdrawable}
                 step="0.01"
                 disabled={submitting}
-                className={`w-full bg-surface-container-low border rounded-sm pr-8 pl-4 py-3 text-sm text-white font-mono placeholder:text-on-surface-variant/40 focus:ring-1 outline-none transition-all disabled:opacity-50 ${
+                className={`w-full bg-zinc-950/80 border rounded-md pr-8 pl-4 py-3 text-sm text-white font-mono placeholder:text-on-surface-variant/40 focus:ring-1 outline-none transition-all disabled:opacity-50 ${
                   isOverMax
                     ? "border-secondary/50 focus:ring-secondary focus:border-secondary/50"
-                    : "border-white/10 focus:ring-primary focus:border-primary/50"
+                    : "border-zinc-700/60 focus:ring-emerald-500/40 focus:border-emerald-500/50"
                 }`}
               />
             </div>
@@ -361,7 +361,7 @@ export function WithdrawalDialog({
                   style={{ width: `${percentage}%` }}
                 />
               </div>
-              <div className="rounded-sm border border-white/5 bg-surface-container-low/60 p-3 space-y-1.5 text-[10px]">
+              <div className="rounded-md border border-zinc-800/60 bg-zinc-950/60 p-3 space-y-1.5 text-[10px]">
                 {profitPortion > 0 && (
                   <div className="flex justify-between">
                     <span className="text-on-surface-variant">
@@ -402,7 +402,7 @@ export function WithdrawalDialog({
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between pt-1.5 border-t border-white/5">
+                <div className="flex justify-between pt-1.5 border-t border-zinc-800/60">
                   <span className="text-on-surface-variant/80">
                     الاستثمار بعد السحب (New Investment)
                   </span>
@@ -426,7 +426,7 @@ export function WithdrawalDialog({
 
           {/* Error */}
           {error && (
-            <div className="p-3 bg-secondary/10 border border-secondary/20 rounded-sm text-xs text-secondary flex items-center gap-2">
+            <div className="p-3 bg-secondary/10 border border-secondary/20 rounded-md text-xs text-secondary flex items-center gap-2">
               <Icon name="error" className="!text-base" />
               <span className="flex-1">{error}</span>
             </div>
@@ -438,14 +438,14 @@ export function WithdrawalDialog({
               type="button"
               onClick={() => !submitting && onClose()}
               disabled={submitting}
-              className="flex-1 px-4 py-2.5 rounded-sm border border-white/10 text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-md border border-zinc-800/70 text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
               disabled={submitting || isOverMax}
-              className="flex-1 px-4 py-2.5 rounded-sm bg-secondary text-white text-xs font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 rounded-md bg-secondary text-white text-xs font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>

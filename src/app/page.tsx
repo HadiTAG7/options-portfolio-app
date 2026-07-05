@@ -843,7 +843,7 @@ function ProfitDistribution({
                               {p.name}
                             </span>
                             {dist.isManager && (
-                              <span className="inline-flex items-center rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-[1px] text-[8px] font-black uppercase tracking-[0.18em] text-amber-300">
+                              <span className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-[1px] text-[8px] font-black uppercase tracking-[0.18em] text-amber-300">
                                 GP
                               </span>
                             )}
