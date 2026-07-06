@@ -279,6 +279,19 @@ export default function SettingsPage() {
           </SettingsCard>
         )}
 
+        {/* ═══════ Partner Accounts ═══════
+            One-click auth-account creation + linking for each partner.
+            Talks to /api/admin/partner-accounts, which only exists on
+            the web deployment — the APK build shows a pointer note
+            instead (same pattern as Monthly Reports above). */}
+        <SettingsCard
+          icon={<Shield size={14} className="text-emerald-300" />}
+          title="Partner Accounts"
+          subtitle="حسابات الشركاء"
+        >
+          <PartnerAccountsPanel />
+        </SettingsCard>
+
         {/* ═══════ Maintenance ═══════ */}
         <SettingsCard
           icon={<Wrench size={14} className="text-amber-300" />}
@@ -767,4 +780,269 @@ function ToggleSwitch({
 
 function Divider() {
   return <div className="border-t border-zinc-800/40" />;
+}
+
+// ── Partner Accounts panel ─────────────────────────────────────────
+// Lists every active partner with their auth-link status and offers
+// one-click create/link (or password reset) through the GP-only
+// /api/admin/partner-accounts route. Rollout order (shown in the
+// panel): create accounts here (the GP's own first — bootstrap mode
+// allows it before any account exists), run migration 013, rebuild
+// with NEXT_PUBLIC_AUTH_ENFORCED=1.
+
+interface AccountRow {
+  id: string;
+  name: string;
+  email: string | null;
+  isAdmin: boolean;
+  authUserId: string | null;
+}
+
+function generatePassword(): string {
+  // 14 chars from a no-lookalike alphabet — shown once, GP copies it.
+  const alphabet =
+    "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#$%";
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
+function PartnerAccountsPanel() {
+  const isMobileBuild = process.env.NEXT_PUBLIC_PLATFORM === "mobile";
+  const [rows, setRows] = useState<AccountRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Per-partner form state
+  const [emails, setEmails] = useState<Record<string, string>>({});
+  const [passwords, setPasswords] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rowMsg, setRowMsg] = useState<
+    Record<string, { ok: boolean; text: string }>
+  >({});
+
+  async function loadRows() {
+    setLoading(true);
+    setLoadError(null);
+    const { data, error } = await supabase
+      .from("partners")
+      .select("id, name, email, isAdmin, auth_user_id")
+      .is("archived_at", null)
+      .order("isAdmin", { ascending: false });
+    if (error) {
+      setLoadError(error.message);
+      setRows([]);
+    } else {
+      const mapped: AccountRow[] = (data ?? []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        email: r.email ?? null,
+        isAdmin: r.isAdmin ?? false,
+        authUserId:
+          (r as { auth_user_id?: string | null }).auth_user_id ?? null,
+      }));
+      setRows(mapped);
+      setEmails((prev) => {
+        const next = { ...prev };
+        for (const p of mapped) {
+          if (next[p.id] === undefined) next[p.id] = p.email ?? "";
+        }
+        return next;
+      });
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    // Deferred a tick — loadRows flips loading synchronously, which
+    // react-hooks/set-state-in-effect forbids directly in the body.
+    const t = setTimeout(() => void loadRows(), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  async function callApi(partner: AccountRow, action: "create" | "reset-password") {
+    setBusyId(partner.id);
+    setRowMsg((m) => ({ ...m, [partner.id]: { ok: true, text: "" } }));
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/admin/partner-accounts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action,
+          partnerId: partner.id,
+          email: emails[partner.id]?.trim(),
+          password: passwords[partner.id]?.trim(),
+        }),
+      });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        setRowMsg((m) => ({
+          ...m,
+          [partner.id]: { ok: false, text: json.error ?? "فشل الطلب" },
+        }));
+      } else {
+        setRowMsg((m) => ({
+          ...m,
+          [partner.id]: {
+            ok: true,
+            text:
+              action === "create"
+                ? "تم إنشاء الحساب وربطه ✓ — احفظ كلمة المرور الآن"
+                : "تم تحديث كلمة المرور ✓",
+          },
+        }));
+        await loadRows();
+      }
+    } catch {
+      setRowMsg((m) => ({
+        ...m,
+        [partner.id]: {
+          ok: false,
+          text: "تعذر الاتصال بالخادم — هذه الميزة تعمل من نسخة الويب فقط",
+        },
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (isMobileBuild) {
+    return (
+      <p className="text-xs leading-relaxed text-zinc-500">
+        إدارة حسابات الشركاء متاحة من <span className="text-zinc-300">نسخة الويب</span> فقط
+        (تتطلب خادماً بمفتاح service role).
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3 text-[11px] leading-relaxed text-zinc-400">
+        ترتيب التفعيل: <span className="text-zinc-200">١)</span> أنشئ الحسابات من هنا —
+        <span className="text-emerald-300"> حسابك (المدير) أولاً</span>،{" "}
+        <span className="text-zinc-200">٢)</span> شغّل{" "}
+        <span className="font-mono text-[10px]">migration 013</span> في Supabase،{" "}
+        <span className="text-zinc-200">٣)</span> أعد البناء بـ{" "}
+        <span className="font-mono text-[10px]">NEXT_PUBLIC_AUTH_ENFORCED=1</span>.
+      </div>
+
+      {loadError && (
+        <p className="rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+          {loadError}
+        </p>
+      )}
+      {loading && (
+        <p className="text-xs text-zinc-500">جاري تحميل الشركاء...</p>
+      )}
+
+      <div className="space-y-3">
+        {rows.map((p) => {
+          const linked = !!p.authUserId;
+          const msg = rowMsg[p.id];
+          const busy = busyId === p.id;
+          return (
+            <div
+              key={p.id}
+              className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">
+                    {p.name}
+                  </span>
+                  {p.isAdmin && (
+                    <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-amber-300">
+                      GP
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-[2px] text-[9px] font-bold uppercase tracking-widest ${
+                    linked
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-zinc-700/60 bg-zinc-900/60 text-zinc-500"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      linked ? "bg-emerald-400" : "bg-zinc-600"
+                    }`}
+                  />
+                  {linked ? "مرتبط" : "غير مرتبط"}
+                </span>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <input
+                  type="email"
+                  dir="ltr"
+                  placeholder="email@example.com"
+                  value={emails[p.id] ?? ""}
+                  onChange={(e) =>
+                    setEmails((m) => ({ ...m, [p.id]: e.target.value }))
+                  }
+                  disabled={busy || (linked && false)}
+                  className="w-full rounded-md border border-zinc-700/60 bg-zinc-950/80 px-3 py-2 text-left font-mono text-xs text-white outline-none placeholder:text-zinc-600 focus:border-emerald-500/50 disabled:opacity-50"
+                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    dir="ltr"
+                    placeholder="كلمة المرور"
+                    value={passwords[p.id] ?? ""}
+                    onChange={(e) =>
+                      setPasswords((m) => ({ ...m, [p.id]: e.target.value }))
+                    }
+                    disabled={busy}
+                    className="w-full rounded-md border border-zinc-700/60 bg-zinc-950/80 px-3 py-2 text-left font-mono text-xs text-white outline-none placeholder:text-zinc-600 focus:border-emerald-500/50 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPasswords((m) => ({ ...m, [p.id]: generatePassword() }))
+                    }
+                    disabled={busy}
+                    title="توليد كلمة مرور قوية"
+                    className="shrink-0 rounded-md border border-zinc-800/70 px-2.5 text-[10px] font-bold text-zinc-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
+                  >
+                    توليد
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => callApi(p, linked ? "reset-password" : "create")}
+                  disabled={busy}
+                  className={`rounded-md px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-60 ${
+                    linked
+                      ? "border border-cyan-400/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+                      : "bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+                  }`}
+                >
+                  {busy
+                    ? "جاري..."
+                    : linked
+                      ? "إعادة تعيين كلمة المرور"
+                      : "إنشاء وربط"}
+                </button>
+              </div>
+
+              {msg?.text && (
+                <p
+                  className={`mt-2 text-[11px] ${
+                    msg.ok ? "text-emerald-300" : "text-rose-300"
+                  }`}
+                >
+                  {msg.text}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

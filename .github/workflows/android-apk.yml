@@ -51,6 +51,11 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Repository Variable (Settings → Secrets and variables →
+          # Actions → Variables). Set AUTH_ENFORCED=1 after the partner
+          # accounts exist and migration 013 has run — the APK then
+          # requires sign-in. Unset/empty = auth guard dormant.
+          NEXT_PUBLIC_AUTH_ENFORCED: ${{ vars.AUTH_ENFORCED }}
         run: npm run build:mobile
 
       # cap add is idempotent on already-initialised projects but errors

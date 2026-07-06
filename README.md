@@ -92,12 +92,9 @@ Before distributing the APK beyond trusted devices, move to Supabase Auth with o
 
 The code for authenticated access ships dormant. Activation order matters — flipping the switch early locks everyone out:
 
-1. **Deploy** the current code. Nothing changes yet (`NEXT_PUBLIC_AUTH_ENFORCED` unset → app behaves as before; `/login` exists but is not required).
-2. **Create accounts**: Supabase Dashboard → Authentication → Users → *Add user* — one per partner (email + password). Email confirmation can be disabled for manual provisioning.
-3. **Link accounts to partners** in the SQL editor (template in `supabase/migrations/013_auth_and_rls.sql`):
-   ```sql
-   update public.partners set auth_user_id = '<auth user id>' where id = '<partner id>';
-   ```
-4. **Run `supabase/migrations/013_auth_and_rls.sql`** — replaces the permissive anon policies: authenticated partners read everything (`transactions`: own rows only), **only the GP writes**, anon reads nothing.
-5. **Rebuild & redeploy** web + APK with env `NEXT_PUBLIC_AUTH_ENFORCED=1` (add it to the GitHub Actions build env and your web host). The app now requires sign-in; the GP gets the full terminal, each LP lands on their own details page only.
-6. **Set `SUPABASE_SERVICE_ROLE_KEY`** in the server env (web host only — never in the APK/client) so `/api/reports/send-monthly` can still read data, and **rotate the anon key**.
+1. **Set `SUPABASE_SERVICE_ROLE_KEY`** in the web host's env (Supabase → Project Settings → API → service_role; never `NEXT_PUBLIC_`, never in the APK) and **deploy**. Nothing changes yet (`NEXT_PUBLIC_AUTH_ENFORCED` unset → app behaves as before; `/login` exists but is not required).
+2. **Create accounts from the app**: Settings → **حسابات الشركاء** — one row per partner with a status badge. Enter an email, generate a password, click **إنشاء وربط**. Create the **GP's own account first** (a bootstrap rule allows exactly that before any account exists); every later action requires the GP to be signed in. Save each generated password — it is shown once.
+   *(Fallback: manual Dashboard + linking SQL, documented in `supabase/migrations/013_auth_and_rls.sql`.)*
+3. **Run `supabase/migrations/013_auth_and_rls.sql`** — replaces the permissive anon policies: authenticated partners read everything (`transactions`: own rows only), **only the GP writes**, anon reads nothing.
+4. **Rebuild & redeploy** web with env `NEXT_PUBLIC_AUTH_ENFORCED=1`. For the APK: add a GitHub **Repository Variable** named `AUTH_ENFORCED` with value `1`, rerun the Android APK workflow, and distribute the new build. The app now requires sign-in; the GP gets the full terminal, each LP lands on their own details page (their stake, positions, and account statement).
+5. **Rotate the anon key** after confirming everything works.

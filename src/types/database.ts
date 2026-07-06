@@ -67,6 +67,7 @@ export interface Database {
           last_settlement_date?: string | null;
           archived_at?: string | null;
           email?: string | null;
+          auth_user_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];

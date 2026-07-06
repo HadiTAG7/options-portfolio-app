@@ -11,6 +11,8 @@ import {
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
+import { useTransactions } from "@/hooks/use-transactions";
+import { TransactionList } from "@/components/ui/transaction-list";
 
 // Format "$120 | 15 Nov" from a strike and an ISO-ish expiry string.
 function formatExpiry(expiry: string): string {
@@ -51,6 +53,11 @@ function PartnerDetailInner() {
   const partner = useMemo(
     () => partners.find((p) => p.id === partnerId),
     [partners, partnerId]
+  );
+
+  // The partner's journal for the statement section below.
+  const { transactions, loading: txLoading } = useTransactions(
+    partnerId || null
   );
 
   // Single source of truth: the same trade-based distribution engine
@@ -626,6 +633,27 @@ function PartnerDetailInner() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Account Statement — the partner's own journal (deposits,
+            withdrawals, capitalizations, fees). This page is the LP's
+            landing view, so the statement must live here; the RLS
+            policy (migration 013) already limits transactions reads to
+            the partner's own rows. */}
+        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
+            <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
+              سجل الحركات · Account Statement
+            </h2>
+          </div>
+          <div className="p-6">
+            <TransactionList
+              transactions={transactions}
+              loading={txLoading}
+              exportFilename={`statement-${partner.code || partner.name}.csv`}
+              maxHeightClass="max-h-[420px]"
+            />
           </div>
         </div>
       </div>
