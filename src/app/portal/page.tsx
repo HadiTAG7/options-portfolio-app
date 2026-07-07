@@ -54,7 +54,7 @@ async function authHeader(): Promise<Record<string, string>> {
 
 function monthLabel(key: string): string {
   const [y, m] = key.split("-");
-  return new Date(Number(y), Number(m) - 1).toLocaleString("ar-SA", {
+  return new Date(Number(y), Number(m) - 1).toLocaleString("en-US", {
     month: "long",
     year: "numeric",
   });
@@ -202,15 +202,12 @@ function PortalContent() {
               </p>
             </div>
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Summary cards (ownership % intentionally omitted — it would let
+                an investor derive the fund's total AUM from their balance) */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <SummaryCard
                 label="الرصيد الحالي"
                 value={formatCurrency(summary.currentBalance)}
-              />
-              <SummaryCard
-                label="نسبة الملكية"
-                value={formatPercent(report.partner.ownershipPct)}
               />
               <SummaryCard
                 label={`صافي ربح ${report.periodLabel}`}
@@ -332,7 +329,7 @@ function PortalContent() {
                       return (
                         <tr key={i} className="border-t border-[#161616]">
                           <td className="px-4 py-2.5 font-mono text-zinc-400">
-                            {t.date}
+                            {t.date?.slice(0, 10)}
                           </td>
                           <td className="px-4 py-2.5">
                             <span

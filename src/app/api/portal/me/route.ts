@@ -75,6 +75,9 @@ export async function GET(request: NextRequest) {
       explicitMonth ?? latestMonthWithData(trades) ?? currentMonthKey();
 
     const report = computeInvestorReport(me, partners, trades, month);
+    // Do NOT expose ownership % to investors — combined with their own balance
+    // it reveals the fund's total AUM. Strip it from the client payload.
+    report.partner.ownershipPct = 0;
     const allTimeNet = computeAllTimeNet(me, partners, trades);
 
     const { data: txRows, error: txErr } = await supabase
