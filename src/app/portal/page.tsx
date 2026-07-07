@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Download, LogOut, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { PortalGuard } from "@/components/auth/portal-guard";
+import { ChangePasswordButton } from "@/components/auth/change-password-button";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
 interface PortalPosition {
@@ -141,13 +142,16 @@ function PortalContent() {
               {report ? `مرحباً ${report.partner.name}` : "بوابة المستثمر"}
             </p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-2 rounded-md border border-[#1f1f1f] px-3 py-2 text-[12px] text-zinc-400 transition-all hover:border-rose-500/40 hover:text-rose-300"
-          >
-            <LogOut size={14} />
-            خروج
-          </button>
+          <div className="flex items-center gap-2">
+            <ChangePasswordButton />
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-2 rounded-md border border-[#1f1f1f] px-3 py-2 text-[12px] text-zinc-400 transition-all hover:border-rose-500/40 hover:text-rose-300"
+            >
+              <LogOut size={14} />
+              خروج
+            </button>
+          </div>
         </div>
 
         {/* Month selector */}

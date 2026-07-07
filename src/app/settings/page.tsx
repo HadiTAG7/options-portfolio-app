@@ -23,6 +23,7 @@ import { useSettings } from "@/hooks/use-settings";
 import type { FundSettings } from "@/hooks/use-settings";
 import { usePartners } from "@/hooks/use-partners";
 import { supabase } from "@/lib/supabase";
+import { ChangePasswordButton } from "@/components/auth/change-password-button";
 import { Wrench } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -81,12 +82,15 @@ export default function SettingsPage() {
               <span className="text-zinc-400 font-light">الإعدادات</span>
             </h1>
           </div>
-          {saved && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 animate-in fade-in duration-200">
-              <Check size={12} />
-              Saved
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {saved && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 animate-in fade-in duration-200">
+                <Check size={12} />
+                Saved
+              </span>
+            )}
+            <ChangePasswordButton />
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-2">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
