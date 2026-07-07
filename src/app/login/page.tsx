@@ -8,19 +8,21 @@ import { useAuth } from "@/hooks/use-auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, role } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Already signed in → bounce to the dashboard.
+  // Already signed in → route by role: admins to the dashboard, investors to
+  // their portal. This also handles the post-login redirect: signInWithPassword
+  // updates the session, which re-runs this effect.
   useEffect(() => {
     if (!authLoading && session) {
-      router.replace("/");
+      router.replace(role === "admin" ? "/" : "/portal");
     }
-  }, [authLoading, session, router]);
+  }, [authLoading, session, role, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,7 +37,8 @@ export default function LoginPage() {
         setError("بيانات الدخول غير صحيحة. تحقق من البريد وكلمة المرور.");
         return;
       }
-      router.replace("/");
+      // The auth-state change updates `session`, and the effect above
+      // redirects by role (admin → /, investor → /portal).
     } catch {
       setError("تعذّر الاتصال بالخادم. حاول مرة أخرى.");
     } finally {

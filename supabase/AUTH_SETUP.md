@@ -49,11 +49,58 @@ data (because you are not yet authenticated). So:
 Re-running migration 008 + 009 restores the previous `anon, authenticated`
 policies. Nothing in 015 deletes data, so a rollback only widens access again.
 
+---
+
+## Investor portal (investors log into their own account)
+
+Investors can now log in and see a **read-only** view of their own account:
+account summary (balance, ownership %, monthly net profit, return), their
+share of each position, their transaction history, and a download of their
+monthly PDF report. They can see **only their own data** — never another
+partner's.
+
+### How it works
+
+- **Roles.** An auth user is an **admin (GP)** only if their JWT carries
+  `app_metadata.role = 'admin'`; everyone else with a login is an **investor**.
+  Migration `016_role_based_rls.sql` makes RLS admin-only for direct table
+  access, so an investor's session can touch **no** table directly.
+- **Linking.** An investor is matched to their `partners` row by **email**
+  (`auth email == partners.email`, case-insensitive).
+- **Data path.** The portal reads through server routes
+  (`/api/portal/me`, `/api/portal/report`) that use the **service-role key**
+  to compute the investor's ownership/profit from all partners on the server,
+  then return only that investor's slice. The raw partner list never reaches
+  the investor's browser.
+- **Routing.** After login, admins land on `/` (dashboard), investors on
+  `/portal`. Each area redirects the other role away.
+
+### Setup steps
+
+1. **Add the service-role key.** Set `SUPABASE_SERVICE_ROLE_KEY` (server-only,
+   **not** `NEXT_PUBLIC_`) from Supabase → Settings → API → `service_role`.
+   The portal routes return HTTP 500 until this is set.
+2. **Mark admins.** For every GP/admin auth user, set App Metadata
+   `{ "role": "admin" }` (Authentication → Users → user → App Metadata).
+3. **Create investor logins.** For each investor, add a Supabase auth user
+   whose email **exactly matches** that partner's `email` column. (Set the
+   partner's email first via the admin app's Edit Partner dialog if missing.)
+4. **Run migration `016`** (after steps 1–2). Order matters: if you run 016
+   before marking admins, admins lose access until you set the role.
+5. Verify: log in as an admin → dashboard with full data; log in as an
+   investor → `/portal` showing only their own numbers; confirm an investor
+   cannot read another partner via the REST API (RLS denies non-admin).
+
+> Migrations 015 and 016 both change the same policies. 016 supersedes 015 and
+> is self-contained, so on a fresh setup you can run 016 directly; if you
+> already ran 015, just run 016 next.
+
 ## Recommended follow-up (not done here)
 
-- Add a **server-only `SUPABASE_SERVICE_ROLE_KEY`** (never `NEXT_PUBLIC_`) and
-  move server routes to it, so trusted server code has its own credential.
-- Consider per-role policies if you later add non-admin users.
+- Consider per-investor RLS `SELECT` policies (keyed to `auth.email()`) if you
+  ever want investors to read their own row directly instead of only via the
+  portal routes.
+- Rate-limit the auth and portal routes.
 
 ---
 

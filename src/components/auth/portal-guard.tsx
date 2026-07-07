@@ -4,13 +4,9 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 
-// Client-side gate for the ADMIN app shell. Unauthenticated → /login;
-// authenticated investors → /portal (they don't belong in the admin UI).
-// NOTE: this is a UX convenience, not the security boundary — Row Level
-// Security (migrations 015/016) is what actually restricts data: only
-// admin-role JWTs can touch the tables, and investors read their own data
-// through the service-role portal routes.
-export function AuthGuard({ children }: { children: React.ReactNode }) {
+// Gate for the investor portal. Unauthenticated → /login; admins → the admin
+// dashboard (they don't use the investor view). Investors are allowed through.
+export function PortalGuard({ children }: { children: React.ReactNode }) {
   const { session, loading, role } = useAuth();
   const router = useRouter();
 
@@ -18,8 +14,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (loading) return;
     if (!session) {
       router.replace("/login");
-    } else if (role !== "admin") {
-      router.replace("/portal");
+    } else if (role === "admin") {
+      router.replace("/");
     }
   }, [loading, session, role, router]);
 
@@ -36,8 +32,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // While a redirect is in flight, render nothing.
-  if (!session || role !== "admin") return null;
+  if (!session || role === "admin") return null;
 
   return <>{children}</>;
 }
