@@ -64,11 +64,11 @@ export function ChangePasswordButton({
         title="تغيير كلمة المرور"
         className={
           className ??
-          "flex items-center gap-2 rounded-md border border-[#1f1f1f] px-3 py-2 text-[12px] text-zinc-400 transition-all hover:border-emerald-500/40 hover:text-emerald-300"
+          "flex min-h-[44px] items-center gap-2 rounded-md border border-[#1f1f1f] px-3 py-2 text-[12px] text-zinc-400 transition-all hover:border-emerald-500/40 hover:text-emerald-300"
         }
       >
         <KeyRound size={14} />
-        تغيير كلمة المرور
+        <span className="hidden sm:inline">تغيير كلمة المرور</span>
       </button>
 
       {open && (
@@ -86,7 +86,7 @@ export function ChangePasswordButton({
               </h3>
               <button
                 onClick={() => setOpen(false)}
-                className="text-zinc-500 hover:text-zinc-300"
+                className="-m-1 p-1 text-zinc-500 hover:text-zinc-300"
                 aria-label="إغلاق"
               >
                 <X size={16} />

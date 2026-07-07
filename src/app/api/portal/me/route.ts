@@ -4,6 +4,8 @@ import {
   rowToPartner,
   rowToTrade,
   computeInvestorReport,
+  computeAllTimeNet,
+  latestMonthWithData,
   findPartnerByEmail,
 } from "@/lib/portal-data";
 
@@ -36,11 +38,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // A caller-supplied month wins; otherwise we resolve the default AFTER
+    // loading trades (to the latest month that actually has data), so the
+    // portal never opens on an empty current month.
     const monthParam = request.nextUrl.searchParams.get("month");
-    const month =
-      monthParam && /^\d{4}-\d{2}$/.test(monthParam)
-        ? monthParam
-        : currentMonthKey();
+    const explicitMonth =
+      monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : null;
 
     const supabase = serviceClient();
 
@@ -68,13 +71,20 @@ export async function GET(request: NextRequest) {
     if (tErr) throw new Error(`Failed to load trades: ${tErr.message}`);
     const trades = (tradeRows ?? []).map(rowToTrade);
 
-    const report = computeInvestorReport(me, partners, trades, month);
+    const month =
+      explicitMonth ?? latestMonthWithData(trades) ?? currentMonthKey();
 
-    const { data: txRows } = await supabase
+    const report = computeInvestorReport(me, partners, trades, month);
+    const allTimeNet = computeAllTimeNet(me, partners, trades);
+
+    const { data: txRows, error: txErr } = await supabase
       .from("transactions")
       .select("amount, type, date")
       .eq("investorId", me.id)
       .order("date", { ascending: false });
+    if (txErr) {
+      console.error("[portal/me] transactions query failed:", txErr.message);
+    }
     const transactions = (txRows ?? []).map((t) => ({
       amount: Number(t.amount) || 0,
       type: t.type,
@@ -84,6 +94,7 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       report,
+      allTimeNet,
       transactions,
       months: recentMonths(12),
     });

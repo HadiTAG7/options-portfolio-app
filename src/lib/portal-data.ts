@@ -132,6 +132,30 @@ export function computeInvestorReport(
   };
 }
 
+// The investor's all-time net-profit share across EVERY trade (not month
+// scoped), using the same ownership/fee split as the monthly view. Gives the
+// portal a meaningful headline number even when the current month has no
+// trades. `partners` must be the full non-archived list.
+export function computeAllTimeNet(
+  partner: Partner,
+  partners: Partner[],
+  trades: Trade[]
+): number {
+  const totalProfit = trades.reduce((sum, t) => sum + tradeProfit(t), 0);
+  const distribution = computePortfolioDistribution(partners, totalProfit);
+  return distribution[partner.id]?.netProfit ?? 0;
+}
+
+// The most recent YYYY-MM month that actually has trade activity, or null if
+// there are none. Used so the portal opens on a month with data instead of an
+// empty current month.
+export function latestMonthWithData(trades: Trade[]): string | null {
+  const buckets = computeMonthlyBuckets(trades);
+  const keys = Object.keys(buckets);
+  if (keys.length === 0) return null;
+  return keys.sort().at(-1) ?? null;
+}
+
 // Find the partner linked to an authenticated investor by email (the linking
 // strategy chosen for this app). Case-insensitive; ignores archived partners.
 export function findPartnerByEmail(

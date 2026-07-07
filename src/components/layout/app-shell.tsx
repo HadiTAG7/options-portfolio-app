@@ -20,13 +20,21 @@ export function AppShell({ children }: AppShellProps) {
 }
 
 function AppShellInner({ children }: AppShellProps) {
-  const { collapsed } = useSidebar();
+  const { collapsed, mobileOpen, closeMobile } = useSidebar();
   return (
     <>
       <Sidebar />
+      {/* Mobile backdrop — tap to close the drawer */}
+      {mobileOpen && (
+        <div
+          onClick={closeMobile}
+          aria-hidden="true"
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+        />
+      )}
       <main
-        className={`min-h-screen transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          collapsed ? "mr-16" : "mr-64"
+        className={`min-h-screen transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] mr-0 ${
+          collapsed ? "md:mr-16" : "md:mr-64"
         }`}
       >
         <TopBar />

@@ -40,6 +40,7 @@ interface PortalPayload {
   success: boolean;
   error?: string;
   report: PortalReport;
+  allTimeNet: number;
   transactions: PortalTransaction[];
   months: string[];
 }
@@ -128,12 +129,13 @@ function PortalContent() {
   const report = data?.report;
   const summary = report?.partnerSummary;
   const positive = (summary?.netProfit ?? 0) >= 0;
+  const allTimeNet = data?.allTimeNet ?? 0;
 
   return (
     <div className="min-h-screen bg-background px-4 pb-16 pt-8">
       <div className="mx-auto max-w-4xl">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-headline text-base font-black uppercase tracking-[0.16em] text-emerald-400">
               AlGhanim Options Desk
@@ -142,11 +144,11 @@ function PortalContent() {
               {report ? `مرحباً ${report.partner.name}` : "بوابة المستثمر"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ChangePasswordButton />
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 rounded-md border border-[#1f1f1f] px-3 py-2 text-[12px] text-zinc-400 transition-all hover:border-rose-500/40 hover:text-rose-300"
+              className="flex min-h-[44px] items-center gap-2 rounded-md border border-[#1f1f1f] px-3 py-2 text-[12px] text-zinc-400 transition-all hover:border-rose-500/40 hover:text-rose-300"
             >
               <LogOut size={14} />
               خروج
@@ -161,7 +163,7 @@ function PortalContent() {
             <select
               value={month ?? ""}
               onChange={(e) => load(e.target.value)}
-              className="rounded-md border border-[#1f1f1f] bg-black/50 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-emerald-500/40"
+              className="min-h-[44px] rounded-md border border-[#1f1f1f] bg-black/50 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500/40"
             >
               {data.months.map((m) => (
                 <option key={m} value={m}>
@@ -186,6 +188,20 @@ function PortalContent() {
 
         {!loading && !error && report && summary && (
           <>
+            {/* All-time headline (always meaningful, not month-scoped) */}
+            <div className="mb-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
+              <p className="text-[11px] text-zinc-400">
+                صافي أرباحك التراكمية (كل الفترات)
+              </p>
+              <p
+                className={`mt-1 font-mono text-2xl font-bold tabular-nums ${
+                  allTimeNet >= 0 ? "text-emerald-400" : "text-rose-400"
+                }`}
+              >
+                {formatCurrency(allTimeNet)}
+              </p>
+            </div>
+
             {/* Summary cards */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryCard

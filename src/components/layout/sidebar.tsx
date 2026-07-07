@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { collapsed, toggle } = useSidebar();
+  const { collapsed, toggle, mobileOpen, closeMobile } = useSidebar();
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -44,8 +44,13 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex flex-col h-screen fixed right-0 top-0 z-50 bg-[#050505]/95 backdrop-blur-xl antialiased text-sm font-medium",
-        "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-        collapsed ? "w-16" : "w-64"
+        "transition-[width,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        // Mobile: full-width drawer, hidden off-canvas until opened.
+        "w-64",
+        mobileOpen ? "translate-x-0" : "translate-x-full",
+        // Desktop: always on-screen; width follows the collapse toggle.
+        "md:translate-x-0",
+        collapsed ? "md:w-16" : "md:w-64"
       )}
       style={{ borderLeft: "1px solid #1f1f1f" }}
     >
@@ -58,7 +63,7 @@ export function Sidebar() {
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         title={collapsed ? "Expand" : "Collapse"}
         className={cn(
-          "group/toggle absolute top-7 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-[#1f1f1f] bg-[#0a0a0a] text-zinc-500 shadow-[0_0_0_4px_#050505]",
+          "group/toggle absolute top-7 z-20 hidden h-6 w-6 items-center justify-center rounded-full border border-[#1f1f1f] bg-[#0a0a0a] text-zinc-500 shadow-[0_0_0_4px_#050505] md:flex",
           "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#050505]",
           "active:scale-95",
           // Park it on the left edge of the sidebar. Because the aside is
@@ -116,6 +121,7 @@ export function Sidebar() {
 
       {/* ═════ Navigation ═════ */}
       <nav
+        onClick={closeMobile}
         className={cn(
           "relative flex-1 pt-5 space-y-0.5 transition-[padding] duration-300",
           collapsed ? "px-2" : "px-3"
@@ -138,6 +144,7 @@ export function Sidebar() {
 
       {/* ═════ Footer ═════ */}
       <div
+        onClick={closeMobile}
         className={cn(
           "relative space-y-1 border-t border-[#1f1f1f] transition-[padding] duration-300",
           collapsed ? "p-2" : "p-3"
