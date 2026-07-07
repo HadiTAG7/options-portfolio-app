@@ -25,30 +25,36 @@ create table if not exists public.partners (
 -- Index for fast lookups by code
 create index if not exists idx_partners_code on public.partners (code);
 
--- 2. Trades (Options & Stocks) Table
+-- 2. Trades (Options & Stock Sells) Table
 -- ============================================================
+-- IMPORTANT: These column names/types are exactly what the application
+-- reads and writes (see src/types/database.ts and src/hooks/use-trades.ts).
+-- An earlier revision of this file described a different "options desk"
+-- shape (symbol / trade_type / strike_price / expiration_date) that never
+-- matched the app and also broke the backfills in migrations 005 and 006.
+-- This definition is the source of truth. `"autoClosed"` is quoted so
+-- PostgREST exposes it in camelCase, matching migration 005 and the client.
 create table if not exists public.trades (
-  id               uuid primary key default gen_random_uuid(),
-  symbol           text    not null,                -- e.g. "NVDA", "AAPL 250C 10/24"
-  trade_type       text    not null
-                    check (trade_type in ('Sell Put', 'Covered Call', 'Buy Call', 'Buy Put')),
-  quantity         integer not null default 1,
-  premium          numeric not null default 0,      -- per-contract premium
-  strike_price     numeric not null default 0,
-  expiration_date  date    not null,
-  entry_date       date    not null default current_date,
-  unrealized_pnl   numeric not null default 0,
-  total_profit     numeric not null default 0,
-  return_percent   numeric not null default 0,
-  status           text    not null default 'open'
-                    check (status in ('open', 'closed', 'expired', 'assigned')),
-  created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now()
+  id            uuid    primary key default gen_random_uuid(),
+  ticker        text    not null,                     -- e.g. "NVDA"
+  type          text    not null
+                  check (type in ('Sell Put', 'Sell Call', 'Stock Sell')),
+  quantity      numeric not null default 0,           -- total shares (100, 200, ...)
+  premium       numeric not null default 0,           -- per-share premium for options
+  strike        numeric not null default 0,
+  result        numeric not null default 0,           -- locked-in P&L once closed
+  expiration    text    not null default '',          -- option expiry, '' for stock sells
+  date          date    not null default current_date,-- trade entry date
+  status        text    not null default 'open'
+                  check (status in ('open', 'closed')),
+  "autoClosed"  boolean not null default false,       -- set when auto-expired
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
 );
 
 -- Indexes for common queries
 create index if not exists idx_trades_status on public.trades (status);
-create index if not exists idx_trades_symbol on public.trades (symbol);
+create index if not exists idx_trades_ticker on public.trades (ticker);
 
 -- 3. Auto-update `updated_at` trigger
 -- ============================================================
@@ -101,26 +107,11 @@ create policy "Allow all access to trades"
   on public.trades for all
   using (true) with check (true);
 
--- 6. Seed Data (Initial Partners)
+-- 6. Seed Data
 -- ============================================================
-insert into public.partners (name, code, initials, total_balance, ownership_percentage, management_fee_rate, performance_24h, performance_trend, joined_at)
-values
-  ('أحمد الهواري',  'K-89204', 'AH', 4120000, 29.00, 1.25,  0.42, 'up',   '2023-01-15'),
-  ('سارة منصور',   'K-77312', 'SM', 2850500, 20.10, 1.50, -0.15, 'down', '2023-03-22'),
-  ('فهد الكواري',   'K-91283', 'FK', 1240000,  8.70, 1.10,  1.82, 'up',   '2023-06-10'),
-  ('سالم العامري',  'K-44521', 'SA', 1780000, 12.50, 1.25,  2.40, 'up',   '2023-02-01'),
-  ('نورة الحربي',   'K-55192', 'NH', 2100000, 14.80, 1.30, -0.32, 'down', '2023-04-18'),
-  ('خالد المطيري',  'K-62847', 'KM', 2118450, 14.90, 1.25,  0.88, 'up',   '2023-05-30')
-on conflict (code) do nothing;
-
--- Recalculate after seed so percentages are exact
-select public.recalculate_ownership();
-
--- 7. Seed Data (Initial Trades)
--- ============================================================
-insert into public.trades (symbol, trade_type, quantity, premium, strike_price, expiration_date, entry_date, unrealized_pnl, total_profit, return_percent, status)
-values
-  ('NVDA',  'Sell Put',      12, 4.20, 890.00, '2024-06-21', '2024-05-01',  1240.50,  5040.00,  24.6, 'open'),
-  ('TSLA',  'Covered Call',   5, 2.15, 185.00, '2024-05-17', '2024-04-22',  -312.20, -1075.00, -12.4, 'open'),
-  ('AAPL',  'Sell Put',      25, 1.85, 170.00, '2024-07-19', '2024-05-05',   450.00,  4625.00,   9.8, 'open')
-on conflict do nothing;
+-- Demo/seed rows (initial partners and trades) have been MOVED to
+-- supabase/seed.sql so this bootstrap file stays pure, production-safe
+-- DDL. Running this schema will NOT insert any demo data.
+--
+-- To load demo data into a DEVELOPMENT project only, run supabase/seed.sql
+-- explicitly. Never run seed.sql against production.

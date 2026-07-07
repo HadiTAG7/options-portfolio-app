@@ -180,7 +180,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     // prior trade profits as "settled" — profit resets to $0.
     // totalDeposits / baseCapital shrink ONLY by capitalPortion (pure
     // profit payouts leave investment untouched).
-    const { error: updateError } = await supabase
+    const { data: updatedRow, error: updateError } = await supabase
       .from("partners")
       .update({
         "currentBalance": newCurrentBalance,
@@ -190,7 +190,9 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         "baseCapital": newBaseCapital,
         last_settlement_date: new Date().toISOString(),
       })
-      .eq("id", partner.id);
+      .eq("id", partner.id)
+      .select()
+      .single();
 
     if (updateError) {
       console.error("[handleWithdrawal] Partner update failed:", updateError);
@@ -208,6 +210,18 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       }
       set({ notification: { type: "error", message: userMsg } });
       throw updateError;
+    }
+
+    // Detect a silent no-op (0 rows updated — e.g. the partner was
+    // archived or removed between page load and this withdrawal). Deposit
+    // and capitalizeProfits already guard this way; without it the UI
+    // would report success and still insert a Withdrawal ledger row while
+    // the balance never actually changed — an accounting mismatch.
+    if (!updatedRow) {
+      const msg =
+        "لم يتم تحديث أي سجل. تحقق من صلاحيات RLS في Supabase أو أن الشريك موجود.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
     }
 
     // --- 1b. Update balanceHistory separately (tolerate missing column) ---

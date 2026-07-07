@@ -1,5 +1,9 @@
-// Auto-generated types matching the Supabase SQL schema.
-// Regenerate with: npx supabase gen types typescript --local > src/types/database.ts
+// Hand-maintained TypeScript contract for the Supabase schema.
+// These types are the source of truth the app relies on; keep them in
+// sync with supabase/schema.sql and supabase/migrations/*.sql by hand.
+// NOTE: this file is NOT produced by `supabase gen types` — the column
+// names here intentionally match the live database, so do not blindly
+// regenerate over it.
 
 export interface BalanceHistoryEntry {
   date: string;

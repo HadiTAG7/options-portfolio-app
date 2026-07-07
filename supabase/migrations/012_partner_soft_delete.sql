@@ -8,3 +8,7 @@ alter table public.partners
 create index if not exists partners_active_idx
   on public.partners (total_balance desc)
   where archived_at is null;
+
+-- Refresh PostgREST so the REST API exposes the new archived_at column
+-- immediately instead of erroring on a stale schema cache.
+notify pgrst, 'reload schema';
