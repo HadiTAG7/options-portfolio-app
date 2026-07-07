@@ -75,6 +75,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+    // --- Authorization: require a valid Supabase session -------------------
+    // The browser sends its access token as `Authorization: Bearer <jwt>`.
+    // Reject anyone without a valid session so this route can no longer be
+    // triggered anonymously (which would blast confidential PDFs to every
+    // partner and leak partner names/existence).
+    const authHeader = request.headers.get("authorization") ?? "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!token) {
+      return Response.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+    const authClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
+    const {
+      data: { user },
+      error: authError,
+    } = await authClient.auth.getUser(token);
+    if (authError || !user) {
+      return Response.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const gmailUser = process.env.GMAIL_USER;
     const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
     if (!gmailUser || !gmailAppPassword) {
@@ -93,10 +121,11 @@ export async function POST(request: NextRequest) {
       auth: { user: gmailUser, pass: gmailAppPassword },
     });
 
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // DB client scoped to the caller's session, so it reads under the
+    // authenticated role that migration 015's RLS policies allow.
+    const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
 
     // Fetch partners
     const { data: partnerRows, error: pError } = await supabase

@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo } from "react";
 import {
   Bell,
   Calendar,
   Globe,
+  LogOut,
   Search,
   Wallet,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 import { useSidebar } from "./sidebar-context";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartners } from "@/hooks/use-partners";
@@ -24,10 +26,16 @@ const NAV_TABS: { href: string; label: string }[] = [
 export function TopBar() {
   const { collapsed } = useSidebar();
   const pathname = usePathname();
+  const router = useRouter();
   const { activeStocks, sellPuts, totalProfit, loading: tradesLoading } = useTrades();
   const { partners, loading: partnersLoading } = usePartners();
 
   const loading = tradesLoading || partnersLoading;
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   const availableBalance = useMemo(() => {
     // Total Fund Equity = partner deposits + accumulated profit
@@ -129,6 +137,16 @@ export function TopBar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-black/60 text-[10px] font-black text-emerald-300 tracking-wide transition-all duration-200 hover:border-emerald-500/50 hover:shadow-[0_0_12px_-4px_rgba(16,185,129,0.5)]">
           HA
         </div>
+
+        {/* Sign out */}
+        <button
+          onClick={handleSignOut}
+          aria-label="تسجيل الخروج"
+          title="تسجيل الخروج"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition-all duration-200 hover:bg-rose-500/10 hover:text-rose-300"
+        >
+          <LogOut size={15} />
+        </button>
       </div>
     </header>
   );

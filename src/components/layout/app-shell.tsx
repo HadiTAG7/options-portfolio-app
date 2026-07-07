@@ -3,6 +3,7 @@
 import { Sidebar } from "./sidebar";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
 import { TopBar } from "./top-bar";
+import { AuthGuard } from "@/components/auth/auth-guard";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -10,9 +11,11 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <SidebarProvider>
-      <AppShellInner>{children}</AppShellInner>
-    </SidebarProvider>
+    <AuthGuard>
+      <SidebarProvider>
+        <AppShellInner>{children}</AppShellInner>
+      </SidebarProvider>
+    </AuthGuard>
   );
 }
 

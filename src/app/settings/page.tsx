@@ -356,9 +356,17 @@ function MonthlyReportSender() {
     setError(null);
 
     try {
+      // Forward the current session's access token so the server route can
+      // authorize the request (the route rejects unauthenticated callers).
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       const res = await fetch("/api/reports/send-monthly", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
         body: JSON.stringify({
           month: selectedMonth,
           partnerId: selectedPartnerId || undefined,
