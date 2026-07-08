@@ -14,6 +14,7 @@ import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { useTransactions } from "@/hooks/use-transactions";
 import { TransactionList } from "@/components/ui/transaction-list";
+import { CapitalChart } from "@/components/ui/capital-chart";
 
 // Format "$120 | 15 Nov" from a strike and an ISO-ish expiry string.
 function formatExpiry(expiry: string): string {
@@ -306,32 +307,6 @@ function PartnerDetailInner() {
   const pendingFee = dist?.feeAmount ?? 0;
   const monthlyLogTotal = monthlyLog.reduce((s, r) => s + r.net, 0);
 
-  // Line-chart geometry for the capital timeline (oldest→newest,
-  // left→right; SVG coords are LTR, matching the snapshot cards above).
-  // Returns null with fewer than 2 snapshots (nothing to connect).
-  const capitalChart = (() => {
-    const rows = [...capitalTimeline].reverse();
-    const n = rows.length;
-    if (n < 2) return null;
-    const W = 100;
-    const H = 40;
-    const PAD = 3;
-    const bals = rows.map((r) => r.balance);
-    const max = Math.max(...bals);
-    const min = Math.min(...bals);
-    const range = max - min || 1;
-    const pts = rows.map((r, i) => {
-      const x = PAD + (i / (n - 1)) * (W - 2 * PAD);
-      const y = PAD + (1 - (r.balance - min) / range) * (H - 2 * PAD);
-      return { x, y, balance: r.balance };
-    });
-    const line = pts
-      .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
-      .join(" ");
-    const area = `${line} L${pts[n - 1].x.toFixed(2)},${H} L${pts[0].x.toFixed(2)},${H} Z`;
-    return { pts, line, area, W, H };
-  })();
-
   const CAPS = "text-[11px] font-bold uppercase tracking-[0.12em]";
 
   return (
@@ -537,86 +512,16 @@ function PartnerDetailInner() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {capitalTimeline.slice(0, 4).map((row, i) => {
-                  const up = (row.delta ?? 0) >= 0;
-                  return (
-                    <div
-                      key={`${row.date}-${i}`}
-                      className="flex flex-col gap-2 rounded-xl border border-outline-variant p-4"
-                    >
-                      <span className={`${CAPS} text-on-surface-variant`}>
-                        {formatSnapshotDate(row.date)}
-                      </span>
-                      <span className="font-mono text-sm tabular-nums text-on-surface">
-                        {formatCurrency(row.balance)}
-                      </span>
-                      {row.delta === null ? (
-                        <span className="text-[11px] text-on-surface-variant/60">
-                          بداية التسجيل
-                        </span>
-                      ) : (
-                        <div
-                          className={`flex items-center gap-1 ${
-                            up ? "text-primary" : "text-error"
-                          }`}
-                        >
-                          <Icon
-                            name={up ? "trending_up" : "trending_down"}
-                            className="!text-sm"
-                          />
-                          <span className="font-mono text-xs tabular-nums">
-                            {up ? "+" : ""}
-                            {formatCurrency(row.delta)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {capitalChart && (
-                <svg
-                  viewBox={`0 0 ${capitalChart.W} ${capitalChart.H}`}
-                  preserveAspectRatio="none"
-                  className="mt-6 h-28 w-full overflow-visible"
-                  role="img"
-                  aria-label="مخطط خطي لتطور رأس المال"
-                >
-                  <defs>
-                    <linearGradient id="capFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="0%"
-                        style={{
-                          stopColor: "var(--color-primary)",
-                          stopOpacity: 0.22,
-                        }}
-                      />
-                      <stop
-                        offset="100%"
-                        style={{
-                          stopColor: "var(--color-primary)",
-                          stopOpacity: 0,
-                        }}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <path d={capitalChart.area} fill="url(#capFill)" />
-                  <path
-                    d={capitalChart.line}
-                    fill="none"
-                    strokeWidth={1.75}
-                    vectorEffect="non-scaling-stroke"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    style={{ stroke: "var(--color-primary)" }}
-                  />
-                </svg>
-              )}
-              <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant/70">
-                لقطات الرصيد عبر الزمن — التغيّر يعكس صافي الحركة في الفترة
-                (إيداع / سحب / تثبيت مجمّعة). الحركات المفصّلة في «كشف الحساب»
-                أدناه.
+              <CapitalChart
+                points={[...capitalTimeline].reverse().map((r) => ({
+                  label: formatSnapshotDate(r.date),
+                  value: r.balance,
+                }))}
+              />
+              <p className="mt-4 text-[11px] leading-relaxed text-on-surface-variant/70">
+                مرّر على الشارت لعرض الرصيد والتاريخ لكل لقطة. التغيّر يعكس صافي
+                الحركة في الفترة (إيداع / سحب / تثبيت مجمّعة). الحركات المفصّلة
+                في «كشف الحساب» أدناه.
               </p>
             </>
           )}
