@@ -178,6 +178,26 @@
   filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.35));
 }
 
+/* Glass card — translucent surface + blur + hover lift. Themeable via
+   the surface/outline/primary variables, so it works in dark AND light. */
+.glass-card {
+  background-color: color-mix(
+    in oklab,
+    var(--color-surface-container) 72%,
+    transparent
+  );
+  backdrop-filter: blur(12px);
+  border: 1px solid
+    color-mix(in oklab, var(--color-outline-variant) 60%, transparent);
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.glass-card:hover {
+  border-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
+  transform: translateY(-2px);
+  box-shadow: 0 0 26px -10px
+    color-mix(in oklab, var(--color-primary) 30%, transparent);
+}
+
 /* Custom scrollbar — slim, zinc thumb that warms toward emerald on
    hover. Firefox gets the equivalent via scrollbar-color. */
 * {

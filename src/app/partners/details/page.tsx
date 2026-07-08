@@ -301,616 +301,493 @@ function PartnerDetailInner() {
   }
 
   // Realized pending net from the distribution engine — the same
-  // number the Partners table shows in its NET column. The old code
-  // rendered partner.totalNetProfit / partner.managementFeesPaid,
-  // columns nothing in the app ever writes, so they read 0 forever.
+  // number the Partners table shows in its NET column.
   const pendingNet = dist?.netProfit ?? 0;
   const pendingFee = dist?.feeAmount ?? 0;
-  const netProfitTone = pendingNet >= 0 ? "text-primary" : "text-secondary";
   const monthlyLogTotal = monthlyLog.reduce((s, r) => s + r.net, 0);
 
+  // Bar-chart heights (30–100%) for the capital timeline, oldest→newest.
+  const barData = (() => {
+    const bals = [...capitalTimeline].reverse().map((r) => r.balance);
+    if (bals.length === 0) return [];
+    const max = Math.max(...bals);
+    const min = Math.min(...bals);
+    const range = max - min || 1;
+    return bals.map((b) => 30 + ((b - min) / range) * 70);
+  })();
+
+  const CAPS = "text-[11px] font-bold uppercase tracking-[0.12em]";
+
   return (
-    <>
+    <div className="mx-auto max-w-[1440px]">
       {/* Breadcrumb + Header */}
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label mb-2">
-            الشركاء / <span className="text-primary">{partner.name}</span>
-          </div>
-          <h1 className="text-4xl font-black font-headline tracking-tighter uppercase">
-            تفاصيل الشريك
-          </h1>
-          <p className="text-sm text-on-surface-variant mt-1">
-            عرض تفصيلي لمركزك في الصندوق
-          </p>
-          {partner.entryDate && (
-            <p className="text-[10px] text-on-surface-variant/70 mt-2 flex items-center gap-1.5">
-              <Icon name="event" className="!text-sm" />
-              تاريخ الانضمام:{" "}
-              <span className="font-mono text-on-surface">
-                {partner.entryDate}
-              </span>
+      <div className="mb-8">
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-on-surface-variant">
+          <span>{partner.name}</span>
+          <Icon name="chevron_left" className="!text-base" />
+          <span className="text-primary">حسابي</span>
+        </div>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="font-headline text-3xl font-bold text-on-surface">
+              حسابي في الصندوق
+            </h1>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              عرض تفصيلي لمركزك في الصندوق
             </p>
+          </div>
+          {partner.entryDate && (
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-outline-variant bg-surface-container-high px-4 py-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+              <span className={`${CAPS} text-on-surface`}>
+                تاريخ الانضمام: {partner.entryDate}
+              </span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Eligibility disclaimer */}
-      <div className="mb-6 flex items-start gap-3 p-4 rounded-xl bg-surface-container-low border border-zinc-800/60 border-r-2 border-r-tertiary/60">
-        <Icon name="info" className="text-tertiary !text-base mt-0.5" />
-        <div className="text-[11px] leading-relaxed text-on-surface-variant">
-          <span className="font-bold text-on-surface">ملاحظة مهمة: </span>
-          يتم احتساب أرباح الشريك فقط على الصفقات التي أُغلقت{" "}
-          <span className="font-bold text-on-surface">
-            بعد تاريخ انضمامه للصندوق
-          </span>
-          . الصفقات التي انتهت قبل ذلك التاريخ لا تُدرج في حصته — هذا لضمان
-          عدالة التوزيع بين جميع الشركاء.
+      {/* Eligibility note */}
+      <div className="mb-8 flex items-start gap-3 rounded-lg border-r-4 border-primary bg-primary/10 p-4">
+        <Icon name="info" className="text-primary !text-base mt-0.5" />
+        <p className="text-sm leading-relaxed text-on-surface">
+          يتم احتساب أرباحك فقط على الصفقات التي أُغلقت{" "}
+          <span className="font-bold">بعد تاريخ انضمامك للصندوق</span> — لضمان
+          عدالة التوزيع.
+        </p>
+      </div>
+
+      {/* Hero — bento */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Current balance (wide) */}
+        <div className="glass-card relative overflow-hidden rounded-2xl p-8 lg:col-span-2">
+          <div className="relative z-10">
+            <p className={`${CAPS} mb-2 text-on-surface-variant`}>
+              الرصيد الحالي
+            </p>
+            <h2 className="mb-4 font-mono text-4xl font-semibold tabular-nums text-on-surface">
+              {formatCurrency(partner.currentBalance)}
+            </h2>
+            <div className="flex items-center gap-5">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs text-on-surface-variant">
+                  صافي الربح المعلق · هذه الدورة
+                </p>
+                <span
+                  className={`font-mono text-sm font-bold tabular-nums ${
+                    pendingNet >= 0 ? "text-primary" : "text-error"
+                  }`}
+                >
+                  {pendingNet >= 0 ? "+" : ""}
+                  {formatCurrency(pendingNet)}
+                </span>
+              </div>
+              <div className="h-10 w-px bg-outline-variant" />
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs text-on-surface-variant">
+                  رأس المال الأساسي
+                </p>
+                <span className="font-mono text-sm tabular-nums text-on-surface">
+                  {formatCurrency(partner.baseCapital)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="pointer-events-none absolute bottom-0 left-0 p-6 opacity-10">
+            <Icon
+              name="account_balance_wallet"
+              className="!text-[120px] text-primary"
+            />
+          </div>
+        </div>
+
+        {/* Pending performance fee */}
+        <div className="glass-card rounded-2xl p-8 !border-amber-400/30">
+          <p className={`${CAPS} mb-2 text-on-surface-variant`}>
+            {isGP ? "رسوم الأداء المحصّلة" : "رسوم الأداء المعلقة"}
+          </p>
+          <h2 className="mb-5 font-mono text-4xl font-semibold tabular-nums text-amber-300">
+            {formatCurrency(pendingFee)}
+          </h2>
+          <div>
+            <div className="flex items-center justify-between border-b border-outline-variant/40 py-2.5">
+              <span className="text-xs text-on-surface-variant">
+                النسبة التقديرية
+              </span>
+              <span className="font-mono text-sm tabular-nums text-on-surface">
+                {feeRatePct.toFixed(0)}%
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-xs text-on-surface-variant">
+                طريقة الاحتساب
+              </span>
+              <span className="text-xs text-on-surface-variant">
+                {isGP
+                  ? "تُقيد لرأس مالك عند التسوية"
+                  : "تُخصم من الربح عند التسوية"}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Bento Grid */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Main Equity Card */}
-        <div className="col-span-12 lg:col-span-8 bg-surface-variant/60 backdrop-blur-xl p-8 rounded-xl border border-zinc-800/60 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-primary to-transparent" />
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-2">
-                إجمالي حقوق الملكية (النسبية)
-              </span>
-              <span className="text-5xl font-headline font-light tracking-tighter text-on-surface block font-mono">
-                {formatCurrency(partner.currentBalance)}
-              </span>
-            </div>
-            <div className="text-left">
-              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-2">
-                صافي الربح المعلق · هذه الدورة
+      {/* Monthly profit log + Capital timeline */}
+      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-4">
+        {/* Monthly profit log (narrow) */}
+        <div className="glass-card flex flex-col rounded-2xl p-6 xl:col-span-1">
+          <div className="mb-5 flex items-center justify-between">
+            <h3 className="font-headline text-xl font-bold text-on-surface">
+              سجل الأرباح
+            </h3>
+            <Icon name="calendar_month" className="text-on-surface-variant" />
+          </div>
+          {monthlyLog.length > 0 && (
+            <div className="mb-4 flex items-baseline justify-between rounded-xl bg-surface-container-low px-4 py-3">
+              <span className={`${CAPS} text-on-surface-variant`}>
+                إجمالي الصافي
               </span>
               <span
-                className={`text-3xl font-headline font-bold font-mono ${netProfitTone}`}
+                className={`font-mono text-lg font-bold tabular-nums ${
+                  monthlyLogTotal >= 0 ? "text-primary" : "text-error"
+                }`}
               >
-                {pendingNet >= 0 ? "+" : ""}
-                {formatCurrency(pendingNet)}
+                {monthlyLogTotal >= 0 ? "+" : ""}
+                {formatCurrency(monthlyLogTotal)}
               </span>
             </div>
-          </div>
-        </div>
-
-        {/* Side Cards */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-          {/* Pending performance fee (this cycle) */}
-          <div className="bg-surface-container p-6 rounded-xl border border-zinc-800/60 border-r-2 border-r-tertiary">
-            <div className="flex items-center gap-3 mb-3">
-              <Icon name="payments" className="text-tertiary" />
-              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-                {isGP
-                  ? "رسوم الأداء المحصّلة (معلقة)"
-                  : "رسوم الأداء المعلقة"}
-              </span>
+          )}
+          {monthlyLog.length === 0 ? (
+            <div className="py-12 text-center">
+              <Icon
+                name="event_busy"
+                className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+              />
+              <p className="text-sm text-on-surface-variant">
+                لا توجد أرباح مسجلة بعد
+              </p>
             </div>
-            <span className="text-2xl font-headline font-bold text-white block font-mono">
-              {formatCurrency(pendingFee)}
-            </span>
-            <span className="text-[10px] text-on-surface-variant mt-1 block">
-              {isGP
-                ? "تُقيد لرأس مالك عند تسوية كل شريك"
-                : `${feeRatePct.toFixed(0)}٪ من الربح المعلق — تُخصم عند التسوية`}
-            </span>
-          </div>
-
-          {/* Base Capital */}
-          <div className="bg-surface-container p-6 rounded-xl border border-zinc-800/60 border-r-2 border-r-primary-container">
-            <div className="flex items-center gap-3 mb-3">
-              <Icon name="account_balance" className="text-primary-container" />
-              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label">
-                رأس المال الأساسي
-              </span>
-            </div>
-            <span className="text-2xl font-headline font-bold text-white block font-mono">
-              {formatCurrency(partner.baseCapital)}
-            </span>
-            <span className="text-[10px] text-on-surface-variant mt-1 block">
-              قيمة رأس المال المُودع
-            </span>
-          </div>
-        </div>
-
-        {/* Monthly Profit Log — the partner's realized profit per month.
-            Settlement-blind + entry-date gated, so it's a permanent
-            record that survives تثبيت and reconciles with the GP ledger. */}
-        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
-            <div className="flex items-center gap-3">
-              <Icon name="calendar_month" className="text-primary" />
-              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-                سجل الأرباح الشهري
-              </h2>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary">
-                {monthlyLog.length} شهر
-              </span>
-            </div>
-            {monthlyLog.length > 0 && (
-              <div className="text-left">
-                <span className="text-[9px] uppercase tracking-widest text-on-surface-variant font-label block mb-0.5">
-                  إجمالي الصافي
-                </span>
-                <span
-                  className={`text-lg font-headline font-bold font-mono tabular-nums ${
-                    monthlyLogTotal >= 0 ? "text-primary" : "text-secondary"
-                  }`}
+          ) : (
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+              {monthlyLog.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex flex-col gap-1 rounded-xl bg-surface-container-low p-4 transition-colors hover:bg-surface-container-high"
                 >
-                  {monthlyLogTotal >= 0 ? "+" : ""}
-                  {formatCurrency(monthlyLogTotal)}
-                </span>
-              </div>
-            )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-on-surface">
+                      {row.label}
+                    </span>
+                    <span
+                      className={`font-mono text-sm font-bold tabular-nums ${
+                        row.net >= 0 ? "text-primary" : "text-error"
+                      }`}
+                    >
+                      {row.net >= 0 ? "+" : ""}
+                      {formatCurrency(row.net)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-on-surface-variant">
+                    <span>
+                      {isGP ? "إجمالي" : "قبل الرسوم"}: {formatCurrency(row.gross)}
+                    </span>
+                    <span>الرسوم: {formatCurrency(Math.abs(row.fee))}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Capital timeline (wide) */}
+        <div className="glass-card rounded-2xl p-6 xl:col-span-3">
+          <div className="mb-5 flex items-center justify-between">
+            <h3 className="font-headline text-xl font-bold text-on-surface">
+              الجدول الزمني لرأس المال
+            </h3>
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
+              {capitalTimeline.length} لقطة
+            </span>
           </div>
-          <div className="p-4">
-            {monthlyLog.length === 0 ? (
-              <div className="py-12 text-center">
-                <Icon
-                  name="event_busy"
-                  className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
-                />
-                <p className="text-sm text-on-surface-variant">
-                  لا توجد أرباح مسجلة بعد
-                </p>
-                <p className="text-[10px] text-on-surface-variant/60 mt-1">
-                  تظهر هنا أرباحك المحققة شهراً بشهر
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {monthlyLog.map((row) => {
-                  const positive = row.net >= 0;
+          {capitalTimeline.length === 0 ? (
+            <div className="py-12 text-center">
+              <Icon
+                name="timeline"
+                className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+              />
+              <p className="text-sm text-on-surface-variant">
+                لا توجد لقطات مسجّلة
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {capitalTimeline.slice(0, 4).map((row, i) => {
+                  const up = (row.delta ?? 0) >= 0;
                   return (
                     <div
-                      key={row.key}
-                      className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-surface-container-low px-4 py-3 transition-colors hover:border-primary/30 hover:bg-white/[0.02]"
+                      key={`${row.date}-${i}`}
+                      className="flex flex-col gap-2 rounded-xl border border-outline-variant p-4"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
-                          <Icon name="calendar_month" className="!text-base" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-white">
-                            {row.label}
-                          </span>
-                          <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">
-                            الربح الصافي
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span
-                          className={`text-base font-headline font-bold font-mono tabular-nums ${
-                            positive ? "text-primary" : "text-secondary"
+                      <span className={`${CAPS} text-on-surface-variant`}>
+                        {formatSnapshotDate(row.date)}
+                      </span>
+                      <span className="font-mono text-sm tabular-nums text-on-surface">
+                        {formatCurrency(row.balance)}
+                      </span>
+                      {row.delta === null ? (
+                        <span className="text-[11px] text-on-surface-variant/60">
+                          بداية التسجيل
+                        </span>
+                      ) : (
+                        <div
+                          className={`flex items-center gap-1 ${
+                            up ? "text-primary" : "text-error"
                           }`}
                         >
-                          {positive ? "+" : ""}
-                          {formatCurrency(row.net)}
-                        </span>
-                        <span className="text-[10px] text-on-surface-variant/70 font-mono tabular-nums">
-                          {isGP ? "إجمالي " : "قبل الرسوم "}
-                          {formatCurrency(row.gross)}
-                          {" · "}
-                          {isGP ? "رسوم +" : "رسوم −"}
-                          {formatCurrency(Math.abs(row.fee))}
-                        </span>
-                      </div>
+                          <Icon
+                            name={up ? "trending_up" : "trending_down"}
+                            className="!text-sm"
+                          />
+                          <span className="font-mono text-xs tabular-nums">
+                            {up ? "+" : ""}
+                            {formatCurrency(row.delta)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            )}
-          </div>
+              {barData.length > 1 && (
+                <div className="mt-6 flex h-28 w-full items-end gap-1.5">
+                  {barData.map((h, i) => (
+                    <div
+                      key={i}
+                      style={{ height: `${h}%` }}
+                      title={formatCurrency(
+                        [...capitalTimeline].reverse()[i]?.balance ?? 0
+                      )}
+                      className={`flex-1 rounded-t transition-all ${
+                        i === barData.length - 1
+                          ? "border-t-2 border-primary bg-primary/40"
+                          : "bg-primary/20 hover:bg-primary/40"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+              <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant/70">
+                لقطات الرصيد عبر الزمن — التغيّر يعكس صافي الحركة في الفترة
+                (إيداع / سحب / تثبيت مجمّعة). الحركات المفصّلة في «كشف الحساب»
+                أدناه.
+              </p>
+            </>
+          )}
         </div>
+      </div>
 
-        {/* Active Options Table — option-specific per-partner metrics */}
-        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-                عقود الخيارات النشطة
-              </h2>
-              <span className="rounded-full bg-tertiary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-tertiary">
-                {optionPositions.length} positions
-              </span>
-              {isGP && (
-                <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-300">
-                  GP · حصة إجمالية — الرسوم تُقيد عند تسوية الشركاء
-                </span>
-              )}
-              {!isGP && (
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
-                  LP · صافي بعد رسوم الأداء {feeRatePct.toFixed(0)}٪
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right">
-              <thead>
-                <tr className="text-[10px] text-on-surface-variant uppercase tracking-widest bg-surface-container-low">
-                  <th className="px-4 py-3 font-medium">الرمز</th>
-                  <th className="px-4 py-3 font-medium">النوع</th>
-                  <th className="px-4 py-3 font-medium">
-                    Strike · الانتهاء
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    الأسهم المعرضة
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    الكاش المحجوز
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    البريميوم · Entry
-                  </th>
-                  <th className="px-4 py-3 font-medium text-emerald-400/80">
-                    صافي بريميوم الشريك
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    ربح/خسارة غير محققة
-                  </th>
+      {/* Active options */}
+      <div className="glass-card mb-6 overflow-hidden rounded-2xl p-6">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <h3 className="font-headline text-xl font-bold text-on-surface">
+            العقود النشطة
+          </h3>
+          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-primary">
+            {optionPositions.length} عقد
+          </span>
+          {isGP ? (
+            <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-amber-300">
+              GP · حصة إجمالية
+            </span>
+          ) : (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-primary">
+              LP · صافي بعد الرسوم {feeRatePct.toFixed(0)}٪
+            </span>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right">
+            <thead>
+              <tr className={`${CAPS} border-b border-outline-variant text-on-surface-variant`}>
+                <th className="px-3 py-3 font-bold">الرمز</th>
+                <th className="px-3 py-3 font-bold">الاستراتيجية</th>
+                <th className="px-3 py-3 font-bold">التنفيذ · الانتهاء</th>
+                <th className="px-3 py-3 font-bold">الأسهم المعرضة</th>
+                <th className="px-3 py-3 font-bold">النقد المؤمّن</th>
+                <th className="px-3 py-3 font-bold">صافي البريميوم</th>
+                <th className="px-3 py-3 font-bold">ربح/خسارة غير محققة</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/30">
+              {optionPositions.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <Icon
+                      name="layers_clear"
+                      className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+                    />
+                    <p className="text-sm text-on-surface-variant">
+                      لا توجد عقود نشطة
+                    </p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {optionPositions.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center">
-                      <Icon
-                        name="layers_clear"
-                        className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
-                      />
-                      <p className="text-sm text-on-surface-variant">
-                        لا توجد عقود خيارات نشطة
-                      </p>
+              )}
+              {optionPositions.map((opt) => {
+                const pnlPositive = opt.partnerNetUnrealized >= 0;
+                const isPut = opt.type === "Sell Put";
+                const label = partnerFriendlyType(opt.type);
+                return (
+                  <tr
+                    key={opt.id}
+                    className="transition-colors hover:bg-surface-container-high"
+                  >
+                    <td className="px-3 py-3 font-mono text-sm font-bold text-on-surface">
+                      {opt.ticker}
                     </td>
-                  </tr>
-                )}
-                {optionPositions.map((opt) => {
-                  const pnlPositive = opt.partnerNetUnrealized >= 0;
-                  const isPut = opt.type === "Sell Put";
-                  const label = partnerFriendlyType(opt.type);
-                  return (
-                    <tr
-                      key={opt.id}
-                      className="hover:bg-white/[0.02] transition-colors"
-                    >
-                      <td className="px-4 py-3 text-sm font-bold text-white font-mono">
-                        {opt.ticker}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div
-                          className={`inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded-md border ${
-                            isPut
-                              ? "border-secondary/50"
-                              : "border-primary/50"
+                    <td className="px-3 py-3">
+                      <span
+                        className={`text-xs font-semibold ${
+                          isPut ? "text-error" : "text-primary"
+                        }`}
+                      >
+                        {label.ar}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 font-mono text-sm tabular-nums text-on-surface">
+                      ${opt.strike.toLocaleString()}{" "}
+                      <span className="text-on-surface-variant/70">
+                        / {formatExpiry(opt.expiration)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 font-mono text-sm tabular-nums text-on-surface">
+                      {opt.partnerShareExposure.toFixed(2)}
+                    </td>
+                    <td className="px-3 py-3 font-mono text-sm tabular-nums text-on-surface">
+                      {formatCurrency(opt.partnerLockedCollateral)}
+                    </td>
+                    <td className="px-3 py-3 font-mono text-sm font-bold tabular-nums text-primary">
+                      {formatCurrency(opt.partnerNetPremium)}
+                    </td>
+                    <td className="px-3 py-3 font-mono">
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={`text-sm font-bold tabular-nums ${
+                            pnlPositive ? "text-primary" : "text-error"
                           }`}
                         >
-                          <span
-                            className={`text-[10px] font-bold ${
-                              isPut ? "text-secondary" : "text-primary"
-                            }`}
-                          >
-                            {label.ar}
-                          </span>
-                          <span className="text-[9px] text-on-surface-variant/60 uppercase tracking-wider">
-                            {label.en}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-white tabular-nums">
-                            ${opt.strike.toLocaleString()}
-                          </span>
-                          <span className="text-[10px] text-on-surface-variant/70 tabular-nums">
-                            {formatExpiry(opt.expiration)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-white tabular-nums">
-                            {opt.partnerShareExposure.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-on-surface-variant/60 tabular-nums">
-                            shares
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
-                        {formatCurrency(opt.partnerLockedCollateral)}
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-white tabular-nums">
-                            ${opt.premium.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-on-surface-variant/60 tabular-nums">
-                            per share
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-headline font-bold text-emerald-400 font-mono tabular-nums drop-shadow-[0_0_6px_rgba(52,211,153,0.35)]">
-                          {formatCurrency(opt.partnerNetPremium)}
+                          {pnlPositive ? "+" : ""}
+                          {formatCurrency(opt.partnerNetUnrealized)}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex flex-col gap-0.5">
-                          <span
-                            className={`text-xs font-bold tabular-nums ${
-                              pnlPositive ? "text-emerald-400" : "text-rose-400"
-                            }`}
-                          >
-                            {pnlPositive ? "+" : ""}
-                            {formatCurrency(opt.partnerNetUnrealized)}
+                        {opt.spot !== null ? (
+                          <span className="text-[10px] tabular-nums text-on-surface-variant/60">
+                            spot ${opt.spot.toFixed(2)}
                           </span>
-                          {opt.spot !== null ? (
-                            <span className="text-[10px] text-on-surface-variant/60 tabular-nums">
-                              spot ${opt.spot.toFixed(2)}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-on-surface-variant/40">
-                              لا يوجد سعر مرجعي
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Stock Holdings Table — partner share of open stock positions */}
-        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-                الأسهم المحتفظ بها
-              </h2>
-              <span className="rounded-full bg-tertiary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-tertiary">
-                {stockPositions.length} positions
-              </span>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right">
-              <thead>
-                <tr className="text-[10px] text-on-surface-variant uppercase tracking-widest bg-surface-container-low">
-                  <th className="px-4 py-3 font-medium">الرمز</th>
-                  <th className="px-4 py-3 font-medium">
-                    التكلفة · السعر الحالي
-                  </th>
-                  <th className="px-4 py-3 font-medium">حصة الشريك</th>
-                  <th className="px-4 py-3 font-medium">
-                    القيمة السوقية
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    ربح/خسارة غير محققة
-                  </th>
-                  <th className="px-4 py-3 font-medium">
-                    السعر المستهدف
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {stockPositions.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
-                      <Icon
-                        name="layers_clear"
-                        className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
-                      />
-                      <p className="text-sm text-on-surface-variant">
-                        لا توجد أسهم نشطة
-                      </p>
-                    </td>
-                  </tr>
-                )}
-                {stockPositions.map((stk) => {
-                  const hasLive = stk.currentPrice !== null;
-                  const pnlPositive = stk.partnerUnrealized >= 0;
-                  return (
-                    <tr
-                      key={stk.id}
-                      className="hover:bg-white/[0.02] transition-colors"
-                    >
-                      <td className="px-4 py-3 text-sm font-bold text-white font-mono">
-                        {stk.ticker}
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex items-center gap-2 tabular-nums">
-                          <span className="text-xs text-on-surface-variant">
-                            ${stk.purchasePrice.toFixed(2)}
-                          </span>
-                          <Icon
-                            name="arrow_left_alt"
-                            className="!text-xs text-on-surface-variant/40"
-                          />
-                          {hasLive ? (
-                            <span className="text-xs text-white font-bold">
-                              ${stk.currentPrice!.toFixed(2)}
-                            </span>
-                          ) : stk.priceLoading ? (
-                            <span className="text-[10px] text-on-surface-variant/60">
-                              جاري التحديث...
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-on-surface-variant/40">
-                              —
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-white font-mono tabular-nums">
-                        {stk.partnerQuantity.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-white font-mono tabular-nums">
-                        {formatCurrency(stk.partnerMarketValue)}
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        {hasLive ? (
-                          <div className="flex flex-col gap-0.5 tabular-nums">
-                            <span
-                              className={`text-xs font-bold ${
-                                pnlPositive
-                                  ? "text-emerald-400"
-                                  : "text-rose-400"
-                              }`}
-                            >
-                              {pnlPositive ? "+" : ""}
-                              {formatCurrency(stk.partnerUnrealized)}
-                            </span>
-                            <span
-                              className={`text-[10px] ${
-                                pnlPositive
-                                  ? "text-emerald-400/70"
-                                  : "text-rose-400/70"
-                              }`}
-                            >
-                              {pnlPositive ? "+" : ""}
-                              {stk.unrealizedPct.toFixed(2)}%
-                            </span>
-                          </div>
                         ) : (
                           <span className="text-[10px] text-on-surface-variant/40">
                             لا يوجد سعر مرجعي
                           </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums">
-                        {stk.targetPrice > 0 ? (
-                          <span className="text-xs text-primary">
-                            ${stk.targetPrice.toFixed(2)}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-on-surface-variant/40">
-                            —
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Capital Timeline — reconstructed from balanceHistory
-            snapshots. Per-event typing (deposit vs capitalize vs fee)
-            was never stored, so this shows the recorded balance at each
-            date and the NET change since the previous snapshot. The
-            itemized journal below covers events logged going forward. */}
-        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
-            <div className="flex items-center gap-3">
-              <Icon name="timeline" className="text-primary" />
-              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-                تطور رأس المال · Capital Timeline
-              </h2>
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary">
-                {capitalTimeline.length} لقطة
-              </span>
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="mb-3 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-on-surface-variant/80">
-              <Icon name="info" className="!text-sm text-tertiary mt-0.5" />
-              <span>
-                لقطات الرصيد المسجّلة عبر الزمن. التغيّر يعكس صافي الحركة في
-                الفترة (إيداع / سحب / تثبيت مجمّعة). الحركات المفصّلة تظهر في
-                «سجل الحركات» أدناه.
-              </span>
-            </div>
-            {capitalTimeline.length === 0 ? (
-              <div className="py-12 text-center">
-                <Icon
-                  name="timeline"
-                  className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
-                />
-                <p className="text-sm text-on-surface-variant">
-                  لا توجد لقطات مسجّلة
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {capitalTimeline.map((row, i) => {
-                  const up = (row.delta ?? 0) >= 0;
-                  return (
-                    <div
-                      key={`${row.date}-${i}`}
-                      className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-surface-container-low px-4 py-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
-                          <Icon name="savings" className="!text-base" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-white">
-                            {formatSnapshotDate(row.date)}
-                          </span>
-                          <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">
-                            الرصيد المسجّل
-                          </span>
-                        </div>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-base font-headline font-bold font-mono tabular-nums text-white">
-                          {formatCurrency(row.balance)}
-                        </span>
-                        {row.delta === null ? (
-                          <span className="text-[10px] text-on-surface-variant/60 uppercase tracking-wider">
-                            بداية
-                          </span>
-                        ) : (
-                          <span
-                            className={`text-[11px] font-mono tabular-nums font-bold ${
-                              up ? "text-primary" : "text-secondary"
-                            }`}
-                          >
-                            {up ? "+" : ""}
-                            {formatCurrency(row.delta)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Account Statement — the partner's own journal (deposits,
-            withdrawals, capitalizations, fees). This page is the LP's
-            landing view, so the statement must live here; the RLS
-            policy (migration 013) already limits transactions reads to
-            the partner's own rows. */}
-        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
-            <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-              سجل الحركات · Account Statement
-            </h2>
-          </div>
-          <div className="p-6">
-            <TransactionList
-              transactions={transactions}
-              loading={txLoading}
-              exportFilename={`statement-${partner.code || partner.name}.csv`}
-              maxHeightClass="max-h-[420px]"
-            />
-          </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
-    </>
+
+      {/* Holdings + Account statement */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Holdings */}
+        <div className="glass-card rounded-2xl p-6">
+          <div className="mb-5 flex items-center justify-between">
+            <h3 className="font-headline text-xl font-bold text-on-surface">
+              الأصول المملوكة
+            </h3>
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-primary">
+              {stockPositions.length} سهم
+            </span>
+          </div>
+          {stockPositions.length === 0 ? (
+            <div className="py-12 text-center">
+              <Icon
+                name="layers_clear"
+                className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+              />
+              <p className="text-sm text-on-surface-variant">
+                لا توجد أسهم نشطة
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {stockPositions.map((stk) => {
+                const hasLive = stk.currentPrice !== null;
+                const pnlPositive = stk.partnerUnrealized >= 0;
+                return (
+                  <div
+                    key={stk.id}
+                    className="flex items-center justify-between rounded-xl border border-outline-variant/40 bg-surface-container-low p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 font-mono text-xs font-bold text-primary">
+                        {stk.ticker}
+                      </div>
+                      <div>
+                        <p className="font-mono text-sm tabular-nums text-on-surface">
+                          {stk.partnerQuantity.toFixed(2)} سهم
+                        </p>
+                        <p className="font-mono text-[11px] tabular-nums text-on-surface-variant">
+                          ${stk.purchasePrice.toFixed(2)}
+                          {hasLive && (
+                            <> → ${stk.currentPrice!.toFixed(2)}</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-mono text-sm tabular-nums text-on-surface">
+                        {formatCurrency(stk.partnerMarketValue)}
+                      </p>
+                      {hasLive ? (
+                        <p
+                          className={`font-mono text-[11px] tabular-nums ${
+                            pnlPositive ? "text-primary" : "text-error"
+                          }`}
+                        >
+                          {pnlPositive ? "+" : ""}
+                          {formatCurrency(stk.partnerUnrealized)} (
+                          {pnlPositive ? "+" : ""}
+                          {stk.unrealizedPct.toFixed(1)}%)
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-on-surface-variant/40">
+                          لا يوجد سعر مرجعي
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Account statement */}
+        <div className="glass-card rounded-2xl p-6">
+          <h3 className="mb-5 font-headline text-xl font-bold text-on-surface">
+            كشف الحساب
+          </h3>
+          <TransactionList
+            transactions={transactions}
+            loading={txLoading}
+            exportFilename={`statement-${partner.code || partner.name}.csv`}
+            maxHeightClass="max-h-[420px]"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
