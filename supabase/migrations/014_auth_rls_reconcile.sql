@@ -44,14 +44,16 @@ alter table public.transactions
 alter table public.transactions
   add constraint transactions_type_check
   check (type in ('Deposit', 'Withdrawal', 'Fee', 'Capitalize'));
+-- NOTE: partners.id and active_stocks.id are TEXT (ids like 'admin-1',
+-- 'uscn7i1sd'), so the FK columns below must be text, not uuid.
 alter table public.transactions
   add column if not exists note               text,
-  add column if not exists related_partner_id uuid
+  add column if not exists related_partner_id text
     references public.partners(id) on delete set null;
 
 -- trades: covered-call → active-stock lot linkage
 alter table public.trades
-  add column if not exists linked_stock_id uuid
+  add column if not exists linked_stock_id text
     references public.active_stocks(id) on delete set null;
 
 -- active_stocks: cached live-price columns
