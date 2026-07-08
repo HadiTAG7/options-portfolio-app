@@ -75,29 +75,41 @@ export interface FeeTransfer {
   lpName: string; // for the Fee transaction's human-readable note
 }
 
-// Journal a settlement event into the transactions table. Non-fatal by
-// design (the balance updates already committed); requires migration
-// 012 for the 'Capitalize' type and the note/related columns.
+// Warning appended to a success message when the balance moved but its
+// ledger entry could not be written — so a silently-missing journal row
+// (which is what left the old statement empty) can never go unnoticed.
+const LOG_WARN =
+  " ⚠️ لكن لم تُسجَّل في سجل الحركات (العملية تمت فعلياً — حدّث الصفحة)";
+
+// Journal a movement (deposit / withdrawal / capitalize / fee) into the
+// transactions table. Requires migration 014 (the 'Capitalize'/'Fee'
+// types + note/related_partner_id columns). Returns true iff the row
+// was written; callers surface LOG_WARN on false. Never throws — any
+// error is caught and reported as a false result.
 async function logTransaction(row: {
   investorId: string;
   amount: number;
   type: "Deposit" | "Withdrawal" | "Fee" | "Capitalize";
   note?: string;
   relatedPartnerId?: string;
-}): Promise<void> {
-  const { error } = await supabase.from("transactions").insert({
-    investorId: row.investorId,
-    amount: row.amount,
-    type: row.type,
-    date: new Date().toISOString().split("T")[0],
-    note: row.note ?? null,
-    related_partner_id: row.relatedPartnerId ?? null,
-  });
-  if (error) {
-    console.warn(
-      `[logTransaction] ${row.type} journal failed (non-fatal — run migration 012):`,
-      error.message
-    );
+}): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("transactions").insert({
+      investorId: row.investorId,
+      amount: row.amount,
+      type: row.type,
+      date: new Date().toISOString().split("T")[0],
+      note: row.note ?? null,
+      related_partner_id: row.relatedPartnerId ?? null,
+    });
+    if (error) {
+      console.warn(`[logTransaction] ${row.type} journal failed:`, error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn(`[logTransaction] ${row.type} journal threw:`, e);
+    return false;
   }
 }
 
@@ -352,38 +364,20 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       );
     }
 
-    // --- 2. Insert transaction record (non-blocking) ---
-    try {
-      const { error: txError } = await supabase.from("transactions").insert({
-        investorId: partner.id,
-        amount,
-        type: "Withdrawal" as const,
-        date: today,
-      });
-
-      if (txError) {
-        console.error("[handleWithdrawal] Transaction insert failed:", txError);
-
-        if (
-          txError.message.includes("relation") &&
-          txError.message.includes("does not exist")
-        ) {
-          console.warn(
-            'Table "transactions" does not exist. Run supabase/migrations/001_add_withdrawal_columns.sql to create it.'
-          );
-        } else if (txError.message.includes("permission")) {
-          console.warn(
-            "Transaction insert blocked by RLS. Check your Supabase policies."
-          );
-        }
-        // Don't block the withdrawal — the partner balance was already updated
-      }
-    } catch (txCatchErr) {
-      console.error(
-        "[handleWithdrawal] Transaction insert threw:",
-        txCatchErr
-      );
-    }
+    // --- 2. Journal the withdrawal (visible on failure) ---
+    let logFailed = false;
+    const withdrawLogged = await logTransaction({
+      investorId: partner.id,
+      amount,
+      type: "Withdrawal",
+      note:
+        capitalPortion > 0 && profitPortion > 0
+          ? "سحب أرباح + رأس مال"
+          : capitalPortion > 0
+            ? "سحب من رأس المال"
+            : "سحب أرباح",
+    });
+    if (!withdrawLogged) logFailed = true;
 
     // --- 3. Recalculate ownership (non-blocking) ---
     try {
@@ -403,12 +397,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
 
     // --- 4. Journal the auto-capitalized remainder ---
     if (profitRemainder > 0) {
-      await logTransaction({
+      const remainderLogged = await logTransaction({
         investorId: partner.id,
         amount: profitRemainder,
         type: "Capitalize",
         note: "تثبيت تلقائي لباقي الأرباح عند السحب",
       });
+      if (!remainderLogged) logFailed = true;
     }
 
     // --- 5. Credit the GP's performance fee for the settled profit ---
@@ -431,7 +426,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     set({
       notification: {
         type: "success",
-        message: `تم سحب $${amount.toLocaleString()} من حساب ${partner.name} بنجاح${remainderNote}${feeNote}`,
+        message: `تم سحب $${amount.toLocaleString()} من حساب ${partner.name} بنجاح${remainderNote}${feeNote}${logFailed ? LOG_WARN : ""}`,
       },
     });
 
@@ -515,7 +510,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     });
 
     // Journal the capitalization itself.
-    await logTransaction({
+    const capLogged = await logTransaction({
       investorId: partner.id,
       amount: netProfitAmount,
       type: "Capitalize",
@@ -536,7 +531,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     set({
       notification: {
         type: "success",
-        message: `تم تثبيت أرباح ${partner.name} (${formatCurrency(netProfitAmount)}) وإضافتها لرأس المال${feeNote}`,
+        message: `تم تثبيت أرباح ${partner.name} (${formatCurrency(netProfitAmount)}) وإضافتها لرأس المال${feeNote}${capLogged ? "" : LOG_WARN}`,
       },
     });
 
@@ -646,20 +641,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       );
     }
 
-    // --- 2. Insert transaction record (non-blocking) ---
-    try {
-      const { error: txError } = await supabase.from("transactions").insert({
-        investorId: partner.id,
-        amount,
-        type: "Deposit" as const,
-        date: today,
-      });
-      if (txError) {
-        console.error("[handleDeposit] Transaction insert failed:", txError);
-      }
-    } catch (txCatchErr) {
-      console.error("[handleDeposit] Transaction insert threw:", txCatchErr);
-    }
+    // --- 2. Journal the deposit (visible on failure) ---
+    const depositLogged = await logTransaction({
+      investorId: partner.id,
+      amount,
+      type: "Deposit",
+      note: "إيداع رأس مال",
+    });
 
     // --- 3. Recalculate ownership (non-blocking) ---
     try {
@@ -677,7 +665,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     set({
       notification: {
         type: "success",
-        message: `تم إيداع ${formatCurrency(amount)} في حساب ${partner.name} بنجاح`,
+        message: `تم إيداع ${formatCurrency(amount)} في حساب ${partner.name} بنجاح${depositLogged ? "" : LOG_WARN}`,
       },
     });
 

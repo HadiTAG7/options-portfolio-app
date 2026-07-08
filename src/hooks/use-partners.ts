@@ -184,6 +184,7 @@ export function usePartners() {
           amount: capital,
           type: "Deposit" as const,
           date: today,
+          note: "إيداع رأس المال الأولي",
         });
 
         if (txError) {
