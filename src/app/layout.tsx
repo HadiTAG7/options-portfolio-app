@@ -29,7 +29,18 @@ export default function RootLayout({
   // there). No CDN <link> tags: the Capacitor APK must render numbers
   // and icons with zero network access.
   return (
-    <html lang="ar" dir="rtl" className="dark">
+    <html lang="ar" dir="rtl" className="dark" suppressHydrationWarning>
+      <head>
+        {/* No-flash theme: set the <html> class from localStorage BEFORE
+            first paint (default dark). suppressHydrationWarning above
+            because this mutates the class before React hydrates. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark')t='dark';var e=document.documentElement;e.classList.remove('light','dark');e.classList.add(t);}catch(e){}})();",
+          }}
+        />
+      </head>
       <body className="bg-background text-on-surface antialiased overflow-x-hidden">
         {children}
       </body>

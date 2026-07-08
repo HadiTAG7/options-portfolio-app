@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, LogIn } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 // Standalone sign-in page (no AppShell — it must render for anonymous
 // users). Email + password via Supabase Auth; accounts are provisioned
@@ -45,7 +46,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main className="relative flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="absolute left-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 text-center">

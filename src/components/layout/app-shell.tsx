@@ -7,6 +7,7 @@ import { LogOut } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
 import { TopBar } from "./top-bar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
 
 interface AppShellProps {
@@ -110,13 +111,16 @@ function GuardedShell({ children }: AppShellProps) {
               محفظة الخيارات · حساب شريك
             </p>
           </div>
-          <button
-            onClick={() => void signOut()}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-800/70 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
-          >
-            <LogOut size={12} />
-            خروج
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={() => void signOut()}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-800/70 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300"
+            >
+              <LogOut size={12} />
+              خروج
+            </button>
+          </div>
         </header>
         <main className="pt-20 px-4 pb-12 max-w-[1800px] mx-auto">
           {onOwnDetails ? children : <ShellSplash />}

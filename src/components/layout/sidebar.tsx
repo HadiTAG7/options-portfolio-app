@@ -44,7 +44,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col h-screen fixed right-0 top-0 z-50 bg-[#050505]/95 backdrop-blur-xl antialiased text-sm font-medium",
+        "flex flex-col h-screen fixed right-0 top-0 z-50 bg-surface/95 backdrop-blur-xl antialiased text-sm font-medium",
         "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
         collapsed ? "w-16" : "w-64"
       )}
@@ -59,7 +59,7 @@ export function Sidebar() {
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         title={collapsed ? "Expand" : "Collapse"}
         className={cn(
-          "group/toggle absolute top-7 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-[#1f1f1f] bg-[#0a0a0a] text-zinc-500 shadow-[0_0_0_4px_#050505]",
+          "group/toggle absolute top-7 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-500 shadow-[0_0_0_4px_#050505]",
           "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#050505]",
           "active:scale-95",
           // Park it on the left edge of the sidebar. Because the aside is
@@ -78,7 +78,7 @@ export function Sidebar() {
       {/* ═════ Brand ═════ */}
       <div
         className={cn(
-          "relative border-b border-[#1f1f1f] transition-[padding] duration-300",
+          "relative border-b border-zinc-800 transition-[padding] duration-300",
           collapsed ? "px-0 pt-7 pb-5" : "px-5 pt-7 pb-6"
         )}
       >
@@ -140,7 +140,7 @@ export function Sidebar() {
       {/* ═════ Footer ═════ */}
       <div
         className={cn(
-          "relative space-y-1 border-t border-[#1f1f1f] transition-[padding] duration-300",
+          "relative space-y-1 border-t border-zinc-800 transition-[padding] duration-300",
           collapsed ? "p-2" : "p-3"
         )}
       >
@@ -150,7 +150,7 @@ export function Sidebar() {
             <div className="group relative mb-2 flex items-center justify-center rounded-md border border-amber-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-amber-400/50 hover:shadow-[0_0_22px_-6px_rgba(251,191,36,0.45)]">
               <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/5 text-[10px] font-black text-amber-300 shadow-[0_0_12px_-4px_rgba(251,191,36,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-[#050505] bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-zinc-950 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]">
                   <Crown
                     size={7}
                     className="text-zinc-900"
@@ -166,7 +166,7 @@ export function Sidebar() {
             <div className="relative flex items-center gap-3">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/5 text-xs font-black text-amber-300 shadow-[0_0_14px_-4px_rgba(251,191,36,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#050505] bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-950 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]">
                   <Crown
                     size={8}
                     className="text-zinc-900"
@@ -390,10 +390,10 @@ function SidebarTooltip({
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute top-1/2 right-full mr-3 -translate-y-1/2 z-[60] whitespace-nowrap rounded-md border border-[#1f1f1f] bg-[#0a0a0a] px-2.5 py-1.5 text-[11px] font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_8px_24px_-6px_rgba(0,0,0,0.8),0_0_18px_-6px_rgba(16,185,129,0.3)] opacity-0 translate-x-1 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:translate-x-0"
+        className="pointer-events-none absolute top-1/2 right-full mr-3 -translate-y-1/2 z-[60] whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_8px_24px_-6px_rgba(0,0,0,0.8),0_0_18px_-6px_rgba(16,185,129,0.3)] opacity-0 translate-x-1 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:translate-x-0"
       >
         {label}
-        <span className="absolute top-1/2 -right-[4px] -translate-y-1/2 h-2 w-2 rotate-45 border-t border-r border-[#1f1f1f] bg-[#0a0a0a]" />
+        <span className="absolute top-1/2 -right-[4px] -translate-y-1/2 h-2 w-2 rotate-45 border-t border-r border-zinc-800 bg-zinc-950" />
       </span>
     </div>
   );

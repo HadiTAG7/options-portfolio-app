@@ -51,7 +51,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
+/* NOTE: non-inline @theme (was `@theme inline`) so every color token is
+   emitted as a :root CSS variable and referenced via var() by the
+   utilities — which lets `html.light` (below) override the whole palette
+   at runtime. The computed dark values are unchanged. */
+@theme {
   /* ═══════════════════════════════════════════════════════════════
      Design tokens — the SINGLE source for the legacy (M3-named)
      component layer. Retuned to the terminal palette the modern pages
@@ -237,4 +241,96 @@ input[type="number"] {
     outline-offset: 2px;
     border-radius: 2px;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT THEME  —  html.light overrides every color variable the app
+   uses. Because Tailwind v4 references all palette colors via var()
+   and the app's `dark:` variant is unused, redefining these here
+   re-skins the entire UI (all ~975 hardcoded zinc/white/black + accent
+   usages AND the M3 surface tokens) with zero component edits.
+
+   Neutrals are ROLE-REVERSED (deep bg ⇄ white, borders ⇄ light gray,
+   white text ⇄ near-black) so every shade keeps its meaning. Accent
+   TEXT shades are darkened for readable contrast on white; fills stay
+   vibrant. Default (:root, no class / .dark) remains the dark theme.
+   ═══════════════════════════════════════════════════════════════════ */
+html.light {
+  /* ── Neutrals: reversed zinc scale + white/black ── */
+  --color-white: #18181b; /* primary text flips to near-black */
+  --color-black: #ffffff; /* overlays / gradient ends / inputs → white */
+  --color-zinc-50: #09090b;
+  --color-zinc-100: #18181b;
+  --color-zinc-200: #27272a;
+  --color-zinc-300: #3f3f46;
+  --color-zinc-400: #52525b; /* muted text (darker for contrast) */
+  --color-zinc-500: #71717a; /* muted text (mid) */
+  --color-zinc-600: #a1a1aa; /* placeholders / faint */
+  --color-zinc-700: #d4d4d8;
+  --color-zinc-800: #e4e4e7; /* borders → light gray */
+  --color-zinc-900: #f3f3f5; /* card surface → light */
+  --color-zinc-950: #ffffff; /* deepest bg → white */
+
+  /* ── M3 surface tokens ── */
+  --color-surface: #ffffff;
+  --color-on-surface: #18181b;
+  --color-surface-variant: #f3f3f5;
+  --color-on-surface-variant: #52525b;
+  --color-surface-tint: #10b981;
+  --color-surface-dim: #e7e7ea;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f7f7f8;
+  --color-surface-container: #f3f3f5;
+  --color-surface-container-high: #ececef;
+  --color-surface-container-highest: #e4e4e7;
+  --color-inverse-surface: #18181b;
+  --color-inverse-on-surface: #d4d4d8;
+  --color-background: #eceef1;
+  --color-on-background: #18181b;
+  --color-outline: #a1a1aa;
+  --color-outline-variant: #e4e4e7;
+
+  /* ── Accents: deep shades so BOTH white-on-fill buttons
+     (e.g. bg-emerald-500 with text-zinc-950 → white) AND accent text on
+     white read with proper contrast. Fills look deep/premium on light;
+     dark theme is untouched (these apply only under html.light). ── */
+  /* Primary (emerald) */
+  --color-primary: #047857;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #059669;
+  --color-on-primary-container: #ffffff;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-emerald-500: #047857;
+  --color-emerald-600: #065f46;
+  /* Secondary (rose) */
+  --color-secondary: #be123c;
+  --color-rose-200: #9f1239;
+  --color-rose-300: #e11d48;
+  --color-rose-400: #e11d48;
+  --color-rose-500: #be123c;
+  /* Tertiary (cyan) */
+  --color-tertiary: #0e7490;
+  --color-cyan-200: #0e7490;
+  --color-cyan-300: #0891b2;
+  --color-cyan-400: #0e7490;
+  --color-cyan-500: #0e7490;
+  /* Amber (fees / GP) */
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #b45309;
+  --color-amber-500: #b45309;
+  --color-amber-600: #92400e;
+}
+
+/* Grid backdrop dots: dark on light instead of the dark-theme grey. */
+html.light .terminal-grid {
+  background-image: radial-gradient(circle, #d4d4d8 1px, transparent 1px);
+}
+
+/* Smooth the flip between themes. */
+body {
+  transition: background-color 0.2s ease, color 0.2s ease;
 }

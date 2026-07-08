@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useSidebar } from "./sidebar-context";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartners } from "@/hooks/use-partners";
@@ -55,7 +56,7 @@ export function TopBar() {
   return (
     <header
       className={cn(
-        "fixed top-0 left-0 z-40 h-16 flex items-center justify-between px-8 bg-[#050505]/95 backdrop-blur-xl border-b border-[#1f1f1f] font-headline text-xs uppercase tracking-widest transition-[right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        "fixed top-0 left-0 z-40 h-16 flex items-center justify-between px-8 bg-surface/95 backdrop-blur-xl border-b border-zinc-800 font-headline text-xs uppercase tracking-widest transition-[right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
         collapsed ? "right-16" : "right-64"
       )}
     >
@@ -69,7 +70,7 @@ export function TopBar() {
           <input
             type="text"
             placeholder="البحث في المحفظة..."
-            className="bg-black/50 border border-[#1f1f1f] rounded-md pr-9 pl-4 py-2 w-56 text-[11px] normal-case tracking-normal text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 focus:shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]"
+            className="bg-black/50 border border-zinc-800 rounded-md pr-9 pl-4 py-2 w-56 text-[11px] normal-case tracking-normal text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 focus:shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]"
           />
         </div>
 
@@ -88,7 +89,7 @@ export function TopBar() {
 
       <div className="flex items-center gap-4">
         {/* Balance Widget */}
-        <div className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-md border border-[#1f1f1f] bg-black/40">
+        <div className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-md border border-zinc-800 bg-black/40">
           <span className="text-[9px] font-semibold text-zinc-500 normal-case tracking-[0.12em]">
             الرصيد المتاح
           </span>
@@ -113,17 +114,18 @@ export function TopBar() {
           <IconButton icon={<Wallet size={15} />} label="Wallet" />
           <IconButton icon={<Globe size={15} />} label="Language" />
           <IconButton icon={<Bell size={15} />} label="Notifications" />
+          <ThemeToggle />
         </div>
 
-        <div className="h-5 w-px bg-[#1f1f1f] mx-1" />
+        <div className="h-5 w-px bg-zinc-800 mx-1" />
 
         {/* Date Range */}
-        <button className="inline-flex items-center gap-2 rounded-md border border-[#1f1f1f] bg-zinc-950/60 px-3 py-1.5 text-[9px] font-bold tracking-[0.18em] text-zinc-400 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900/80 hover:text-zinc-200">
+        <button className="inline-flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-1.5 text-[9px] font-bold tracking-[0.18em] text-zinc-400 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900/80 hover:text-zinc-200">
           <Calendar size={11} className="text-zinc-500" />
           نطاق التاريخ
         </button>
 
-        <div className="h-5 w-px bg-[#1f1f1f] mx-1" />
+        <div className="h-5 w-px bg-zinc-800 mx-1" />
 
         {/* Avatar */}
         <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-black/60 text-[10px] font-black text-emerald-300 tracking-wide transition-all duration-200 hover:border-emerald-500/50 hover:shadow-[0_0_12px_-4px_rgba(16,185,129,0.5)]">
