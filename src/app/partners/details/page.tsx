@@ -306,14 +306,30 @@ function PartnerDetailInner() {
   const pendingFee = dist?.feeAmount ?? 0;
   const monthlyLogTotal = monthlyLog.reduce((s, r) => s + r.net, 0);
 
-  // Bar-chart heights (30–100%) for the capital timeline, oldest→newest.
-  const barData = (() => {
-    const bals = [...capitalTimeline].reverse().map((r) => r.balance);
-    if (bals.length === 0) return [];
+  // Line-chart geometry for the capital timeline (oldest→newest,
+  // left→right; SVG coords are LTR, matching the snapshot cards above).
+  // Returns null with fewer than 2 snapshots (nothing to connect).
+  const capitalChart = (() => {
+    const rows = [...capitalTimeline].reverse();
+    const n = rows.length;
+    if (n < 2) return null;
+    const W = 100;
+    const H = 40;
+    const PAD = 3;
+    const bals = rows.map((r) => r.balance);
     const max = Math.max(...bals);
     const min = Math.min(...bals);
     const range = max - min || 1;
-    return bals.map((b) => 30 + ((b - min) / range) * 70);
+    const pts = rows.map((r, i) => {
+      const x = PAD + (i / (n - 1)) * (W - 2 * PAD);
+      const y = PAD + (1 - (r.balance - min) / range) * (H - 2 * PAD);
+      return { x, y, balance: r.balance };
+    });
+    const line = pts
+      .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
+      .join(" ");
+    const area = `${line} L${pts[n - 1].x.toFixed(2)},${H} L${pts[0].x.toFixed(2)},${H} Z`;
+    return { pts, line, area, W, H };
   })();
 
   const CAPS = "text-[11px] font-bold uppercase tracking-[0.12em]";
@@ -559,23 +575,43 @@ function PartnerDetailInner() {
                   );
                 })}
               </div>
-              {barData.length > 1 && (
-                <div className="mt-6 flex h-28 w-full items-end gap-1.5">
-                  {barData.map((h, i) => (
-                    <div
-                      key={i}
-                      style={{ height: `${h}%` }}
-                      title={formatCurrency(
-                        [...capitalTimeline].reverse()[i]?.balance ?? 0
-                      )}
-                      className={`flex-1 rounded-t transition-all ${
-                        i === barData.length - 1
-                          ? "border-t-2 border-primary bg-primary/40"
-                          : "bg-primary/20 hover:bg-primary/40"
-                      }`}
-                    />
-                  ))}
-                </div>
+              {capitalChart && (
+                <svg
+                  viewBox={`0 0 ${capitalChart.W} ${capitalChart.H}`}
+                  preserveAspectRatio="none"
+                  className="mt-6 h-28 w-full overflow-visible"
+                  role="img"
+                  aria-label="مخطط خطي لتطور رأس المال"
+                >
+                  <defs>
+                    <linearGradient id="capFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="0%"
+                        style={{
+                          stopColor: "var(--color-primary)",
+                          stopOpacity: 0.22,
+                        }}
+                      />
+                      <stop
+                        offset="100%"
+                        style={{
+                          stopColor: "var(--color-primary)",
+                          stopOpacity: 0,
+                        }}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <path d={capitalChart.area} fill="url(#capFill)" />
+                  <path
+                    d={capitalChart.line}
+                    fill="none"
+                    strokeWidth={1.75}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    style={{ stroke: "var(--color-primary)" }}
+                  />
+                </svg>
               )}
               <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant/70">
                 لقطات الرصيد عبر الزمن — التغيّر يعكس صافي الحركة في الفترة
