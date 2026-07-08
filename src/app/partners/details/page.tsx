@@ -520,7 +520,7 @@ function PartnerDetailInner() {
           <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
-                عقود الخيارات النشطة ({ownershipPct.toFixed(2)}%)
+                عقود الخيارات النشطة
               </h2>
               <span className="rounded-full bg-tertiary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-tertiary">
                 {optionPositions.length} positions
