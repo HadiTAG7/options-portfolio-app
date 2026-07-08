@@ -20,6 +20,7 @@ import {
   formatCompactCurrency,
   formatCurrency,
   getPartnerInvestment,
+  partnerCapitalAsOf,
 } from "@/lib/utils";
 import {
   computeFundBreakdown,
@@ -161,22 +162,9 @@ export default function DashboardPage() {
     // stamped on EVERY row — which made any new deposit/capitalization
     // retroactively rewrite historical months' capital (and their return
     // %, since نسبة الربح = grossProfit / totalCapital).
-    // `${key}-31` is a safe string upper bound: no real date is XX-31 for
-    // 30-day months, and it sorts below the next month's -01.
+    // `${key}-31` is a safe string upper bound (see partnerCapitalAsOf).
     const capitalAsOf = (monthEnd: string) =>
-      partners.reduce((sum, p) => {
-        const hist = Array.isArray(p.balanceHistory) ? p.balanceHistory : [];
-        let latest = 0;
-        let latestDate = "";
-        for (const h of hist) {
-          const d = (h.date || "").slice(0, 10); // ISO timestamp → YYYY-MM-DD
-          if (d && d <= monthEnd && d >= latestDate) {
-            latestDate = d;
-            latest = Number(h.balance) || 0;
-          }
-        }
-        return sum + latest;
-      }, 0);
+      partners.reduce((sum, p) => sum + partnerCapitalAsOf(p, monthEnd), 0);
     const statementPartners = partners.map((p) => ({
       ...p,
       lastSettlementDate: null,
@@ -706,10 +694,20 @@ function ProfitDistribution({
   monthOptions: MonthOption[];
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const distribution = useMemo(
-    () => computePortfolioDistribution(partners, totalProfit),
-    [partners, totalProfit]
-  );
+  // When a specific month is selected, weight the whole table by each
+  // partner's capital AS OF that month (reconstructed from
+  // balanceHistory) instead of today's investment — so CAPITAL, SHARE,
+  // and Net Profit all reflect that month. A partner who hadn't joined
+  // yet gets 0 capital → 0 share → 0 profit (no phantom row). "All
+  // Time" keeps today's live investment weighting.
+  const distribution = useMemo(() => {
+    const monthEnd = selectedMonth === "all" ? null : `${selectedMonth}-31`;
+    const viewPartners = partners.map((p) => {
+      const cap = partnerCapitalAsOf(p, monthEnd);
+      return { ...p, totalDeposits: cap, baseCapital: cap, currentBalance: cap };
+    });
+    return computePortfolioDistribution(viewPartners, totalProfit);
+  }, [partners, totalProfit, selectedMonth]);
 
   const sortedPartners = useMemo(() => {
     return [...partners].sort((a, b) => {
@@ -846,7 +844,10 @@ function ProfitDistribution({
                 const dist = distribution[p.id];
                 if (!dist) return null;
                 const netPositive = dist.netProfit >= 0;
-                const capital = Number(p.currentBalance) || 0;
+                // Month-scoped capital (dist.investment already reflects
+                // the selected month via viewPartners); "active" means the
+                // partner had capital in the fund that month.
+                const capital = dist.investment;
                 const isActive = capital > 0;
                 return (
                   <tr

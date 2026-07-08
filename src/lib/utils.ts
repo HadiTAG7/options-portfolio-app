@@ -69,3 +69,35 @@ export function getPartnerInvestment(partner: Partner): number {
   }
   return safeNumber(partner.baseCapital) || safeNumber(partner.currentBalance);
 }
+
+// A partner's capital base AS OF a month end, reconstructed from
+// balanceHistory (dated currentBalance snapshots): the most recent
+// snapshot on/before `monthEnd`, or 0 if the partner had no snapshot
+// yet (hadn't joined). Pass `null` for "current" → falls back to the
+// live getPartnerInvestment. `monthEnd` is a string upper bound like
+// "2026-04-31" (safe: no real date is XX-31 for a 30-day month, and it
+// sorts below the next month's -01), compared against the YYYY-MM-DD
+// prefix of each snapshot date.
+//
+// Shared by the dashboard's Monthly Ledger (Σ across partners) and the
+// Partner Distribution table (per-partner, month-weighted) so a
+// historical month never shows today's capital.
+export function partnerCapitalAsOf(
+  partner: Partner,
+  monthEnd: string | null
+): number {
+  if (!monthEnd) return getPartnerInvestment(partner);
+  const hist = Array.isArray(partner.balanceHistory)
+    ? partner.balanceHistory
+    : [];
+  let latest = 0;
+  let latestDate = "";
+  for (const h of hist) {
+    const d = (h.date || "").slice(0, 10); // ISO timestamp → YYYY-MM-DD
+    if (d && d <= monthEnd && d >= latestDate) {
+      latestDate = d;
+      latest = Number(h.balance) || 0;
+    }
+  }
+  return latest;
+}
