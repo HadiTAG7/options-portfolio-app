@@ -11,7 +11,7 @@ import { EditPartnerDialog } from "@/components/ui/edit-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
-import { CardSkeleton, TableRowSkeleton } from "@/components/ui/skeleton";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent, getPartnerInvestment } from "@/lib/utils";
 import {
   computePartnerDistributionFromTrades,
@@ -421,457 +421,443 @@ export default function PartnersPage() {
         )}
       </div>
 
-      {/* Partners Table */}
-      <section className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-950/90 backdrop-blur-sm">
-        {/* Table Header */}
-        <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-zinc-900/60">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/10 border border-emerald-500/20">
-              <Icon name="group" className="text-emerald-400 !text-base" />
-            </div>
-            <h2 className="text-sm font-headline font-bold text-white tracking-[0.18em] uppercase">
+      {/* Toolbar — title, search, add */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+            <Icon name="group" className="text-emerald-400 !text-lg" />
+          </div>
+          <div className="flex flex-col">
+            <h2 className="text-sm font-headline font-bold text-white tracking-[0.18em] uppercase leading-none">
               قائمة الشركاء
             </h2>
-            <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-bold uppercase tracking-widest">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-              النشطين
+            <span className="mt-1.5 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+              Partners
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            {searchOpen && (
-              <input
-                autoFocus
-                dir="rtl"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setSearchQuery("");
-                    setSearchOpen(false);
-                  }
-                }}
-                placeholder="بحث بالاسم أو الكود..."
-                className="w-48 rounded-md border border-zinc-700/60 bg-zinc-950/80 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:outline-none"
-              />
-            )}
-            <button
-              onClick={() => {
-                if (searchOpen) setSearchQuery("");
-                setSearchOpen((v) => !v);
+        </div>
+        <div className="flex items-center gap-2">
+          {searchOpen && (
+            <input
+              autoFocus
+              dir="rtl"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearchQuery("");
+                  setSearchOpen(false);
+                }
               }}
-              className={`rounded-md p-2 transition-colors hover:bg-white/5 ${
-                searchOpen || searchQuery
-                  ? "text-emerald-400"
-                  : "text-zinc-500 hover:text-zinc-200"
-              }`}
-              title="بحث في الشركاء"
-            >
-              <Icon name={searchOpen ? "close" : "search"} className="!text-lg" />
-            </button>
-            <button
-              onClick={() => setShowAddDialog(true)}
-              className="group relative flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(52,211,153,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
-            >
-              <Icon name="add" className="!text-sm" />
-              إضافة شريك جديد
-            </button>
+              placeholder="بحث بالاسم أو الكود..."
+              className="w-48 rounded-md border border-zinc-700/60 bg-zinc-950/80 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:outline-none"
+            />
+          )}
+          <button
+            onClick={() => {
+              if (searchOpen) setSearchQuery("");
+              setSearchOpen((v) => !v);
+            }}
+            className={`rounded-md p-2 transition-colors hover:bg-white/5 ${
+              searchOpen || searchQuery
+                ? "text-emerald-400"
+                : "text-zinc-500 hover:text-zinc-200"
+            }`}
+            title="بحث في الشركاء"
+          >
+            <Icon name={searchOpen ? "close" : "search"} className="!text-lg" />
+          </button>
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="group relative flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(52,211,153,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
+          >
+            <Icon name="add" className="!text-sm" />
+            إضافة شريك جديد
+          </button>
+        </div>
+      </div>
+
+      {/* Loading — skeleton card grid */}
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && partners.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/70 to-zinc-950/90 px-6 py-20 text-center backdrop-blur-sm">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-zinc-800/70 bg-zinc-950/60">
+            <Icon name="group_off" className="!text-4xl text-zinc-600" />
+          </div>
+          <p className="text-sm text-zinc-200 font-semibold">
+            لا يوجد شركاء في المحفظة
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            قم بإضافة شريك جديد للبدء
+          </p>
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="mt-5 flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(52,211,153,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
+          >
+            <Icon name="add" className="!text-sm" />
+            إضافة شريك جديد
+          </button>
+        </div>
+      )}
+
+      {/* No search matches */}
+      {!loading && partners.length > 0 && visiblePartners.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/70 to-zinc-950/90 px-6 py-16 text-center backdrop-blur-sm">
+          <Icon name="search_off" className="!text-4xl text-zinc-700 mb-2" />
+          <p className="text-sm text-zinc-300">
+            لا توجد نتائج لـ &quot;{searchQuery}&quot;
+          </p>
+        </div>
+      )}
+
+      {/* Partner Cards */}
+      {!loading && visiblePartners.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {visiblePartners.map((partner) => {
+            // dist drives the REALIZED performance figures (Investment,
+            // Ownership, GROSS, FEES, NET). It's the trade-based
+            // distribution, so it reads $0 when no trade settled this
+            // cycle — open-position mark-to-market never bleeds in.
+            const dist = tradeDistribution[partner.id] ?? {
+              partnerId: partner.id,
+              investment: 0,
+              ownershipPct: 0,
+              grossProfit: 0,
+              feeRatePct: 0,
+              feeAmount: 0,
+              netProfit: 0,
+              isManager: false,
+              returnPct: 0,
+              collectedFromLps: [],
+              settleableNet: 0,
+            };
+            // Gates the تثبيت/إيداع buttons. settleableNet, not
+            // netProfit: for the GP, pending LP fees are not settleable
+            // (they arrive via LP settlements), so they must not enable
+            // another تثبيت.
+            const tradeNet = dist.settleableNet;
+            const profitPositive = dist.netProfit >= 0;
+            // Current Balance = Investment + realized net profit. Equals
+            // Investment exactly until a trade settles. Σ across all
+            // cards == the AUM hero.
+            const currentBalance = dist.investment + dist.netProfit;
+            const isGP = dist.isManager;
+            return (
+              <article
+                key={partner.id}
+                className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-gradient-to-br from-zinc-900/80 via-zinc-900/50 to-zinc-950/90 p-5 backdrop-blur-sm transition-all duration-300 ${
+                  isGP
+                    ? "border-amber-400/30 hover:border-amber-400/55 hover:shadow-[0_0_44px_-14px_rgba(251,191,36,0.45)]"
+                    : "border-zinc-800/60 hover:border-emerald-500/40 hover:shadow-[0_0_44px_-14px_rgba(52,211,153,0.4)]"
+                }`}
+              >
+                {/* Corner glow */}
+                <div
+                  className={`pointer-events-none absolute -top-20 -right-16 h-48 w-48 rounded-full blur-3xl transition-opacity duration-300 ${
+                    isGP
+                      ? "bg-amber-400/10 group-hover:bg-amber-400/20"
+                      : "bg-emerald-500/[0.08] group-hover:bg-emerald-500/15"
+                  }`}
+                />
+
+                {/* Header: avatar + name + edit/delete */}
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-[0_0_16px_-4px_rgba(52,211,153,0.4)] ${
+                        isGP
+                          ? "border border-amber-400/40 bg-gradient-to-br from-amber-400/25 to-amber-400/5 text-amber-300"
+                          : "border border-emerald-500/30 bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 text-emerald-400"
+                      }`}
+                    >
+                      {partner.initials}
+                    </div>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="flex items-center gap-1.5 text-[15px] font-bold text-white">
+                        <span className="truncate">{partner.name}</span>
+                        {isGP && (
+                          <span
+                            className="inline-flex shrink-0 items-center rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-amber-300"
+                            title="General Partner · المدير العام"
+                          >
+                            GP
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-mono text-[10px] tracking-wider text-zinc-500">
+                        {partner.code}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={() => setEditTarget(partner)}
+                      className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-400"
+                      title="تعديل بيانات الشريك"
+                    >
+                      <Icon name="edit" className="!text-base" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(partner)}
+                      className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-rose-500/30 hover:bg-rose-500/5 hover:text-rose-400"
+                      title="حذف الشريك"
+                    >
+                      <Icon name="delete" className="!text-base" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary stats: Current Balance (hero) + Investment */}
+                <div className="relative mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-3.5 py-3">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      الرصيد الحالي
+                    </p>
+                    <p
+                      className={`mt-1 font-headline font-mono text-lg font-bold tabular-nums ${
+                        profitPositive ? "text-white" : "text-rose-400"
+                      }`}
+                      title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} الربح المحقق (${formatCurrency(Math.abs(dist.netProfit))})`}
+                    >
+                      {formatCurrency(currentBalance)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-3.5 py-3">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      الاستثمار
+                    </p>
+                    <p className="mt-1 font-headline font-mono text-lg font-semibold tabular-nums text-zinc-200">
+                      {formatCurrency(dist.investment)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Ownership bar */}
+                <div className="relative mt-4">
+                  <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                    <span>نسبة الملكية</span>
+                    <span className="font-mono tabular-nums text-zinc-300">
+                      {dist.ownershipPct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div
+                    className="relative mt-2 h-[4px] w-full overflow-hidden rounded-full bg-zinc-900 ring-1 ring-inset ring-zinc-800/80"
+                    title={`${dist.ownershipPct.toFixed(2)}%`}
+                  >
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.55)] transition-all duration-700 ease-out"
+                      style={{
+                        width: `${Math.max(0, Math.min(100, dist.ownershipPct))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Gross / Fees / Net breakdown */}
+                <div className="relative mt-4 grid grid-cols-3 rounded-xl border border-zinc-800/50 bg-zinc-950/30 p-3">
+                  <div className="flex flex-col gap-1 pl-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                      إجمالي
+                    </span>
+                    <span
+                      className={`font-mono text-xs font-bold tabular-nums ${
+                        dist.grossProfit >= 0 ? "text-white" : "text-rose-500"
+                      }`}
+                    >
+                      {dist.grossProfit >= 0 ? "+" : ""}
+                      {formatCurrency(dist.grossProfit)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1 border-x border-zinc-800/40 px-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                      {isGP ? "رسوم (GP)" : `رسوم · ${dist.feeRatePct.toFixed(0)}%`}
+                    </span>
+                    <span
+                      className={`font-mono text-xs font-bold tabular-nums ${
+                        isGP ? "text-amber-300" : "text-rose-400"
+                      }`}
+                      title={
+                        isGP
+                          ? "الرسوم المحصّلة من جميع الشركاء المحدودين"
+                          : `رسوم الأداء بنسبة ${dist.feeRatePct.toFixed(2)}%`
+                      }
+                    >
+                      {isGP ? "+" : "-"}
+                      {formatCurrency(Math.abs(dist.feeAmount))}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1 pr-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                      صافي {formatPercent(dist.returnPct)}
+                    </span>
+                    <span
+                      className={`font-mono text-xs font-bold tabular-nums ${
+                        profitPositive ? "text-emerald-400" : "text-rose-500"
+                      }`}
+                    >
+                      {profitPositive ? "+" : ""}
+                      {formatCurrency(dist.netProfit)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="relative mt-auto flex flex-col gap-2 pt-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setCapitalizeTarget(partner)}
+                      disabled={tradeNet <= 0}
+                      className="flex items-center justify-center gap-1 rounded-md border border-amber-400/25 bg-amber-400/5 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-amber-300 transition-all duration-200 hover:scale-[1.03] hover:border-amber-400/50 hover:bg-amber-400/10 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-amber-400/25 disabled:hover:bg-amber-400/5 disabled:hover:text-amber-300"
+                      title={
+                        tradeNet > 0
+                          ? "تثبيت الأرباح وتحويلها إلى رأس المال"
+                          : "لا توجد أرباح للتثبيت"
+                      }
+                    >
+                      <Icon name="savings" className="!text-xs" />
+                      تثبيت
+                    </button>
+                    <button
+                      onClick={() => setDepositTarget(partner)}
+                      disabled={anyPendingProfit}
+                      className="flex items-center justify-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-emerald-500/25 disabled:hover:bg-emerald-500/5 disabled:hover:text-emerald-300"
+                      title={
+                        anyPendingProfit
+                          ? tradeNet > 0
+                            ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
+                            : "يوجد شركاء بأرباح معلقة — الإيداع الآن يعيد توزيع حصصهم. سوِّ أرباح الجميع أولاً"
+                          : "إيداع رأس مال جديد"
+                      }
+                    >
+                      <Icon name="add" className="!text-xs" />
+                      إيداع
+                    </button>
+                    <button
+                      onClick={() => setWithdrawTarget(partner)}
+                      className="flex items-center justify-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/5 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-rose-300 transition-all duration-200 hover:scale-[1.03] hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-200"
+                      title="سحب أموال"
+                    >
+                      <Icon name="account_balance" className="!text-xs" />
+                      سحب
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setLedgerTarget(partner)}
+                      className="flex items-center justify-center gap-1.5 rounded-md border border-cyan-400/25 bg-cyan-500/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-cyan-300 transition-all duration-200 hover:scale-[1.02] hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-200"
+                      title="عرض كشف الحساب"
+                    >
+                      <BookOpen size={11} />
+                      كشف الحساب
+                    </button>
+                    <Link
+                      href={`/partners/details?id=${partner.id}`}
+                      className="flex items-center justify-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-400 transition-all duration-200 hover:scale-[1.02] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                    >
+                      <Icon name="arrow_forward" className="!text-xs" />
+                      التفاصيل
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Portfolio Totals ribbon */}
+      {!loading && partners.length > 0 && (
+        <div className="mt-6 overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-zinc-900/80 to-zinc-950/90 backdrop-blur-sm">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 px-6 py-4">
+            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-400">
+              الإجمالي · Portfolio Total
+            </span>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                الاستثمار
+              </span>
+              <span className="font-headline font-mono text-sm font-bold tabular-nums text-white">
+                {formatCurrency(totals.investment)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                الملكية
+              </span>
+              <span className="font-mono text-sm font-bold tabular-nums text-white">
+                {totals.ownership.toFixed(1)}%
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                إجمالي الربح
+              </span>
+              <span
+                className={`font-mono text-sm font-bold tabular-nums ${
+                  totals.gross >= 0 ? "text-white" : "text-rose-500"
+                }`}
+              >
+                {totals.gross >= 0 ? "+" : ""}
+                {formatCurrency(totals.gross)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                الرسوم
+              </span>
+              <span
+                className="font-mono text-sm font-bold tabular-nums text-amber-300"
+                title="إجمالي رسوم الأداء المدفوعة من LPs (يساوي ما حصّله GP)"
+              >
+                {formatCurrency(totals.fees)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                صافي الربح
+              </span>
+              <span
+                className={`font-headline font-mono text-sm font-bold tabular-nums ${
+                  totals.net >= 0 ? "text-emerald-500" : "text-rose-500"
+                }`}
+              >
+                {totals.net >= 0 ? "+" : ""}
+                {formatCurrency(totals.net)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                الرصيد الحالي
+              </span>
+              <span
+                className="font-headline font-mono text-sm font-bold tabular-nums text-white"
+                title={`يطابق إجمالي أصول الشركاء (${formatCurrency(totalCurrentBalanceSum)})`}
+              >
+                {formatCurrency(totals.currentBalance)}
+              </span>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-right">
-            <thead className="sticky top-0 z-10">
-              <tr className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] bg-zinc-950/80 backdrop-blur">
-                <th className="px-6 py-4 font-semibold">الاسم والتعريف</th>
-                <th className="px-6 py-4 font-semibold">
-                  الاستثمار · Investment
-                </th>
-                <th className="px-6 py-4 font-semibold">نسبة الملكية</th>
-                <th className="px-6 py-4 font-semibold">
-                  إجمالي الربح · Gross
-                </th>
-                <th className="px-6 py-4 font-semibold">
-                  رسوم الأداء · Fees
-                </th>
-                <th className="px-6 py-4 font-semibold">
-                  صافي الربح · Net
-                </th>
-                <th className="px-6 py-4 font-semibold">
-                  الرصيد الحالي · Current Balance
-                </th>
-                <th className="px-6 py-4 font-semibold text-left">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/60">
-              {/* Loading State */}
-              {loading && (
-                <>
-                  <TableRowSkeleton cols={8} />
-                  <TableRowSkeleton cols={8} />
-                  <TableRowSkeleton cols={8} />
-                </>
-              )}
-
-              {/* Empty State */}
-              {!loading && partners.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-20 text-center">
-                    <Icon
-                      name="group_off"
-                      className="!text-5xl text-zinc-700 mb-3 block mx-auto"
-                    />
-                    <p className="text-sm text-zinc-300">
-                      لا يوجد شركاء في المحفظة
-                    </p>
-                    <p className="text-[10px] text-zinc-500 mt-1">
-                      قم بإضافة شريك جديد للبدء
-                    </p>
-                  </td>
-                </tr>
-              )}
-
-              {/* No search matches */}
-              {!loading && partners.length > 0 && visiblePartners.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center">
-                    <Icon
-                      name="search_off"
-                      className="!text-4xl text-zinc-700 mb-2 block mx-auto"
-                    />
-                    <p className="text-sm text-zinc-300">
-                      لا توجد نتائج لـ &quot;{searchQuery}&quot;
-                    </p>
-                  </td>
-                </tr>
-              )}
-
-              {/* Data Rows */}
-              {!loading &&
-                visiblePartners.map((partner) => {
-                  // dist drives the REALIZED performance columns
-                  // (Investment, Ownership, GROSS, FEES, NET). It's the
-                  // trade-based distribution, so it reads $0 when no
-                  // trade settled this cycle — open-position
-                  // mark-to-market never bleeds into these columns.
-                  const dist = tradeDistribution[partner.id] ?? {
-                    partnerId: partner.id,
-                    investment: 0,
-                    ownershipPct: 0,
-                    grossProfit: 0,
-                    feeRatePct: 0,
-                    feeAmount: 0,
-                    netProfit: 0,
-                    isManager: false,
-                    returnPct: 0,
-                    collectedFromLps: [],
-                    settleableNet: 0,
-                  };
-                  // Gates the تثبيت/إيداع buttons. settleableNet, not
-                  // netProfit: for the GP, pending LP fees are not
-                  // settleable (they arrive via LP settlements), so
-                  // they must not enable another تثبيت.
-                  const tradeNet = dist.settleableNet;
-                  const profitPositive = dist.netProfit >= 0;
-                  // Current Balance = Investment + realized net profit.
-                  // No livePnL / broker-balance back-calculation — when
-                  // nothing has settled this cycle (netProfit == 0) the
-                  // balance equals the Investment column to the cent.
-                  const currentBalance = dist.investment + dist.netProfit;
-                  return (
-                    <tr
-                      key={partner.id}
-                      className="group transition-colors hover:bg-white/[0.03]"
-                    >
-                      {/* Name & ID */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/30 text-xs font-bold text-emerald-400 shadow-[0_0_12px_-4px_rgba(52,211,153,0.4)]">
-                            {partner.initials}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-1.5 text-sm text-white font-semibold">
-                              {partner.name}
-                              {dist.isManager && (
-                                <span
-                                  className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-amber-300"
-                                  title="General Partner · المدير العام"
-                                >
-                                  GP
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-mono tracking-wider">
-                              {partner.code}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Investment */}
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-headline font-semibold text-white font-mono tabular-nums">
-                          {formatCurrency(dist.investment)}
-                        </span>
-                      </td>
-
-                      {/* Ownership Percentage */}
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-2">
-                          <span className="text-sm font-mono font-semibold text-white tabular-nums">
-                            {dist.ownershipPct.toFixed(1)}%
-                          </span>
-                          <div
-                            className="relative h-[3px] w-32 overflow-hidden rounded-full bg-zinc-900 ring-1 ring-inset ring-zinc-800/80"
-                            title={`${dist.ownershipPct.toFixed(2)}%`}
-                          >
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.55)] transition-all duration-700 ease-out"
-                              style={{
-                                width: `${Math.max(0, Math.min(100, dist.ownershipPct))}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Gross Profit — REALIZED share before fees.
-                          Neutral white when flat/positive, rose only on
-                          an actual realized loss. Unrealized
-                          mark-to-market lives in Current Balance, not here. */}
-                      <td className="px-6 py-4">
-                        <span
-                          className={`text-sm font-mono tabular-nums font-bold ${
-                            dist.grossProfit >= 0
-                              ? "text-white"
-                              : "text-rose-500"
-                          }`}
-                        >
-                          {dist.grossProfit >= 0 ? "+" : ""}
-                          {formatCurrency(dist.grossProfit)}
-                        </span>
-                      </td>
-
-                      {/* Fees Deducted — red (LP paid) or amber (GP collected) */}
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span
-                            className={`text-sm font-mono tabular-nums font-bold ${
-                              dist.isManager
-                                ? "text-amber-300"
-                                : "text-rose-400"
-                            }`}
-                            title={
-                              dist.isManager
-                                ? "الرسوم المحصّلة من جميع الشركاء المحدودين"
-                                : `رسوم الأداء بنسبة ${dist.feeRatePct.toFixed(2)}%`
-                            }
-                          >
-                            {dist.isManager ? "+" : "-"}
-                            {formatCurrency(Math.abs(dist.feeAmount))}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
-                            {dist.isManager
-                              ? "محصّلة (GP)"
-                              : `مدفوعة · ${dist.feeRatePct.toFixed(0)}%`}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Net Profit — REALIZED earnings this cycle
-                          (after fees). $0 until a trade settles —
-                          unrealized drift never shows here. */}
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span
-                            className={`text-sm font-headline font-bold font-mono tabular-nums ${
-                              profitPositive
-                                ? "text-emerald-500"
-                                : "text-rose-500"
-                            }`}
-                          >
-                            {profitPositive ? "+" : ""}
-                            {formatCurrency(dist.netProfit)}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold tabular-nums ${
-                              profitPositive
-                                ? "text-emerald-500/70"
-                                : "text-rose-500/70"
-                            }`}
-                          >
-                            {formatPercent(dist.returnPct)}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Current Balance — Investment + realized net
-                          profit. Equals Investment exactly until a trade
-                          settles. Σ across all rows == the AUM hero. */}
-                      <td className="px-6 py-4">
-                        <span
-                          className={`text-sm font-headline font-bold font-mono tabular-nums ${
-                            profitPositive
-                              ? "text-emerald-500"
-                              : "text-rose-500"
-                          }`}
-                          title={`الاستثمار (${formatCurrency(dist.investment)}) ${profitPositive ? "+" : "−"} الربح المحقق (${formatCurrency(Math.abs(dist.netProfit))})`}
-                        >
-                          {formatCurrency(currentBalance)}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-4 text-left">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button
-                            onClick={() => setLedgerTarget(partner)}
-                            className="flex items-center gap-1 rounded-md border border-cyan-400/25 bg-cyan-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300 transition-all duration-200 hover:scale-[1.03] hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-200"
-                            title="عرض كشف الحساب"
-                          >
-                            <BookOpen size={11} />
-                            View Ledger
-                          </button>
-                          <button
-                            onClick={() => setEditTarget(partner)}
-                            className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-400"
-                            title="تعديل بيانات الشريك"
-                          >
-                            <Icon name="edit" className="!text-base" />
-                          </button>
-                          <button
-                            onClick={() => setDepositTarget(partner)}
-                            disabled={anyPendingProfit}
-                            className="flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-emerald-500/25 disabled:hover:bg-emerald-500/5 disabled:hover:text-emerald-300"
-                            title={
-                              anyPendingProfit
-                                ? tradeNet > 0
-                                  ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
-                                  : "يوجد شركاء بأرباح معلقة — الإيداع الآن يعيد توزيع حصصهم. سوِّ أرباح الجميع أولاً"
-                                : "إيداع رأس مال جديد"
-                            }
-                          >
-                            <Icon name="add" className="!text-xs" />
-                            إيداع
-                          </button>
-                          <button
-                            onClick={() => setWithdrawTarget(partner)}
-                            className="flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-300 transition-all duration-200 hover:scale-[1.03] hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-200"
-                            title="سحب أموال"
-                          >
-                            <Icon
-                              name="account_balance"
-                              className="!text-xs"
-                            />
-                            سحب
-                          </button>
-                          <button
-                            onClick={() => setCapitalizeTarget(partner)}
-                            disabled={tradeNet <= 0}
-                            className="flex items-center gap-1 rounded-md border border-amber-400/25 bg-amber-400/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-300 transition-all duration-200 hover:scale-[1.03] hover:border-amber-400/50 hover:bg-amber-400/10 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-amber-400/25 disabled:hover:bg-amber-400/5 disabled:hover:text-amber-300"
-                            title={
-                              tradeNet > 0
-                                ? "تثبيت الأرباح وتحويلها إلى رأس المال"
-                                : "لا توجد أرباح للتثبيت"
-                            }
-                          >
-                            <Icon name="savings" className="!text-xs" />
-                            تثبيت
-                          </button>
-                          <Link
-                            href={`/partners/details?id=${partner.id}`}
-                            className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
-                          >
-                            التفاصيل
-                          </Link>
-                          <button
-                            onClick={() => setDeleteTarget(partner)}
-                            className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-rose-500/30 hover:bg-rose-500/5 hover:text-rose-400"
-                            title="حذف الشريك"
-                          >
-                            <Icon name="delete" className="!text-base" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-
-            {/* Totals Footer */}
-            {!loading && partners.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-emerald-500/30 bg-zinc-950/90">
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
-                      الإجمالي · Total
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-headline font-bold text-white font-mono tabular-nums">
-                      {formatCurrency(totals.investment)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-mono font-bold text-white tabular-nums">
-                      {totals.ownership.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`text-sm font-mono tabular-nums font-bold ${
-                        totals.gross >= 0 ? "text-white" : "text-rose-500"
-                      }`}
-                    >
-                      {totals.gross >= 0 ? "+" : ""}
-                      {formatCurrency(totals.gross)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className="text-sm font-mono tabular-nums font-bold text-amber-300"
-                      title="إجمالي رسوم الأداء المدفوعة من LPs (يساوي ما حصّله GP)"
-                    >
-                      {formatCurrency(totals.fees)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`text-sm font-headline font-bold font-mono tabular-nums ${
-                        totals.net >= 0 ? "text-emerald-500" : "text-rose-500"
-                      }`}
-                    >
-                      {totals.net >= 0 ? "+" : ""}
-                      {formatCurrency(totals.net)}
-                    </span>
-                  </td>
-                  {/* Current Balance total = Σ (investment + realized net) — identical to the AUM hero. */}
-                  <td className="px-6 py-4">
-                    <span
-                      className="text-sm font-headline font-bold text-white font-mono tabular-nums"
-                      title={`يطابق إجمالي أصول الشركاء (${formatCurrency(totalCurrentBalanceSum)})`}
-                    >
-                      {formatCurrency(totals.currentBalance)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+      {/* Footer count */}
+      {!loading && partners.length > 0 && (
+        <div className="mt-4 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          عرض{" "}
+          <span className="tabular-nums text-zinc-300">
+            {visiblePartners.length}
+          </span>{" "}
+          {searchQuery ? `من ${partners.length} ` : ""}شريك
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-zinc-800/60 bg-zinc-950/60 px-4 py-3 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
-          <span>
-            عرض{" "}
-            <span className="text-zinc-300 tabular-nums">
-              {visiblePartners.length}
-            </span>{" "}
-            {searchQuery ? `من ${partners.length} ` : ""}شريك
-          </span>
-        </div>
-      </section>
+      )}
     </AppShell>
   );
 }
