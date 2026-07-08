@@ -321,7 +321,7 @@ function PartnerDetailInner() {
             تفاصيل الشريك
           </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            عرض تحليلي للحصة النسبية في المحفظة النشطة
+            عرض تفصيلي لمركزك في الصندوق
           </p>
           {partner.entryDate && (
             <p className="text-[10px] text-on-surface-variant/70 mt-2 flex items-center gap-1.5">
@@ -332,14 +332,6 @@ function PartnerDetailInner() {
               </span>
             </p>
           )}
-        </div>
-        <div className="bg-surface-container-highest px-6 py-4 border-r-4 border-primary rounded-xl">
-          <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-1">
-            نسبة الملكية
-          </span>
-          <span className="text-3xl font-headline font-black text-primary">
-            {ownershipPct.toFixed(2)}%
-          </span>
         </div>
       </div>
 
