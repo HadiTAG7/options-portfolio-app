@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils";
 import {
   computePartnerDistributionFromTrades,
   isManagerPartner,
+  tradeMonthKey,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
@@ -33,6 +34,23 @@ function partnerFriendlyType(type: string): { ar: string; en: string } {
   return { ar: type, en: "" };
 }
 
+// Gregorian month names in Arabic (Gulf/MSA), indexed 0–11. A manual
+// map avoids toLocaleString("ar-SA") defaulting to the Hijri calendar.
+const AR_MONTHS = [
+  "يناير",
+  "فبراير",
+  "مارس",
+  "أبريل",
+  "مايو",
+  "يونيو",
+  "يوليو",
+  "أغسطس",
+  "سبتمبر",
+  "أكتوبر",
+  "نوفمبر",
+  "ديسمبر",
+];
+
 // Inner component reads the partner id from the URL query string. Split
 // out from the default export so we can wrap it in <Suspense> — that's
 // required by useSearchParams during prerender (the static-export build
@@ -41,7 +59,7 @@ function PartnerDetailInner() {
   const searchParams = useSearchParams();
   const partnerId = searchParams.get("id") ?? "";
 
-  const { partners, loading: partnersLoading, totalAssets } = usePartners();
+  const { partners, loading: partnersLoading } = usePartners();
   const {
     trades,
     sellPuts,
@@ -188,6 +206,45 @@ function PartnerDetailInner() {
     });
   }, [partner, ownershipPct, activeStocks]);
 
+  // Monthly profit log — the partner's realized profit, month by month.
+  // Reuses the GP dashboard's exact convention: bucket trades by
+  // profit-month, then run the distribution engine over each month with
+  // settlement stamps nulled (a later تثبيت must NOT erase history) but
+  // entry-date eligibility active. So each row is this partner's own
+  // gross / fee / net for that month, and the numbers reconcile with the
+  // manager's monthly ledger.
+  const monthlyLog = useMemo(() => {
+    if (!partnerId) return [];
+    const statementPartners = partners.map((p) => ({
+      ...p,
+      lastSettlementDate: null,
+    }));
+    const tradesByMonth: Record<string, typeof trades> = {};
+    for (const t of trades) {
+      const key = tradeMonthKey(t);
+      if (!key) continue;
+      (tradesByMonth[key] ??= []).push(t);
+    }
+    return Object.keys(tradesByMonth)
+      .sort()
+      .reverse()
+      .map((key) => {
+        const md = computePartnerDistributionFromTrades(
+          statementPartners,
+          tradesByMonth[key]
+        )[partnerId];
+        const [y, m] = key.split("-");
+        return {
+          key,
+          label: `${AR_MONTHS[Number(m) - 1]} ${y}`,
+          gross: md?.grossProfit ?? 0,
+          fee: md?.feeAmount ?? 0,
+          net: md?.netProfit ?? 0,
+        };
+      })
+      .filter((r) => r.gross !== 0 || r.net !== 0);
+  }, [partnerId, partners, trades]);
+
   const loading = partnersLoading || tradesLoading;
 
   if (loading) {
@@ -220,6 +277,7 @@ function PartnerDetailInner() {
   const pendingNet = dist?.netProfit ?? 0;
   const pendingFee = dist?.feeAmount ?? 0;
   const netProfitTone = pendingNet >= 0 ? "text-primary" : "text-secondary";
+  const monthlyLogTotal = monthlyLog.reduce((s, r) => s + r.net, 0);
 
   return (
     <>
@@ -282,9 +340,6 @@ function PartnerDetailInner() {
               <span className="text-5xl font-headline font-light tracking-tighter text-on-surface block font-mono">
                 {formatCurrency(partner.currentBalance)}
               </span>
-              <span className="text-[10px] text-on-surface-variant mt-3 block">
-                من إجمالي {formatCurrency(totalAssets)} في المحفظة
-              </span>
             </div>
             <div className="text-left">
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-label block mb-2">
@@ -336,6 +391,97 @@ function PartnerDetailInner() {
             <span className="text-[10px] text-on-surface-variant mt-1 block">
               قيمة رأس المال المُودع
             </span>
+          </div>
+        </div>
+
+        {/* Monthly Profit Log — the partner's realized profit per month.
+            Settlement-blind + entry-date gated, so it's a permanent
+            record that survives تثبيت and reconciles with the GP ledger. */}
+        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
+            <div className="flex items-center gap-3">
+              <Icon name="calendar_month" className="text-primary" />
+              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
+                سجل الأرباح الشهري
+              </h2>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary">
+                {monthlyLog.length} شهر
+              </span>
+            </div>
+            {monthlyLog.length > 0 && (
+              <div className="text-left">
+                <span className="text-[9px] uppercase tracking-widest text-on-surface-variant font-label block mb-0.5">
+                  إجمالي الصافي
+                </span>
+                <span
+                  className={`text-lg font-headline font-bold font-mono tabular-nums ${
+                    monthlyLogTotal >= 0 ? "text-primary" : "text-secondary"
+                  }`}
+                >
+                  {monthlyLogTotal >= 0 ? "+" : ""}
+                  {formatCurrency(monthlyLogTotal)}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="p-4">
+            {monthlyLog.length === 0 ? (
+              <div className="py-12 text-center">
+                <Icon
+                  name="event_busy"
+                  className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+                />
+                <p className="text-sm text-on-surface-variant">
+                  لا توجد أرباح مسجلة بعد
+                </p>
+                <p className="text-[10px] text-on-surface-variant/60 mt-1">
+                  تظهر هنا أرباحك المحققة شهراً بشهر
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                {monthlyLog.map((row) => {
+                  const positive = row.net >= 0;
+                  return (
+                    <div
+                      key={row.key}
+                      className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-surface-container-low px-4 py-3 transition-colors hover:border-primary/30 hover:bg-white/[0.02]"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                          <Icon name="calendar_month" className="!text-base" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-white">
+                            {row.label}
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">
+                            الربح الصافي
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span
+                          className={`text-base font-headline font-bold font-mono tabular-nums ${
+                            positive ? "text-primary" : "text-secondary"
+                          }`}
+                        >
+                          {positive ? "+" : ""}
+                          {formatCurrency(row.net)}
+                        </span>
+                        <span className="text-[10px] text-on-surface-variant/70 font-mono tabular-nums">
+                          {isGP ? "إجمالي " : "قبل الرسوم "}
+                          {formatCurrency(row.gross)}
+                          {" · "}
+                          {isGP ? "رسوم +" : "رسوم −"}
+                          {formatCurrency(Math.abs(row.fee))}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
