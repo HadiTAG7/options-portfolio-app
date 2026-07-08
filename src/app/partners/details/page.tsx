@@ -51,6 +51,14 @@ const AR_MONTHS = [
   "ديسمبر",
 ];
 
+// "20 أبريل 2026" from an ISO / YYYY-MM-DD string (Gregorian, Arabic).
+function formatSnapshotDate(iso: string): string {
+  const d = (iso || "").slice(0, 10);
+  const [y, m, day] = d.split("-");
+  if (!y || !m || !day) return iso || "—";
+  return `${Number(day)} ${AR_MONTHS[Number(m) - 1] ?? m} ${y}`;
+}
+
 // Inner component reads the partner id from the URL query string. Split
 // out from the default export so we can wrap it in <Suspense> — that's
 // required by useSearchParams during prerender (the static-export build
@@ -244,6 +252,28 @@ function PartnerDetailInner() {
       })
       .filter((r) => r.gross !== 0 || r.net !== 0);
   }, [partnerId, partners, trades]);
+
+  // Capital timeline — reconstructed from balanceHistory snapshots.
+  // The per-event history (which change was a deposit vs a
+  // capitalization vs a fee) was never stored, so each row shows the
+  // recorded balance at a date and the NET change since the previous
+  // snapshot. Most-recent first.
+  const capitalTimeline = useMemo(() => {
+    const hist = Array.isArray(partner?.balanceHistory)
+      ? [...partner!.balanceHistory]
+      : [];
+    hist.sort((a, b) =>
+      (a.date || "").slice(0, 10).localeCompare((b.date || "").slice(0, 10))
+    );
+    let prev: number | null = null;
+    const rows = hist.map((h) => {
+      const balance = Number(h.balance) || 0;
+      const delta = prev === null ? null : balance - prev;
+      prev = balance;
+      return { date: h.date, balance, delta };
+    });
+    return rows.reverse();
+  }, [partner]);
 
   const loading = partnersLoading || tradesLoading;
 
@@ -779,6 +809,91 @@ function PartnerDetailInner() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Capital Timeline — reconstructed from balanceHistory
+            snapshots. Per-event typing (deposit vs capitalize vs fee)
+            was never stored, so this shows the recorded balance at each
+            date and the NET change since the previous snapshot. The
+            itemized journal below covers events logged going forward. */}
+        <div className="col-span-12 bg-surface-container rounded-xl border border-zinc-800/60 overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-surface-container-high">
+            <div className="flex items-center gap-3">
+              <Icon name="timeline" className="text-primary" />
+              <h2 className="text-sm font-headline font-bold text-white tracking-widest uppercase">
+                تطور رأس المال · Capital Timeline
+              </h2>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary">
+                {capitalTimeline.length} لقطة
+              </span>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="mb-3 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-on-surface-variant/80">
+              <Icon name="info" className="!text-sm text-tertiary mt-0.5" />
+              <span>
+                لقطات الرصيد المسجّلة عبر الزمن. التغيّر يعكس صافي الحركة في
+                الفترة (إيداع / سحب / تثبيت مجمّعة). الحركات المفصّلة تظهر في
+                «سجل الحركات» أدناه.
+              </span>
+            </div>
+            {capitalTimeline.length === 0 ? (
+              <div className="py-12 text-center">
+                <Icon
+                  name="timeline"
+                  className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
+                />
+                <p className="text-sm text-on-surface-variant">
+                  لا توجد لقطات مسجّلة
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                {capitalTimeline.map((row, i) => {
+                  const up = (row.delta ?? 0) >= 0;
+                  return (
+                    <div
+                      key={`${row.date}-${i}`}
+                      className="flex items-center justify-between rounded-lg border border-zinc-800/50 bg-surface-container-low px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                          <Icon name="savings" className="!text-base" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-white">
+                            {formatSnapshotDate(row.date)}
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">
+                            الرصيد المسجّل
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-base font-headline font-bold font-mono tabular-nums text-white">
+                          {formatCurrency(row.balance)}
+                        </span>
+                        {row.delta === null ? (
+                          <span className="text-[10px] text-on-surface-variant/60 uppercase tracking-wider">
+                            بداية
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[11px] font-mono tabular-nums font-bold ${
+                              up ? "text-primary" : "text-secondary"
+                            }`}
+                          >
+                            {up ? "+" : ""}
+                            {formatCurrency(row.delta)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
