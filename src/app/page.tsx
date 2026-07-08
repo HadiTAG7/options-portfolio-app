@@ -146,10 +146,30 @@ export default function DashboardPage() {
   const monthlyLedger = useMemo(() => {
     const now = new Date();
     const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const capital = partners.reduce(
-      (s, p) => s + (Number(p.currentBalance) || 0),
-      0
-    );
+    // Capital base AS OF the end of a given YYYY-MM month, reconstructed
+    // from each partner's balanceHistory (dated currentBalance
+    // snapshots). Each partner contributes their most recent snapshot
+    // on/before the month end; partners who hadn't joined yet contribute
+    // 0. This replaces the old single Σ currentBalance snapshot that was
+    // stamped on EVERY row — which made any new deposit/capitalization
+    // retroactively rewrite historical months' capital (and their return
+    // %, since نسبة الربح = grossProfit / totalCapital).
+    // `${key}-31` is a safe string upper bound: no real date is XX-31 for
+    // 30-day months, and it sorts below the next month's -01.
+    const capitalAsOf = (monthEnd: string) =>
+      partners.reduce((sum, p) => {
+        const hist = Array.isArray(p.balanceHistory) ? p.balanceHistory : [];
+        let latest = 0;
+        let latestDate = "";
+        for (const h of hist) {
+          const d = (h.date || "").slice(0, 10); // ISO timestamp → YYYY-MM-DD
+          if (d && d <= monthEnd && d >= latestDate) {
+            latestDate = d;
+            latest = Number(h.balance) || 0;
+          }
+        }
+        return sum + latest;
+      }, 0);
     const statementPartners = partners.map((p) => ({
       ...p,
       lastSettlementDate: null,
@@ -185,7 +205,7 @@ export default function DashboardPage() {
           quarter,
           grossProfit: profit,
           gpFees,
-          totalCapital: capital,
+          totalCapital: capitalAsOf(`${key}-31`),
           status: (key === currentKey ? "Active" : "Settled") as "Active" | "Settled",
         };
       });
