@@ -72,18 +72,25 @@ export default function DashboardPage() {
       ),
     [realizedDistribution]
   );
-  // Pending GP performance fees on REALIZED profit only (Σ LP
-  // feeAmount). The old computeGpFeeTotal(partners, totalProfit) taxed
-  // unrealized mark-to-market and open premium and ignored settlement,
-  // so the card overstated collectable fees and never reconciled with
-  // the Partners table.
-  const gpFeeTotal = useMemo(
-    () =>
-      Object.values(realizedDistribution)
-        .filter((d) => !d.isManager)
-        .reduce((s, d) => s + d.feeAmount, 0),
-    [realizedDistribution]
-  );
+  // Total GP performance fees EARNED across all realized trades,
+  // settlement-blind (lastSettlementDate nulled) — the same basis as
+  // the monthly ledger's fee column, so the card equals Σ of those
+  // rows. Using the settlement-aware realizedDistribution here made the
+  // card read $0 once every partner had been settled (the fees were
+  // already moved into GP capital by creditGpFee), which looked like
+  // the fees had "disappeared." This figure is what the GP has earned,
+  // whether or not it's been capitalized yet.
+  const gpFeeTotal = useMemo(() => {
+    const statementPartners = partners.map((p) => ({
+      ...p,
+      lastSettlementDate: null,
+    }));
+    return Object.values(
+      computePartnerDistributionFromTrades(statementPartners, trades)
+    )
+      .filter((d) => !d.isManager)
+      .reduce((s, d) => s + d.feeAmount, 0);
+  }, [partners, trades]);
   // Book-value AUM = committed capital + realized profit. Mirrors the
   // Partners page "Total Partner Assets" / Current Balance total to the
   // cent. Deliberately ignores the broker's live balance (totalAssets)
