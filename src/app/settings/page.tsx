@@ -787,8 +787,9 @@ function Divider() {
 // one-click create/link (or password reset) through the GP-only
 // /api/admin/partner-accounts route. Rollout order (shown in the
 // panel): create accounts here (the GP's own first — bootstrap mode
-// allows it before any account exists), run migration 013, rebuild
-// with NEXT_PUBLIC_AUTH_ENFORCED=1.
+// allows it before any account exists), run migration 014 (links
+// accounts + enables role-aware RLS), then redeploy — enforcement is
+// on by default.
 
 interface AccountRow {
   id: string;
@@ -925,9 +926,11 @@ function PartnerAccountsPanel() {
         ترتيب التفعيل: <span className="text-zinc-200">١)</span> أنشئ الحسابات من هنا —
         <span className="text-emerald-300"> حسابك (المدير) أولاً</span>،{" "}
         <span className="text-zinc-200">٢)</span> شغّل{" "}
-        <span className="font-mono text-[10px]">migration 013</span> في Supabase،{" "}
-        <span className="text-zinc-200">٣)</span> أعد البناء بـ{" "}
-        <span className="font-mono text-[10px]">NEXT_PUBLIC_AUTH_ENFORCED=1</span>.
+        <span className="font-mono text-[10px]">migration 014</span> في Supabase (يربط
+        الحسابات ويفعّل الصلاحيات)،{" "}
+        <span className="text-zinc-200">٣)</span> أعد النشر — التحقق مُفعّل تلقائياً
+        (لإيقافه مؤقتاً:{" "}
+        <span className="font-mono text-[10px]">NEXT_PUBLIC_AUTH_ENFORCED=0</span>).
       </div>
 
       {loadError && (

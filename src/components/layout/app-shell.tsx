@@ -13,13 +13,13 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-// Auth enforcement is an explicit build-time switch. Rollout order
-// matters: deploy this code (switch off → app behaves exactly as
-// before) → create the 6 auth users in the Supabase dashboard → link
-// them to partner rows → run migration 013 (locks RLS) → rebuild with
-// NEXT_PUBLIC_AUTH_ENFORCED=1. Flipping the switch before the accounts
-// exist would lock everyone out.
-const AUTH_ENFORCED = process.env.NEXT_PUBLIC_AUTH_ENFORCED === "1";
+// Auth enforcement is ON by default now that the partner accounts exist,
+// are linked (partners.auth_user_id) and RLS is live (migration 014):
+//   anonymous → /login · GP → full terminal · LP → own details page.
+// Set NEXT_PUBLIC_AUTH_ENFORCED=0 to temporarily fall back to the old
+// open behavior (no login, shared anon view). Any other value — unset
+// included — enforces.
+const AUTH_ENFORCED = process.env.NEXT_PUBLIC_AUTH_ENFORCED !== "0";
 
 export function AppShell({ children }: AppShellProps) {
   if (!AUTH_ENFORCED) {

@@ -52,9 +52,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           # Repository Variable (Settings → Secrets and variables →
-          # Actions → Variables). Set AUTH_ENFORCED=1 after the partner
-          # accounts exist and migration 013 has run — the APK then
-          # requires sign-in. Unset/empty = auth guard dormant.
+          # Actions → Variables). Enforcement is ON by default in code
+          # now that accounts are linked + RLS is live (migration 014);
+          # unset/empty here = the APK requires sign-in. Set
+          # AUTH_ENFORCED=0 only to temporarily ship an open build.
           NEXT_PUBLIC_AUTH_ENFORCED: ${{ vars.AUTH_ENFORCED }}
         run: npm run build:mobile
 
