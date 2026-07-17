@@ -1,9 +1,10 @@
-// Which backend the app talks to. Default is Supabase; the Firebase
-// cutover is a deploy-time switch:
-//   web:  set NEXT_PUBLIC_BACKEND=firebase in the hosting env + redeploy
-//   APK:  set the APP_BACKEND repository variable to "firebase" + rerun
-//         the Android workflow
-// Rollback = remove the variable (or set it to "supabase") + redeploy.
-// Works on both client and server (API routes read the same variable).
+// Which backend the app talks to. CUTOVER DONE (2026-07-17): Firebase
+// is the default — data, auth users (same passwords, same UIDs) and
+// custom claims were migrated and verified against Supabase to the cent
+// (run 29589084603: 6/33/4/7 docs, Σ balances $691,029.31 ✓).
+//
+// ROLLBACK: set NEXT_PUBLIC_BACKEND=supabase in the deploy env (web) /
+// the APP_BACKEND repository variable (APK) and redeploy — the Supabase
+// project was left untouched as the fallback.
 export const BACKEND: "supabase" | "firebase" =
-  process.env.NEXT_PUBLIC_BACKEND === "firebase" ? "firebase" : "supabase";
+  process.env.NEXT_PUBLIC_BACKEND === "supabase" ? "supabase" : "firebase";
