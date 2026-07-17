@@ -1,0 +1,39 @@
+# One-click full data backup, downloadable as a workflow artifact.
+#
+# Run from: GitHub → Actions → "Backup Supabase" → Run workflow, then
+# open the run and download the "supabase-backup-…" artifact (zip).
+#
+# Requires repository secrets: SUPABASE_URL (exists — APK build uses it)
+# and SUPABASE_SERVICE_ROLE_KEY (added for the Firebase migration).
+#
+# Run it right BEFORE the Firebase cutover so the snapshot includes the
+# very latest data. Artifacts are kept for 90 days — download and store
+# the zip somewhere safe (personal drive), not in the repository.
+
+name: Backup Supabase
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Pure-Node script — no npm install needed.
+      - name: Export all tables
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backup-supabase.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backup-output/
+          retention-days: 90
