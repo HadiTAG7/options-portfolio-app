@@ -1,0 +1,38 @@
+# One-click Supabase → Firebase migration.
+#
+# Run it from: GitHub → Actions → "Migrate to Firebase" → Run workflow.
+# Requires these repository secrets (Settings → Secrets and variables →
+# Actions):
+#   SUPABASE_URL                (already exists — used by the APK build)
+#   SUPABASE_SERVICE_ROLE_KEY   Supabase → Project Settings → API keys → service_role
+#   FIREBASE_SERVICE_ACCOUNT    the service-account JSON file's full contents
+#   AUTH_USERS_JSON             output of scripts/export-auth-users.sql
+#
+# The job moves data + auth users (same passwords) + custom claims, then
+# verifies counts and money totals. Re-running is safe.
+
+name: Migrate to Firebase
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run migration + verification
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          AUTH_USERS_JSON: ${{ secrets.AUTH_USERS_JSON }}
+        run: node scripts/migrate-to-firebase.mjs

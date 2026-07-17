@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Access model — identical to the Supabase RLS this replaces:
+//   • Any signed-in partner READS partners / trades / active_stocks
+//     (the profit engine needs the full partner list to compute any
+//     single partner's share; co-investors already know each other).
+//   • transactions is the exception: an LP reads ONLY their own rows.
+//   • Only the GP WRITES anything. Anonymous users get nothing.
+//
+// Identity comes from custom claims stamped by the migration script /
+// the admin accounts API:  gp: boolean, partnerId: string.
+//
+// Deploy: Firebase console → Firestore Database → Rules → paste → Publish.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isGP() {
+      return signedIn() && request.auth.token.gp == true;
+    }
+
+    match /partners/{id} {
+      allow read: if signedIn();
+      allow write: if isGP();
+    }
+
+    match /trades/{id} {
+      allow read: if signedIn();
+      allow write: if isGP();
+    }
+
+    match /active_stocks/{id} {
+      allow read: if signedIn();
+      allow write: if isGP();
+    }
+
+    match /transactions/{id} {
+      allow read: if isGP()
+        || (signedIn() && resource.data.investorId == request.auth.token.partnerId);
+      allow write: if isGP();
+    }
+
+    // Anything else: denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
