@@ -40,7 +40,8 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
-          java-version: "17"
+          # Capacitor 8's Android library compiles with source release 21.
+          java-version: "21"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
