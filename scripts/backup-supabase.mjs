@@ -27,15 +27,15 @@ const money = (v) => Math.round(v * 100) / 100;
 const manifest = { generatedAt: new Date().toISOString(), tables: {} };
 
 for (const table of TABLES) {
+  // Legacy JWT keys (eyJ…) go in apikey + Authorization; new secret
+  // keys (sb_secret_…) are not JWTs and must be apikey-only.
+  const headers = { apikey: SUPABASE_SERVICE_ROLE_KEY, Range: "0-9999" };
+  if (!SUPABASE_SERVICE_ROLE_KEY.startsWith("sb_")) {
+    headers.Authorization = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+  }
   const res = await fetch(
     `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${table}?select=*`,
-    {
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        Range: "0-9999",
-      },
-    }
+    { headers }
   );
   if (!res.ok) {
     console.error(`✗ ${table}: ${res.status} ${await res.text()}`);

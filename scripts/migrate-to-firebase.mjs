@@ -67,17 +67,26 @@ const auth = getAuth();
 
 const TABLES = ["partners", "trades", "active_stocks", "transactions"];
 
+// Accepts BOTH Supabase key formats: legacy JWT service_role keys
+// (eyJ…) go in apikey + Authorization; new secret keys (sb_secret_…)
+// must be sent as apikey ONLY (they are not JWTs — a Bearer header
+// would break PostgREST's token parsing).
+function supabaseHeaders() {
+  const headers = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    // Large enough for this dataset; PostgREST default page is 1000.
+    Range: "0-9999",
+  };
+  if (!SUPABASE_SERVICE_ROLE_KEY.startsWith("sb_")) {
+    headers.Authorization = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+  }
+  return headers;
+}
+
 async function fetchAll(table) {
   const res = await fetch(
     `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${table}?select=*`,
-    {
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        // Large enough for this dataset; PostgREST default page is 1000.
-        Range: "0-9999",
-      },
-    }
+    { headers: supabaseHeaders() }
   );
   if (!res.ok) {
     fail(`Reading ${table} failed: ${res.status} ${await res.text()}`);
