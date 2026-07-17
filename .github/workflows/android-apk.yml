@@ -57,6 +57,10 @@ jobs:
           # unset/empty here = the APK requires sign-in. Set
           # AUTH_ENFORCED=0 only to temporarily ship an open build.
           NEXT_PUBLIC_AUTH_ENFORCED: ${{ vars.AUTH_ENFORCED }}
+          # Backend switch (Repository Variable APP_BACKEND). Unset =
+          # Supabase. Set to "firebase" at cutover — the APK then talks
+          # to Firestore/Firebase Auth. Rollback: clear the variable.
+          NEXT_PUBLIC_BACKEND: ${{ vars.APP_BACKEND }}
         run: npm run build:mobile
 
       # cap add is idempotent on already-initialised projects but errors

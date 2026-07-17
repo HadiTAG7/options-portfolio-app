@@ -2,6 +2,8 @@ import { type NextRequest } from "next/server";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { BACKEND } from "@/lib/backend";
+import { adminDb } from "@/lib/firebase-admin";
 import type { Partner, Trade } from "@/types";
 import { safeNumber, getPartnerInvestment } from "@/lib/utils";
 import {
@@ -99,25 +101,45 @@ export async function POST(request: NextRequest) {
       auth: { user: gmailUser, pass: gmailAppPassword },
     });
 
-    // Server-side reads. After migration 013 locks RLS, anon reads
-    // nothing — set SUPABASE_SERVICE_ROLE_KEY (server-only env, never
-    // NEXT_PUBLIC_*) so this route keeps working; falls back to the
-    // anon key on pre-013 environments.
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY ??
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // Server-side reads — branch by backend. Firebase: firebase-admin
+    // bypasses firestore.rules (like service_role bypasses RLS).
+    // Supabase: service key (RLS is locked), anon fallback pre-013.
+    let partnerRows: PartnerRow[] = [];
+    let tradeRows: Database["public"]["Tables"]["trades"]["Row"][] = [];
+    if (BACKEND === "firebase") {
+      const db = adminDb();
+      const [pSnap, tSnap] = await Promise.all([
+        db.collection("partners").get(),
+        db.collection("trades").get(),
+      ]);
+      partnerRows = pSnap.docs
+        .map((d) => d.data() as PartnerRow)
+        .filter((r) => !r.archived_at);
+      tradeRows = tSnap.docs.map(
+        (d) => d.data() as Database["public"]["Tables"]["trades"]["Row"]
+      );
+    } else {
+      const supabase = createClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY ??
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data: pData, error: pError } = await supabase
+        .from("partners")
+        .select("*")
+        .is("archived_at", null);
+      if (pError)
+        throw new Error(`Failed to fetch partners: ${pError.message}`);
+      partnerRows = pData ?? [];
 
-    // Fetch partners
-    const { data: partnerRows, error: pError } = await supabase
-      .from("partners")
-      .select("*")
-      .is("archived_at", null);
+      const { data: tData, error: tError } = await supabase
+        .from("trades")
+        .select("*");
+      if (tError) throw new Error(`Failed to fetch trades: ${tError.message}`);
+      tradeRows = tData ?? [];
+    }
 
-    if (pError) throw new Error(`Failed to fetch partners: ${pError.message}`);
-
-    const partners = (partnerRows ?? []).map(rowToPartner);
+    const partners = partnerRows.map(rowToPartner);
 
     // Optional single-recipient mode. We still keep the full partners list
     // for ownership/distribution math (so a partner's share doesn't change
@@ -132,14 +154,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch trades
-    const { data: tradeRows, error: tError } = await supabase
-      .from("trades")
-      .select("*");
-
-    if (tError) throw new Error(`Failed to fetch trades: ${tError.message}`);
-
-    const trades: Trade[] = (tradeRows ?? []).map((r) => ({
+    const trades: Trade[] = tradeRows.map((r) => ({
       id: r.id,
       ticker: r.ticker,
       type: r.type,
