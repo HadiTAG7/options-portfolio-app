@@ -20,18 +20,17 @@ export interface FinnhubQuote {
   t: number; // UNIX timestamp
 }
 
+// Every failure path returns null SILENTLY (console only, never an
+// alert): the UI already degrades gracefully — it hydrates the last
+// cached price from the DB and renders "لا يوجد سعر مرجعي" when there
+// is none. The old debug alerts fired once per ticker on app open
+// (including on partners' phones) when the key wasn't baked in.
 export async function fetchLivePrice(ticker: string): Promise<number | null> {
   const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
-  console.log("[finnhub] API Key present:", !!apiKey);
   if (!apiKey) {
     console.warn(
-      "[finnhub] NEXT_PUBLIC_FINNHUB_API_KEY is not set — live prices disabled"
+      "[finnhub] NEXT_PUBLIC_FINNHUB_API_KEY is not set — live prices disabled, showing cached prices"
     );
-    if (typeof window !== "undefined") {
-      window.alert(
-        "Finnhub API key is missing. Add NEXT_PUBLIC_FINNHUB_API_KEY to .env.local and restart the dev server."
-      );
-    }
     return null;
   }
 
@@ -39,23 +38,14 @@ export async function fetchLivePrice(ticker: string): Promise<number | null> {
   if (!symbol) return null;
 
   const url = `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
-  console.log("[finnhub] Requesting:", url.replace(apiKey, "***"));
 
   try {
     const res = await fetch(url, { cache: "no-store" });
-    console.log("[finnhub]", symbol, "HTTP status:", res.status);
     if (!res.ok) {
-      const errorBody = await res.text();
-      console.error(`[finnhub] ${symbol} HTTP ${res.status} body:`, errorBody);
-      if (typeof window !== "undefined") {
-        window.alert(
-          `Finnhub API error for ${symbol}: HTTP ${res.status}\n${errorBody}`
-        );
-      }
+      console.error(`[finnhub] ${symbol} HTTP ${res.status}:`, await res.text());
       return null;
     }
     const quote = (await res.json()) as FinnhubQuote;
-    console.log("[finnhub]", symbol, "raw response:", JSON.stringify(quote));
     if (!Number.isFinite(quote.c) || quote.c === 0) {
       console.warn("[finnhub]", symbol, "returned c=0 or invalid — symbol may not exist on Finnhub");
       return null;
@@ -63,9 +53,6 @@ export async function fetchLivePrice(ticker: string): Promise<number | null> {
     return quote.c;
   } catch (err) {
     console.error(`[finnhub] ${symbol} fetch failed:`, err);
-    if (typeof window !== "undefined") {
-      window.alert(`Finnhub network error for ${symbol}: ${err}`);
-    }
     return null;
   }
 }

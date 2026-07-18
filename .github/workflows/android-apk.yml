@@ -63,6 +63,10 @@ jobs:
           # Supabase. Set to "firebase" at cutover — the APK then talks
           # to Firestore/Firebase Auth. Rollback: clear the variable.
           NEXT_PUBLIC_BACKEND: ${{ vars.APP_BACKEND }}
+          # Live stock quotes (optional). Add a FINNHUB_API_KEY repo
+          # secret to bake live prices into the APK; without it the app
+          # silently shows the last cached prices from the database.
+          NEXT_PUBLIC_FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: npm run build:mobile
 
       # cap add is idempotent on already-initialised projects but errors
