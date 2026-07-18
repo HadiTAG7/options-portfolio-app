@@ -73,6 +73,12 @@ jobs:
             npx cap add android
           fi
 
+      # App icon + splash screens from assets/ (icon-only /
+      # icon-foreground / icon-background / splash) — regenerated every
+      # build since android/ itself is not committed.
+      - name: Generate app icons & splash screens
+        run: npx @capacitor/assets@3 generate --android
+
       - name: Sync web bundle into Android project
         run: npm run cap:sync
 
