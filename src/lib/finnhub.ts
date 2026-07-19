@@ -11,6 +11,13 @@
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 
+// Public client-side key. NEXT_PUBLIC_* values ship inside the web/APK
+// bundle by design, so this is not a secret — committing it just makes
+// every build (especially the APK) work out of the box. A build-time
+// env var (website env / FINNHUB_API_KEY repo secret) takes precedence,
+// so the key can be rotated without touching code.
+const FALLBACK_API_KEY = "d7j294pr01qp3g1rhmigd7j294pr01qp3g1rhmj0";
+
 export interface FinnhubQuote {
   c: number; // current price
   h: number; // high of the day
@@ -26,10 +33,10 @@ export interface FinnhubQuote {
 // is none. The old debug alerts fired once per ticker on app open
 // (including on partners' phones) when the key wasn't baked in.
 export async function fetchLivePrice(ticker: string): Promise<number | null> {
-  const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+  const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY || FALLBACK_API_KEY;
   if (!apiKey) {
     console.warn(
-      "[finnhub] NEXT_PUBLIC_FINNHUB_API_KEY is not set — live prices disabled, showing cached prices"
+      "[finnhub] no API key available — live prices disabled, showing cached prices"
     );
     return null;
   }
