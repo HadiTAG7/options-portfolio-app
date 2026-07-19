@@ -46,11 +46,14 @@ export function tradeProfitDate(t: Trade): string | null {
 // profit belong to? Mirrors the eligibility profit-date logic so
 // dashboard charts, monthly cards, and the email sender all agree.
 // Returns null for trade types we don't bucket (anything other than
-// Sell Put / Sell Call / Stock Sell).
+// Sell Put / Sell Call / Stock Sell / Dividend).
 export function tradeMonthKey(t: Trade): string | null {
   const isOption = t.type === "Sell Put" || t.type === "Sell Call";
   const isStockSell = t.type === "Stock Sell";
-  if (!isOption && !isStockSell) return null;
+  // Cash dividends are dated at their PAYMENT date, so they land in
+  // the month they were received (tradeProfitDate → t.date).
+  const isDividend = t.type === "Dividend";
+  if (!isOption && !isStockSell && !isDividend) return null;
   const dateStr = tradeProfitDate(t);
   if (!dateStr) return null;
   const d = new Date(dateStr);

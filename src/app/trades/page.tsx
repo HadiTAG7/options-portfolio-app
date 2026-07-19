@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
+  Coins,
   Crown,
   Download,
   Layers,
@@ -30,6 +31,8 @@ import { EditStockDialog } from "@/components/ui/edit-stock-dialog";
 import type { StockEditPayload } from "@/components/ui/edit-stock-dialog";
 import { SellStockDialog } from "@/components/ui/sell-stock-dialog";
 import type { StockSellPayload } from "@/components/ui/sell-stock-dialog";
+import { DividendDialog } from "@/components/ui/dividend-dialog";
+import type { DividendPayload } from "@/components/ui/dividend-dialog";
 import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
@@ -55,6 +58,8 @@ function typeBadgeClass(type: string): string {
       return "border-cyan-400/30 text-cyan-300 bg-cyan-500/5";
     case "Stock Sell":
       return "border-emerald-500/30 text-emerald-300 bg-emerald-500/5";
+    case "Dividend":
+      return "border-amber-400/30 text-amber-300 bg-amber-400/5";
     default:
       return "border-zinc-700/50 text-zinc-400 bg-zinc-900/40";
   }
@@ -94,6 +99,7 @@ export default function TradesPage() {
     deleteTrade,
     recordAssignment,
     sellStock,
+    recordDividend,
     toast,
     dismissToast,
     refreshPrices,
@@ -135,6 +141,7 @@ export default function TradesPage() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [editingStock, setEditingStock] = useState<ActiveStock | null>(null);
   const [sellingStock, setSellingStock] = useState<ActiveStock | null>(null);
+  const [dividendStock, setDividendStock] = useState<ActiveStock | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [assigningTrade, setAssigningTrade] = useState<Trade | null>(null);
@@ -213,6 +220,13 @@ export default function TradesPage() {
 
   async function handleSellStock(stock: ActiveStock, payload: StockSellPayload) {
     await sellStock(stock, payload);
+  }
+
+  async function handleRecordDividend(
+    stock: ActiveStock,
+    payload: DividendPayload
+  ) {
+    await recordDividend(stock, payload);
   }
 
   return (
@@ -619,6 +633,17 @@ export default function TradesPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setDividendStock(stock);
+                              }}
+                              className="rounded-md border border-cyan-400/25 bg-cyan-500/5 p-1.5 text-cyan-300 transition-all duration-200 hover:scale-[1.05] hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-200"
+                              title="تسجيل توزيعات أرباح"
+                              aria-label={`Dividend ${stock.ticker}`}
+                            >
+                              <Coins size={12} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setEditingStock(stock);
                               }}
                               className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
@@ -994,6 +1019,13 @@ export default function TradesPage() {
         stock={sellingStock}
         onClose={() => setSellingStock(null)}
         onSubmit={handleSellStock}
+      />
+
+      <DividendDialog
+        open={dividendStock !== null}
+        stock={dividendStock}
+        onClose={() => setDividendStock(null)}
+        onSubmit={handleRecordDividend}
       />
 
       <ConfirmDialog

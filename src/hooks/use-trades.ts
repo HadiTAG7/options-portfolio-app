@@ -835,6 +835,52 @@ export function useTrades() {
     []
   );
 
+  // Record a cash dividend received on a holding. Modeled as a closed
+  // "Dividend" trade row dated at the PAYMENT date, so the amount lands
+  // in that month's profits (tradeMonthKey) and flows to the partners
+  // through the same distribution engine as every other realized gain.
+  // The stock lot itself is untouched.
+  const recordDividend = useCallback(
+    async (
+      stock: ActiveStock,
+      opts: { perShare: number; quantity: number; date: string }
+    ) => {
+      setError(null);
+
+      const amount = opts.perShare * opts.quantity;
+      const row = {
+        ticker: stock.ticker.toUpperCase(),
+        type: "Dividend",
+        quantity: opts.quantity,
+        premium: opts.perShare, // per-share dividend
+        strike: 0,
+        expiration: "",
+        date: opts.date, // ← profit month = payment month
+        status: "closed" as const,
+        result: amount,
+      };
+
+      console.log("[recordDividend] trades insert payload:", row);
+      const { data, error: insertError } = await supabase
+        .from("trades")
+        .insert(row)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("[recordDividend] insert failed:", insertError);
+        setError(`فشل تسجيل التوزيع: ${insertError.message}`);
+        throw insertError;
+      }
+
+      setTradesList((prev) => [rowToTrade(data as TradeRow), ...prev]);
+      setToast(
+        `تم تسجيل توزيعات ${stock.ticker.toUpperCase()}: ${formatCurrency(amount)} — تُحتسب ضمن أرباح ${opts.date.slice(0, 7)}`
+      );
+    },
+    []
+  );
+
   // Only OPEN option positions show up in the active tables
   const sellPuts = useMemo(
     () =>
@@ -848,6 +894,12 @@ export function useTrades() {
   );
   const stockSells = useMemo(
     () => tradesList.filter((t) => t.type === "Stock Sell"),
+    [tradesList]
+  );
+  // Cash dividends received on holdings — realized income, bucketed by
+  // payment date.
+  const dividends = useMemo(
+    () => tradesList.filter((t) => t.type === "Dividend"),
     [tradesList]
   );
   // Closed option positions (auto-expired or manually closed)
@@ -874,13 +926,17 @@ export function useTrades() {
         .reduce((sum, t) => sum + tradeProfit(t), 0),
     [tradesList]
   );
-  // Realized result = locked-in P&L from Stock Sell rows ONLY. Closed
-  // option results are already counted in totalPremium above (via
-  // tradeProfit), so including closedOptions here would double-count
-  // every expired Sell Put / Sell Call.
+  // Realized result = locked-in P&L from Stock Sell rows + cash
+  // dividends. Closed option results are already counted in
+  // totalPremium above (via tradeProfit), so including closedOptions
+  // here would double-count every expired Sell Put / Sell Call.
   const totalResult = useMemo(
-    () => stockSells.reduce((sum, t) => sum + Number(t.result || 0), 0),
-    [stockSells]
+    () =>
+      [...stockSells, ...dividends].reduce(
+        (sum, t) => sum + Number(t.result || 0),
+        0
+      ),
+    [stockSells, dividends]
   );
   // Unrealized mark-to-market P&L on the active stock book.
   //   (currentPrice − purchasePrice) × quantity
@@ -938,6 +994,7 @@ export function useTrades() {
     sellCalls,
     sellPuts,
     stockSells,
+    dividends,
     closedOptions,
     activeStocks: activeStocksList,
     loading,
@@ -955,6 +1012,7 @@ export function useTrades() {
     deleteTrade,
     recordAssignment,
     sellStock,
+    recordDividend,
     toast,
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,

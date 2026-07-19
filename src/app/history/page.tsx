@@ -46,6 +46,8 @@ function typeBadgeClass(type: string): string {
       return "border-cyan-400/30 text-cyan-300 bg-cyan-500/5";
     case "Stock Sell":
       return "border-emerald-500/30 text-emerald-300 bg-emerald-500/5";
+    case "Dividend":
+      return "border-amber-400/30 text-amber-300 bg-amber-400/5";
     default:
       return "border-zinc-700/50 text-zinc-400 bg-zinc-900/40";
   }
@@ -61,7 +63,7 @@ function closeDateFor(t: Trade): string {
 }
 
 export default function HistoryPage() {
-  const { closedOptions, stockSells, loading, error } = useTrades();
+  const { closedOptions, stockSells, dividends, loading, error } = useTrades();
   const [filter, setFilter] = useState<FilterMode>("all");
 
   const entries: HistoryEntry[] = useMemo(() => {
@@ -90,10 +92,23 @@ export default function HistoryPage() {
       closedDate: closeDateFor(t),
       autoClosed: false,
     }));
-    return [...options, ...stocks].sort((a, b) =>
+    // Dividends sit in the stock bucket: they're realized income tied
+    // to a holding. strikeOrBuy carries the per-share dividend.
+    const divs: HistoryEntry[] = dividends.map((t) => ({
+      id: t.id,
+      ticker: t.ticker,
+      type: t.type,
+      category: "stock",
+      quantity: t.quantity,
+      strikeOrBuy: t.premium > 0 ? t.premium : null,
+      result: Number(t.result) || 0,
+      closedDate: t.date ?? "",
+      autoClosed: false,
+    }));
+    return [...options, ...stocks, ...divs].sort((a, b) =>
       b.closedDate.localeCompare(a.closedDate)
     );
-  }, [closedOptions, stockSells]);
+  }, [closedOptions, stockSells, dividends]);
 
   const visible = useMemo(
     () => (filter === "all" ? entries : entries.filter((e) => e.category === filter)),
