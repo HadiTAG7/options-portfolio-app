@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
+  Banknote,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -27,6 +28,8 @@ import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
 import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
 import { EditStockDialog } from "@/components/ui/edit-stock-dialog";
 import type { StockEditPayload } from "@/components/ui/edit-stock-dialog";
+import { SellStockDialog } from "@/components/ui/sell-stock-dialog";
+import type { StockSellPayload } from "@/components/ui/sell-stock-dialog";
 import { AddTradeDialog } from "@/components/ui/add-trade-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
@@ -90,6 +93,7 @@ export default function TradesPage() {
     addTrade,
     deleteTrade,
     recordAssignment,
+    sellStock,
     toast,
     dismissToast,
     refreshPrices,
@@ -130,6 +134,7 @@ export default function TradesPage() {
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [editingStock, setEditingStock] = useState<ActiveStock | null>(null);
+  const [sellingStock, setSellingStock] = useState<ActiveStock | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [assigningTrade, setAssigningTrade] = useState<Trade | null>(null);
@@ -204,6 +209,10 @@ export default function TradesPage() {
 
   async function handleEditStock(id: string, payload: StockEditPayload) {
     await updateStock(id, payload);
+  }
+
+  async function handleSellStock(stock: ActiveStock, payload: StockSellPayload) {
+    await sellStock(stock, payload);
   }
 
   return (
@@ -594,17 +603,31 @@ export default function TradesPage() {
                           {stock.purchaseDate || "—"}
                         </td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingStock(stock);
-                            }}
-                            className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
-                            title="تعديل المركز"
-                            aria-label={`Edit ${stock.ticker}`}
-                          >
-                            <Pencil size={12} />
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSellingStock(stock);
+                              }}
+                              className="flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200"
+                              title="بيع السهم وتسجيل الربح في شهر البيع"
+                              aria-label={`Sell ${stock.ticker}`}
+                            >
+                              <Banknote size={11} />
+                              بيع
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingStock(stock);
+                              }}
+                              className="rounded-md border border-zinc-800/60 p-1.5 text-zinc-500 transition-all duration-200 hover:scale-[1.05] hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                              title="تعديل المركز"
+                              aria-label={`Edit ${stock.ticker}`}
+                            >
+                              <Pencil size={12} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
 
@@ -964,6 +987,13 @@ export default function TradesPage() {
         stock={editingStock}
         onClose={() => setEditingStock(null)}
         onSubmit={handleEditStock}
+      />
+
+      <SellStockDialog
+        open={sellingStock !== null}
+        stock={sellingStock}
+        onClose={() => setSellingStock(null)}
+        onSubmit={handleSellStock}
       />
 
       <ConfirmDialog

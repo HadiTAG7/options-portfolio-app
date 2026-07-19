@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { safeNumber } from "@/lib/utils";
+import { formatCurrency, safeNumber } from "@/lib/utils";
 import { fetchLivePrices } from "@/lib/finnhub";
 import { tradeProfit } from "@/lib/partner-profit";
 import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
@@ -749,6 +749,92 @@ export function useTrades() {
     [usingSeedData, enrichWithLivePrices]
   );
 
+  // Sell an active stock lot — fully or partially. Books the realized
+  // P&L as a "Stock Sell" trade row dated at the SELL date: the
+  // distribution engine buckets profit by tradeProfitDate (= t.date for
+  // stock sells), so a lot bought in May and sold in July lands in
+  // JULY's profits — on the dashboard ledger, the partners' monthly
+  // logs and the emailed statements alike. Then shrinks or removes the
+  // active_stocks position.
+  const sellStock = useCallback(
+    async (
+      stock: ActiveStock,
+      opts: { quantity: number; price: number; date: string }
+    ) => {
+      setError(null);
+
+      const qty = Number(opts.quantity);
+      const result = (opts.price - stock.purchasePrice) * qty;
+
+      const sellRow = {
+        ticker: stock.ticker.toUpperCase(),
+        type: "Stock Sell",
+        quantity: qty,
+        premium: opts.price, // sell price per share
+        strike: stock.purchasePrice, // cost basis per share
+        expiration: "",
+        date: opts.date, // ← profit month = sell month
+        status: "closed" as const,
+        result,
+      };
+
+      console.log("[sellStock] trades insert payload:", sellRow);
+      const { data, error: insertError } = await supabase
+        .from("trades")
+        .insert(sellRow)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("[sellStock] trades insert failed:", insertError);
+        setError(`فشل تسجيل البيع: ${insertError.message}`);
+        throw insertError;
+      }
+
+      setTradesList((prev) => [rowToTrade(data as TradeRow), ...prev]);
+
+      // Shrink the lot on a partial sale; remove it on a full one.
+      const remaining = stock.quantity - qty;
+      if (remaining > 0.000001) {
+        const { error: upErr } = await supabase
+          .from("active_stocks")
+          .update({ quantity: remaining })
+          .eq("id", stock.id);
+        if (upErr) {
+          console.error("[sellStock] quantity update failed:", upErr);
+          setError(upErr.message);
+        }
+        setActiveStocksList((prev) =>
+          prev.map((s) =>
+            s.id === stock.id
+              ? {
+                  ...s,
+                  quantity: remaining,
+                  costBasis: remaining * s.purchasePrice,
+                }
+              : s
+          )
+        );
+      } else {
+        const { error: delErr } = await supabase
+          .from("active_stocks")
+          .delete()
+          .eq("id", stock.id);
+        if (delErr) {
+          console.error("[sellStock] stock delete failed:", delErr);
+          setError(delErr.message);
+        }
+        setActiveStocksList((prev) => prev.filter((s) => s.id !== stock.id));
+      }
+
+      const sign = result >= 0 ? "ربح" : "خسارة";
+      setToast(
+        `تم بيع ${qty.toLocaleString()} ${stock.ticker.toUpperCase()} @ $${opts.price} — ${sign} ${formatCurrency(Math.abs(result))} يُحتسب ضمن أرباح ${opts.date.slice(0, 7)}`
+      );
+    },
+    []
+  );
+
   // Only OPEN option positions show up in the active tables
   const sellPuts = useMemo(
     () =>
@@ -868,6 +954,7 @@ export function useTrades() {
     addTrade,
     deleteTrade,
     recordAssignment,
+    sellStock,
     toast,
     dismissToast: () => setToast(null),
     refetch: fetchTradesData,
