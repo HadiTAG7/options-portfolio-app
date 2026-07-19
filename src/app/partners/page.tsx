@@ -100,6 +100,12 @@ export default function PartnersPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
   const [depositTarget, setDepositTarget] = useState<Partner | null>(null);
+  // Clean-Slate override: depositing while pending profit exists is
+  // allowed, but only through an explicit warning confirm (the deposit
+  // re-weights everyone's already-earned pending profit).
+  const [depositWarnTarget, setDepositWarnTarget] = useState<Partner | null>(
+    null
+  );
   const [editTarget, setEditTarget] = useState<Partner | null>(null);
   const [ledgerTarget, setLedgerTarget] = useState<Partner | null>(null);
   const [capitalizeTarget, setCapitalizeTarget] = useState<Partner | null>(null);
@@ -153,11 +159,22 @@ export default function PartnersPage() {
   // totalDeposits, and the distribution engine weights EVERY
   // unsettled historical trade by today's investments — so any deposit
   // retroactively re-weights (dilutes) OTHER partners' already-earned
-  // pending profit. Deposits are therefore blocked until every
-  // partner's pending profit is settled, not just the depositor's.
+  // pending profit. Depositing while pending profit exists is therefore
+  // gated behind an explicit warning confirm (the GP may override —
+  // settling everyone first stays the recommended order).
   const anyPendingProfit = useMemo(
     () =>
       Object.values(tradeDistribution).some((d) => d.settleableNet > 0),
+    [tradeDistribution]
+  );
+  // Total unsettled profit across all partners — shown in the override
+  // warning so the GP sees exactly what a mid-cycle deposit re-weights.
+  const pendingUnsettledTotal = useMemo(
+    () =>
+      Object.values(tradeDistribution).reduce(
+        (s, d) => s + Math.max(0, d.settleableNet),
+        0
+      ),
     [tradeDistribution]
   );
 
@@ -256,6 +273,49 @@ export default function PartnersPage() {
         partner={depositTarget}
         onClose={() => setDepositTarget(null)}
         onSubmit={onDeposit}
+      />
+
+      {/* Clean-Slate override — deposit requested while pending profit
+          exists. Spell out the re-weighting consequence, then let the
+          GP proceed deliberately. */}
+      <ConfirmDialog
+        open={depositWarnTarget !== null}
+        title="إيداع مع وجود أرباح معلقة"
+        description={
+          depositWarnTarget ? (
+            <div className="space-y-3 text-right">
+              <div className="flex items-center justify-between rounded-md border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-xs">
+                <span className="text-zinc-300">
+                  أرباح معلقة غير مثبتة (كل الشركاء)
+                </span>
+                <span className="font-mono font-bold tabular-nums text-amber-300">
+                  {formatCurrency(pendingUnsettledTotal)}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-zinc-400">
+                الإيداع الآن يغيّر نسب الملكية، وبالتالي{" "}
+                <span className="font-bold text-zinc-200">
+                  يُعاد توزيع هذه الأرباح المعلقة
+                </span>{" "}
+                بالنسب الجديدة — أرباح انكسبت قبل دخول المبلغ الجديد.
+              </p>
+              <p className="text-xs leading-relaxed text-zinc-400">
+                <span className="font-bold text-emerald-300">الأفضل:</span>{" "}
+                ثبّت أرباح الجميع أولاً ثم أودع. أو تابع الآن كاستثناء
+                واعٍ بالأثر.
+              </p>
+            </div>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel="متابعة الإيداع (استثناء)"
+        onConfirm={() => {
+          const p = depositWarnTarget;
+          setDepositWarnTarget(null);
+          setDepositTarget(p);
+        }}
+        onCancel={() => setDepositWarnTarget(null)}
       />
 
       {/* Partner Ledger Dialog — GP/LP distribution breakdown */}
@@ -726,14 +786,15 @@ export default function PartnersPage() {
                       تثبيت
                     </button>
                     <button
-                      onClick={() => setDepositTarget(partner)}
-                      disabled={anyPendingProfit}
-                      className="flex items-center justify-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 disabled:hover:border-emerald-500/25 disabled:hover:bg-emerald-500/5 disabled:hover:text-emerald-300"
+                      onClick={() =>
+                        anyPendingProfit
+                          ? setDepositWarnTarget(partner)
+                          : setDepositTarget(partner)
+                      }
+                      className="flex items-center justify-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-300 transition-all duration-200 hover:scale-[1.03] hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200"
                       title={
                         anyPendingProfit
-                          ? tradeNet > 0
-                            ? "يجب تثبيت الأرباح المعلقة قبل الإيداع (Clean Slate Rule)"
-                            : "يوجد شركاء بأرباح معلقة — الإيداع الآن يعيد توزيع حصصهم. سوِّ أرباح الجميع أولاً"
+                          ? "يوجد أرباح معلقة — سيظهر تحذير قبل المتابعة"
                           : "إيداع رأس مال جديد"
                       }
                     >
