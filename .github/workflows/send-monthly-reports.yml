@@ -1,9 +1,9 @@
-# Automatic monthly partner reports (PDF via Gmail).
+# Send the monthly partner reports (PDF via Gmail) — ON DEMAND ONLY.
 #
-#   • Runs BY ITSELF on the 1st of every month at 06:00 UTC (09:00 KSA)
-#     and emails the PREVIOUS month's report to every partner.
-#   • Can also be run manually: Actions → "Send Monthly Reports" →
-#     Run workflow — optionally set month (YYYY-MM) / partner_id.
+# Nothing runs by itself. The GP presses:
+#   Actions → "Send Monthly Reports" → Run workflow
+# optionally setting month (YYYY-MM, empty = previous month) and/or a
+# single partner_id — then every partner gets their PDF by email.
 #
 # Required repository secrets:
 #   FIREBASE_SERVICE_ACCOUNT   (already exists — added for the migration)
@@ -11,9 +11,8 @@
 #   GMAIL_APP_PASSWORD         App Password from
 #                              https://myaccount.google.com/apppasswords
 #
-# The checkout ref is pinned to the production branch so scheduled runs
-# (which execute from the default branch's workflow copy) still use the
-# real app code.
+# The checkout ref is pinned to the production branch so runs use the
+# real app code regardless of which branch registered the workflow.
 
 name: Send Monthly Reports
 
@@ -26,8 +25,6 @@ on:
       partner_id:
         description: "معرف شريك واحد (فارغ = كل الشركاء)"
         required: false
-  schedule:
-    - cron: "0 6 1 * *"
 
 jobs:
   send:

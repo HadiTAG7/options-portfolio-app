@@ -582,6 +582,20 @@ function MonthlyReportSender() {
           <Download size={12} />
           تنزيل التقارير PDF (بدون خادم)
         </button>
+
+        {/* On-demand email blast via the GitHub workflow — works no
+            matter what the web hosting supports. Opens the Run
+            workflow page; one green click there emails everyone. */}
+        <a
+          href="https://github.com/HadiTAG7/options-portfolio-app/actions/workflows/send-monthly-reports.yml"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan-400/30 bg-cyan-500/5 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300 transition-all duration-200 hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-200 active:scale-[0.99]"
+          title="يفتح صفحة التشغيل في GitHub — اضغط Run workflow وترسل التقارير للجميع"
+        >
+          <Mail size={12} />
+          إرسال بالإيميل للجميع (عبر GitHub)
+        </a>
       </div>
 
       {downloadMsg && (
