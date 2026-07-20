@@ -1,0 +1,54 @@
+# Automatic monthly partner reports (PDF via Gmail).
+#
+#   • Runs BY ITSELF on the 1st of every month at 06:00 UTC (09:00 KSA)
+#     and emails the PREVIOUS month's report to every partner.
+#   • Can also be run manually: Actions → "Send Monthly Reports" →
+#     Run workflow — optionally set month (YYYY-MM) / partner_id.
+#
+# Required repository secrets:
+#   FIREBASE_SERVICE_ACCOUNT   (already exists — added for the migration)
+#   GMAIL_USER                 the sending Gmail address
+#   GMAIL_APP_PASSWORD         App Password from
+#                              https://myaccount.google.com/apppasswords
+#
+# The checkout ref is pinned to the production branch so scheduled runs
+# (which execute from the default branch's workflow copy) still use the
+# real app code.
+
+name: Send Monthly Reports
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "الشهر YYYY-MM (فارغ = الشهر الماضي)"
+        required: false
+      partner_id:
+        description: "معرف شريك واحد (فارغ = كل الشركاء)"
+        required: false
+  schedule:
+    - cron: "0 6 1 * *"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build + email the reports
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MONTH: ${{ inputs.month }}
+          PARTNER_ID: ${{ inputs.partner_id }}
+        run: npx tsx scripts/send-monthly-reports.ts
