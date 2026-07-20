@@ -16,9 +16,12 @@
 //   PARTNER_ID   send to a single partner only
 //
 // Run with: npx tsx scripts/send-monthly-reports.ts
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
+import { chromium } from "playwright";
 import {
   computePartnerDistributionFromTrades,
   tradeMonthKey,
@@ -26,12 +29,37 @@ import {
   tradeProfitDate,
 } from "../src/lib/partner-profit";
 import { getPartnerInvestment, safeNumber } from "../src/lib/utils";
-import {
-  generatePartnerReportPDF,
-  type MonthlyReportData,
-  type PartnerPosition,
+import type {
+  MonthlyReportData,
+  PartnerPosition,
 } from "../src/lib/report-pdf";
+import { buildReportsDocument } from "../src/lib/report-html";
 import type { Partner, Trade } from "../src/types";
+
+// The report is real HTML/CSS (full Arabic + the app's fonts) rendered
+// to PDF by Chromium — fonts embedded as base64 so no network access.
+const FONTS_DIR = join(process.cwd(), "public", "fonts");
+function fontFace(family: string, weight: string, file: string): string {
+  const b64 = readFileSync(join(FONTS_DIR, file)).toString("base64");
+  return `@font-face{font-family:"${family}";font-weight:${weight};src:url(data:font/woff2;base64,${b64}) format("woff2")}`;
+}
+function embeddedFontCss(): string {
+  return [
+    fontFace("Thmanyah Sans", "400", "thmanyah/thmanyahsans-Regular.woff2"),
+    fontFace("Thmanyah Sans", "500", "thmanyah/thmanyahsans-Medium.woff2"),
+    fontFace("Thmanyah Sans", "700", "thmanyah/thmanyahsans-Bold.woff2"),
+    fontFace(
+      "Thmanyah Serif Display",
+      "700",
+      "thmanyah/thmanyahserifdisplay-Bold.woff2"
+    ),
+    fontFace(
+      "JetBrains Mono",
+      "100 800",
+      "jetbrains-mono/jetbrains-mono-latin.woff2"
+    ),
+  ].join("\n");
+}
 
 const {
   FIREBASE_SERVICE_ACCOUNT,
@@ -168,6 +196,17 @@ const transporter = nodemailer.createTransport({
   auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
 });
 
+const fontCss = embeddedFontCss();
+const browser = await chromium.launch();
+const page = await browser.newPage();
+
+async function renderPdf(report: MonthlyReportData): Promise<Buffer> {
+  await page.setContent(buildReportsDocument([report], fontCss), {
+    waitUntil: "networkidle",
+  });
+  return page.pdf({ format: "A4", printBackground: true });
+}
+
 let sent = 0;
 let skipped = 0;
 let errors = 0;
@@ -221,7 +260,7 @@ for (const partner of targets) {
   };
 
   try {
-    const pdfBuffer = generatePartnerReportPDF(reportData);
+    const pdfBuffer = await renderPdf(reportData);
     await transporter.sendMail({
       from: `"AlGhanim Options Desk" <${GMAIL_USER}>`,
       to: partner.email,
@@ -249,6 +288,7 @@ for (const partner of targets) {
   }
 }
 
+  await browser.close();
   console.log("──────────────────────");
   console.log(
     `month ${month}: sent ${sent}, skipped ${skipped}, errors ${errors}`

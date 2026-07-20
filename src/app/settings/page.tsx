@@ -31,8 +31,8 @@ import {
   tradeProfit,
   tradeProfitDate,
 } from "@/lib/partner-profit";
-import { buildPartnerReportDoc } from "@/lib/report-pdf";
-import type { PartnerPosition } from "@/lib/report-pdf";
+import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
+import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
 import { Wrench } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -448,7 +448,7 @@ function MonthlyReportSender() {
         Number(m) - 1
       ).toLocaleString("en-US", { month: "long", year: "numeric" });
 
-      let generated = 0;
+      const reports: MonthlyReportData[] = [];
       for (const partner of targets) {
         const dist = distribution[partner.id];
         if (!dist) continue;
@@ -469,7 +469,7 @@ function MonthlyReportSender() {
             share: tradeProfit(t) * ownershipShare,
           }));
 
-        const doc = buildPartnerReportDoc({
+        reports.push({
           periodLabel,
           periodKey: month,
           partner: {
@@ -488,14 +488,30 @@ function MonthlyReportSender() {
           },
           positions,
         });
-        doc.save(`report-${month}-${partner.code || partner.name}.pdf`);
-        generated++;
       }
 
+      if (reports.length === 0) {
+        setDownloadMsg("لا توجد بيانات لهذا الشهر");
+        return;
+      }
+
+      // Print view: one document, a page per partner, the browser's
+      // own Arabic shaping + the app fonts. من نافذة الطباعة اختر
+      // "حفظ كـ PDF".
+      const html = buildReportsDocument(reports, appFontFaceCss());
+      const win = window.open("", "_blank");
+      if (!win) {
+        setError("منع المتصفح فتح نافذة التقارير — اسمح بالنوافذ المنبثقة وحاول مجدداً");
+        return;
+      }
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      // Give the fonts a beat to load before the print dialog.
+      setTimeout(() => win.print(), 700);
+
       setDownloadMsg(
-        generated > 0
-          ? `تم توليد ${generated} تقرير وتنزيلها — أرسلها للشركاء عبر الإيميل أو واتساب`
-          : "لا توجد بيانات لهذا الشهر"
+        `تم تجهيز ${reports.length} تقرير — من نافذة الطباعة اختر «حفظ كـ PDF»`
       );
     } catch (e) {
       console.error("[reports] client-side generation failed:", e);
@@ -580,7 +596,7 @@ function MonthlyReportSender() {
           title="توليد التقارير في المتصفح وتنزيلها مباشرة — لا يحتاج خادماً"
         >
           <Download size={12} />
-          تنزيل التقارير PDF (بدون خادم)
+          معاينة وحفظ التقارير PDF
         </button>
 
         {/* On-demand email blast via the GitHub workflow — works no
