@@ -41,6 +41,11 @@ jobs:
 
       - run: npm ci
 
+      # The report PDF is real HTML/CSS rendered by Chromium (full
+      # Arabic + brand fonts) — install the browser Playwright expects.
+      - name: Install Chromium for PDF rendering
+        run: npx playwright install --with-deps chromium
+
       - name: Build + email the reports
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
