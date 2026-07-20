@@ -16,7 +16,7 @@
 //   PARTNER_ID   send to a single partner only
 //
 // Run with: npx tsx scripts/send-monthly-reports.ts
-import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
 import {
