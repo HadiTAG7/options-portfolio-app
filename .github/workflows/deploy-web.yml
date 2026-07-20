@@ -1,0 +1,47 @@
+# Deploy the web app to Firebase Hosting — https://option-porfolio.web.app
+#
+# Runs automatically on every push to the production branch (real CI/CD
+# at last), and can be run manually from the Actions tab. Uses the
+# existing FIREBASE_SERVICE_ACCOUNT secret — no other setup.
+#
+# The build is the same static export the APK uses (output: export via
+# MOBILE_BUILD=1) WITHOUT NEXT_PUBLIC_PLATFORM=mobile, so web-only
+# panels stay visible. Firebase mode is the code default; auth domains
+# *.web.app are pre-authorized by Firebase automatically.
+
+name: Deploy Web
+
+on:
+  push:
+    branches:
+      - claude/write-app-prompt-8V4uK
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build static export
+        env:
+          MOBILE_BUILD: "1"
+        run: npx next build
+
+      - name: Deploy to Firebase Hosting
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
+            npx firebase-tools@14 deploy --only hosting --project option-porfolio --non-interactive
+          rm -f /tmp/sa.json
