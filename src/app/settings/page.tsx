@@ -22,7 +22,17 @@ import { AppShell } from "@/components/layout/app-shell";
 import { useSettings } from "@/hooks/use-settings";
 import type { FundSettings } from "@/hooks/use-settings";
 import { usePartners } from "@/hooks/use-partners";
+import { useTrades } from "@/hooks/use-trades";
 import { supabase } from "@/lib/supabase";
+import { getPartnerInvestment } from "@/lib/utils";
+import {
+  computePartnerDistributionFromTrades,
+  tradeMonthKey,
+  tradeProfit,
+  tradeProfitDate,
+} from "@/lib/partner-profit";
+import { buildPartnerReportDoc } from "@/lib/report-pdf";
+import type { PartnerPosition } from "@/lib/report-pdf";
 import { Wrench } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -343,11 +353,13 @@ function SettingsCard({
 
 function MonthlyReportSender() {
   const { partners } = usePartners();
+  const { trades } = useTrades();
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
+  const [downloadMsg, setDownloadMsg] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{
     sentCount: number;
@@ -393,9 +405,101 @@ function MonthlyReportSender() {
 
       setResult(data);
     } catch {
-      setError("خطأ في الاتصال بالخادم");
+      setError(
+        "تعذر الوصول لخدمة الإرسال على الخادم — استضافتك قد لا تشغّل مسارات API. استخدم زر «تنزيل التقارير PDF» بالأسفل ثم أرسلها بنفسك."
+      );
     } finally {
       setSending(false);
+    }
+  }
+
+  // Client-side generation — the same PDF the email route builds, but
+  // rendered in the browser and downloaded directly. Needs NO server,
+  // no env vars, and works on static hosting and inside the APK.
+  function handleDownload() {
+    setError(null);
+    setResult(null);
+    setDownloadMsg(null);
+
+    try {
+      const month = selectedMonth;
+      const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
+      // Historical statement: settlement stamps nulled (a later تثبيت
+      // must not zero the month), entry-date eligibility active — the
+      // exact convention of the email route and the dashboard ledger.
+      const statementPartners = partners.map((p) => ({
+        ...p,
+        lastSettlementDate: null,
+      }));
+      const distribution = computePartnerDistributionFromTrades(
+        statementPartners,
+        tradesInMonth
+      );
+      const totalInvestment = partners.reduce(
+        (sum, p) => sum + getPartnerInvestment(p),
+        0
+      );
+      const targets = selectedPartnerId
+        ? partners.filter((p) => p.id === selectedPartnerId)
+        : partners;
+      const [y, m] = month.split("-");
+      const periodLabel = new Date(
+        Number(y),
+        Number(m) - 1
+      ).toLocaleString("en-US", { month: "long", year: "numeric" });
+
+      let generated = 0;
+      for (const partner of targets) {
+        const dist = distribution[partner.id];
+        if (!dist) continue;
+        const ownershipShare =
+          totalInvestment > 0
+            ? getPartnerInvestment(partner) / totalInvestment
+            : 0;
+        const entry = partner.entryDate?.trim();
+        const positions: PartnerPosition[] = tradesInMonth
+          .filter((t) => {
+            const profitDate = tradeProfitDate(t);
+            if (!profitDate) return false;
+            return !entry || entry <= profitDate;
+          })
+          .map((t) => ({
+            ticker: t.ticker,
+            type: t.type,
+            share: tradeProfit(t) * ownershipShare,
+          }));
+
+        const doc = buildPartnerReportDoc({
+          periodLabel,
+          periodKey: month,
+          partner: {
+            name: partner.name,
+            code: partner.code,
+            ownershipPct: dist.ownershipPct,
+          },
+          partnerSummary: {
+            investment: getPartnerInvestment(partner),
+            grossProfit: dist.grossProfit,
+            feeRatePct: dist.feeRatePct,
+            feeAmount: dist.feeAmount,
+            netProfit: dist.netProfit,
+            returnPct: dist.returnPct,
+            currentBalance: partner.currentBalance,
+          },
+          positions,
+        });
+        doc.save(`report-${month}-${partner.code || partner.name}.pdf`);
+        generated++;
+      }
+
+      setDownloadMsg(
+        generated > 0
+          ? `تم توليد ${generated} تقرير وتنزيلها — أرسلها للشركاء عبر الإيميل أو واتساب`
+          : "لا توجد بيانات لهذا الشهر"
+      );
+    } catch (e) {
+      console.error("[reports] client-side generation failed:", e);
+      setError("فشل توليد التقارير في المتصفح");
     }
   }
 
@@ -468,7 +572,23 @@ function MonthlyReportSender() {
             )}
           </button>
         </div>
+
+        {/* Server-free path: generate the same PDFs in the browser. */}
+        <button
+          onClick={handleDownload}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300 transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 active:scale-[0.99]"
+          title="توليد التقارير في المتصفح وتنزيلها مباشرة — لا يحتاج خادماً"
+        >
+          <Download size={12} />
+          تنزيل التقارير PDF (بدون خادم)
+        </button>
       </div>
+
+      {downloadMsg && (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+          {downloadMsg}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">

@@ -35,7 +35,10 @@ function fmt(n: number): string {
   }).format(n);
 }
 
-export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
+// Builds the jsPDF document itself — safe in BOTH Node (the email API
+// route) and the browser (client-side download in the settings panel,
+// which needs no server at all).
+export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -192,5 +195,10 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
     { align: "center" }
   );
 
-  return Buffer.from(doc.output("arraybuffer"));
+  return doc;
+}
+
+// Server-side wrapper — nodemailer attachments need a Node Buffer.
+export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
+  return Buffer.from(buildPartnerReportDoc(data).output("arraybuffer"));
 }
