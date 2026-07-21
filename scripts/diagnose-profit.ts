@@ -6,7 +6,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import {
   computePartnerDistributionFromTrades,
   tradeMonthKey,
-  asEarnedBasis,
+  monthlyPartnerNet,
 } from "../src/lib/partner-profit";
 import { getPartnerInvestment, safeNumber } from "../src/lib/utils";
 import type { Partner, Trade } from "../src/types";
@@ -65,32 +65,26 @@ async function main(): Promise<void> {
   // CARD basis: settlement-aware, all unsettled trades (what صفحة الشركاء shows).
   const cardDist = computePartnerDistributionFromTrades(partners, trades);
 
-  // LOG basis: settlement-blind per-month (what سجل الأرباح shows).
-  const blind = partners.map(asEarnedBasis);
-  const byMonth: Record<string, Trade[]> = {};
+  // NEW LOG basis: historical per-month (monthlyPartnerNet) — the fix.
+  const months = new Set<string>();
   for (const t of trades) {
     const k = tradeMonthKey(t);
-    if (!k) continue;
-    (byMonth[k] ??= []).push(t);
+    if (k) months.add(k);
   }
-  const months = Object.keys(byMonth).sort();
 
   for (const p of partners) {
     const c = cardDist[p.id];
-    // per-month net (settlement-blind) + this-month + lifetime sum
     let logSum = 0;
     let thisMonthNet = 0;
     for (const k of months) {
-      const d = computePartnerDistributionFromTrades(blind, byMonth[k])[p.id];
-      const net = d?.netProfit ?? 0;
+      const net = monthlyPartnerNet(partners, trades, p.id, k).net;
       logSum += net;
       if (k === THIS_MONTH) thisMonthNet = net;
     }
     console.log(`\n=== ${p.name} ${p.isAdmin ? "(GP)" : ""} [${p.id}] ===`);
-    console.log(`  investment=${m(getPartnerInvestment(p))}  lastSettlement=${p.lastSettlementDate ?? "null"}  accrued=${m(p.gpFeesAccrued)}  profitTaken=${m(p.profitTakenGross)}`);
-    console.log(`  CARD (صفحة الشركاء) net = ${m(c?.netProfit ?? 0)}   [gross ${m(c?.grossProfit ?? 0)} + feeAmt ${m(c?.feeAmount ?? 0)} + accrued ${m(c?.accruedFees ?? 0)}]`);
-    console.log(`  DETAIL hero (net − accrued) = ${m((c?.netProfit ?? 0) - (c?.accruedFees ?? 0))}`);
-    console.log(`  LOG ${THIS_MONTH} net = ${m(thisMonthNet)}    LOG lifetime sum = ${m(logSum)}`);
+    console.log(`  investment=${m(getPartnerInvestment(p))}  lastSettlement=${p.lastSettlementDate ?? "null"}`);
+    console.log(`  CARD net = ${m(c?.netProfit ?? 0)}  |  DETAIL hero (now = card) = ${m(c?.netProfit ?? 0)}`);
+    console.log(`  NEW LOG ${THIS_MONTH} net = ${m(thisMonthNet)}   |  NEW LOG lifetime = ${m(logSum)}`);
   }
 }
 main().catch((e) => { console.error(e); process.exit(1); });

@@ -23,14 +23,13 @@ import { getFirestore } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
 import { chromium } from "playwright";
 import {
-  computePartnerDistributionFromTrades,
   tradeMonthKey,
   tradeProfit,
   tradeProfitDate,
-  asEarnedBasis,
   cumulativeNetForPartner,
+  monthlyPartnerDist,
 } from "../src/lib/partner-profit";
-import { getPartnerInvestment, safeNumber } from "../src/lib/utils";
+import { safeNumber } from "../src/lib/utils";
 import type {
   MonthlyReportData,
   PartnerPosition,
@@ -170,16 +169,10 @@ const trades: Trade[] = tSnap.docs.map((d) => {
 ok(`loaded ${partners.length} partners, ${trades.length} trades`);
 
 // ── Statement math — identical to the app's email route ─────────────
+// Per-partner monthly figures come from monthlyPartnerDist inside the
+// loop: each partner weighted by the capital they held THAT month
+// (stable, entry-date-gated, settlement-blind).
 const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
-const statementPartners = partners.map(asEarnedBasis);
-const distribution = computePartnerDistributionFromTrades(
-  statementPartners,
-  tradesInMonth
-);
-const totalInvestment = partners.reduce(
-  (sum, p) => sum + getPartnerInvestment(p),
-  0
-);
 
 const targets = PARTNER_ID
   ? partners.filter((p) => p.id === PARTNER_ID)
@@ -218,15 +211,14 @@ for (const partner of targets) {
     skipped++;
     continue;
   }
-  const dist = distribution[partner.id];
-  if (!dist) {
+  const md = monthlyPartnerDist(partners, trades, partner.id, month);
+  if (!md) {
     console.warn(`⏭ ${partner.name}: skipped (no distribution data)`);
     skipped++;
     continue;
   }
 
-  const ownershipShare =
-    totalInvestment > 0 ? getPartnerInvestment(partner) / totalInvestment : 0;
+  const ownershipShare = md.ownershipPct / 100;
   const entry = partner.entryDate?.trim();
   const positions: PartnerPosition[] = tradesInMonth
     .filter((t) => {
@@ -246,15 +238,15 @@ for (const partner of targets) {
     partner: {
       name: partner.name,
       code: partner.code,
-      ownershipPct: dist.ownershipPct,
+      ownershipPct: md.ownershipPct,
     },
     partnerSummary: {
-      investment: getPartnerInvestment(partner),
-      grossProfit: dist.grossProfit,
-      feeRatePct: dist.feeRatePct,
-      feeAmount: dist.feeAmount,
-      netProfit: dist.netProfit,
-      returnPct: dist.returnPct,
+      investment: md.investment,
+      grossProfit: md.grossProfit,
+      feeRatePct: md.feeRatePct,
+      feeAmount: md.feeAmount,
+      netProfit: md.netProfit,
+      returnPct: md.returnPct,
       currentBalance: partner.currentBalance,
       cumulativeNetProfit: cumulativeNetForPartner(
         partners,

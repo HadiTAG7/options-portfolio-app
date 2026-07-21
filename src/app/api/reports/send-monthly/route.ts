@@ -5,14 +5,13 @@ import type { Database } from "@/types/database";
 import { BACKEND } from "@/lib/backend";
 import { adminDb } from "@/lib/firebase-admin";
 import type { Partner, Trade } from "@/types";
-import { safeNumber, getPartnerInvestment } from "@/lib/utils";
+import { safeNumber } from "@/lib/utils";
 import {
-  computePartnerDistributionFromTrades,
   tradeProfit,
   tradeProfitDate,
   tradeMonthKey,
-  asEarnedBasis,
   cumulativeNetForPartner,
+  monthlyPartnerDist,
 } from "@/lib/partner-profit";
 import {
   generatePartnerReportPDF,
@@ -177,29 +176,10 @@ export async function POST(request: NextRequest) {
     // bucketing (tradeMonthKey) the dashboard uses.
     const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
 
-    // Per-partner distribution for the STATEMENT month, built
-    // trade-by-trade so entry-date eligibility is honored: a partner
-    // who joined in June must not receive a March report crediting
-    // them with March profit. The flat ownership × monthProfit split
-    // used previously ignored entry dates entirely.
-    //
-    // lastSettlementDate is deliberately nulled: this is a historical
-    // statement of what was EARNED in the month. A later settlement
-    // moved that profit into capital — it doesn't un-earn it, and a
-    // settled partner's statement must not read $0.
-    const statementPartners = partners.map(asEarnedBasis);
-    const distribution = computePartnerDistributionFromTrades(
-      statementPartners,
-      tradesInMonth
-    );
-
-    // Same investment-weighted ownership the distribution engine uses,
-    // so a partner's per-trade share in the PDF matches their
-    // grossProfit to the penny.
-    const totalInvestment = partners.reduce(
-      (sum, p) => sum + getPartnerInvestment(p),
-      0
-    );
+    // Per-partner monthly figures are computed inside the loop via
+    // monthlyPartnerDist — each partner weighted by the capital they
+    // held THAT month (stable, entry-date-gated, settlement-blind), so a
+    // later deposit/settlement never rewrites a past month's statement.
 
     // Period label
     const [y, m] = month.split("-");
@@ -228,8 +208,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const dist = distribution[partner.id];
-      if (!dist) {
+      const md = monthlyPartnerDist(partners, trades, partner.id, month);
+      if (!md) {
         results.push({
           partnerId: partner.id,
           name: partner.name,
@@ -239,14 +219,10 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // This partner's slice of each trade = ownership × trade P&L,
-      // restricted to trades earned on/after their entry date — the
-      // same gate the distribution engine applies, so the per-trade
-      // shares sum to dist.grossProfit exactly.
-      const ownershipShare =
-        totalInvestment > 0
-          ? getPartnerInvestment(partner) / totalInvestment
-          : 0;
+      // This partner's slice of each trade = their THAT-MONTH ownership ×
+      // trade P&L, restricted to trades earned on/after their entry date,
+      // so the per-trade shares sum to md.grossProfit.
+      const ownershipShare = md.ownershipPct / 100;
       const entry = partner.entryDate?.trim();
       const positions: PartnerPosition[] = tradesInMonth
         .filter((t) => {
@@ -266,15 +242,15 @@ export async function POST(request: NextRequest) {
         partner: {
           name: partner.name,
           code: partner.code,
-          ownershipPct: dist.ownershipPct,
+          ownershipPct: md.ownershipPct,
         },
         partnerSummary: {
-          investment: getPartnerInvestment(partner),
-          grossProfit: dist.grossProfit,
-          feeRatePct: dist.feeRatePct,
-          feeAmount: dist.feeAmount,
-          netProfit: dist.netProfit,
-          returnPct: dist.returnPct,
+          investment: md.investment,
+          grossProfit: md.grossProfit,
+          feeRatePct: md.feeRatePct,
+          feeAmount: md.feeAmount,
+          netProfit: md.netProfit,
+          returnPct: md.returnPct,
           currentBalance: partner.currentBalance,
           cumulativeNetProfit: cumulativeNetForPartner(
             partners,

@@ -1,5 +1,9 @@
 import type { Partner, Trade } from "@/types";
-import { getPartnerInvestment, safeNumber } from "@/lib/utils";
+import {
+  getPartnerInvestment,
+  partnerCapitalAsOf,
+  safeNumber,
+} from "@/lib/utils";
 
 // Legacy default fee rate. The GP/LP logic reads each partner's own
 // managementFeeRate, but this constant is still exported for consumers
@@ -362,33 +366,70 @@ export function computePartnerDistributionFromTrades(
   return result;
 }
 
+// One partner's gross / fee / net for a single month (YYYY-MM), the
+// STABLE historical way: each partner is weighted by the capital they
+// actually held that month (partnerCapitalAsOf, reconstructed from
+// balanceHistory) — NOT today's capital. This is what keeps a past
+// month's numbers from drifting when someone later deposits, settles, or
+// is corrected. Settlement-blind + entry-date-gated (via the engine), so
+// it's a true record of what was earned that month.
+export function monthlyPartnerDist(
+  partners: Partner[],
+  trades: Trade[],
+  partnerId: string,
+  monthKey: string
+): PartnerDistribution | undefined {
+  const monthEnd = `${monthKey}-31`;
+  const view = partners.map((p) => {
+    const cap = partnerCapitalAsOf(p, monthEnd);
+    return {
+      ...p,
+      lastSettlementDate: null,
+      profitTakenGross: 0,
+      gpFeesAccrued: 0,
+      totalDeposits: cap,
+      baseCapital: cap,
+      currentBalance: cap,
+    };
+  });
+  const monthTrades = trades.filter((t) => tradeMonthKey(t) === monthKey);
+  return computePartnerDistributionFromTrades(view, monthTrades)[partnerId];
+}
+
+export function monthlyPartnerNet(
+  partners: Partner[],
+  trades: Trade[],
+  partnerId: string,
+  monthKey: string
+): { gross: number; fee: number; net: number } {
+  const d = monthlyPartnerDist(partners, trades, partnerId, monthKey);
+  return {
+    gross: d?.grossProfit ?? 0,
+    fee: d?.feeAmount ?? 0,
+    net: d?.netProfit ?? 0,
+  };
+}
+
 // Cumulative NET profit for one partner across every month up to and
-// including `uptoMonthKey` (YYYY-MM). Sums the partner's per-month net on
-// the same settlement-blind, entry-date-gated basis the monthly report
-// uses for the current month, so a partner's running total reconciles
-// with the sequence of monthly reports they've received. Per-month
-// summation (not one all-time pass) is deliberate: the performance fee
-// is charged per profitable month, so a losing month can't shelter an
-// earlier month's fee.
+// including `uptoMonthKey`. Per-month summation (each month weighted by
+// that month's capital) so the running total is stable and reconciles
+// with the monthly reports the partner has received. Per-month (not one
+// all-time pass) also keeps the performance fee charged per profitable
+// month — a losing month can't shelter an earlier month's fee.
 export function cumulativeNetForPartner(
   partners: Partner[],
   trades: Trade[],
   partnerId: string,
   uptoMonthKey: string
 ): number {
-  const basis = partners.map(asEarnedBasis);
-  const byMonth: Record<string, Trade[]> = {};
+  const monthKeys = new Set<string>();
   for (const t of trades) {
     const k = tradeMonthKey(t);
-    if (!k || k > uptoMonthKey) continue;
-    (byMonth[k] ??= []).push(t);
+    if (k && k <= uptoMonthKey) monthKeys.add(k);
   }
   let total = 0;
-  for (const key of Object.keys(byMonth)) {
-    const d = computePartnerDistributionFromTrades(basis, byMonth[key])[
-      partnerId
-    ];
-    total += d?.netProfit ?? 0;
+  for (const key of monthKeys) {
+    total += monthlyPartnerNet(partners, trades, partnerId, key).net;
   }
   return total;
 }

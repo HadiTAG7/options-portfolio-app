@@ -9,7 +9,7 @@ import {
   computePartnerDistributionFromTrades,
   isManagerPartner,
   tradeMonthKey,
-  asEarnedBasis,
+  monthlyPartnerNet,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
@@ -260,28 +260,25 @@ function PartnerDetailInner() {
   // manager's monthly ledger.
   const monthlyLog = useMemo(() => {
     if (!partnerId) return [];
-    const statementPartners = partners.map(asEarnedBasis);
-    const tradesByMonth: Record<string, typeof trades> = {};
+    const monthKeys = new Set<string>();
     for (const t of trades) {
       const key = tradeMonthKey(t);
-      if (!key) continue;
-      (tradesByMonth[key] ??= []).push(t);
+      if (key) monthKeys.add(key);
     }
-    return Object.keys(tradesByMonth)
+    return Array.from(monthKeys)
       .sort()
       .reverse()
       .map((key) => {
-        const md = computePartnerDistributionFromTrades(
-          statementPartners,
-          tradesByMonth[key]
-        )[partnerId];
+        // Each month weighted by that month's actual ownership — stable,
+        // won't drift when capital changes later.
+        const md = monthlyPartnerNet(partners, trades, partnerId, key);
         const [y, m] = key.split("-");
         return {
           key,
           label: `${AR_MONTHS[Number(m) - 1]} ${y}`,
-          gross: md?.grossProfit ?? 0,
-          fee: md?.feeAmount ?? 0,
-          net: md?.netProfit ?? 0,
+          gross: md.gross,
+          fee: md.fee,
+          net: md.net,
         };
       })
       .filter((r) => r.gross !== 0 || r.net !== 0);
@@ -341,8 +338,10 @@ function PartnerDetailInner() {
   // GP commission pot (0 for LPs). netProfit folds the pot in, so a
   // "this cycle" figure must peel it back off; the pot is a standing
   // balance, not this cycle's earnings.
+  // GP commission pot (0 for LPs). Shown in the commission tile; the
+  // hero "net" stays equal to the Partners-page card (dist.netProfit,
+  // which already folds the pot in) so the two pages never disagree.
   const gpAccrued = dist?.accruedFees ?? 0;
-  const cyclePendingNet = pendingNet - gpAccrued;
   const gpCommissionTotal = pendingFee + gpAccrued;
   const monthlyLogTotal = monthlyLog.reduce((s, r) => s + r.net, 0);
 
@@ -405,11 +404,11 @@ function PartnerDetailInner() {
                 </p>
                 <span
                   className={`font-mono text-sm font-bold tabular-nums ${
-                    cyclePendingNet >= 0 ? "text-primary" : "text-error"
+                    pendingNet >= 0 ? "text-primary" : "text-error"
                   }`}
                 >
-                  {cyclePendingNet >= 0 ? "+" : ""}
-                  {formatCurrency(cyclePendingNet)}
+                  {pendingNet >= 0 ? "+" : ""}
+                  {formatCurrency(pendingNet)}
                 </span>
               </div>
               <div className="h-10 w-px bg-outline-variant" />

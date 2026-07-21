@@ -24,14 +24,12 @@ import type { FundSettings } from "@/hooks/use-settings";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { supabase } from "@/lib/supabase";
-import { getPartnerInvestment } from "@/lib/utils";
 import {
-  computePartnerDistributionFromTrades,
   tradeMonthKey,
   tradeProfit,
   tradeProfitDate,
-  asEarnedBasis,
   cumulativeNetForPartner,
+  monthlyPartnerDist,
 } from "@/lib/partner-profit";
 import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
@@ -426,18 +424,9 @@ function MonthlyReportSender() {
     try {
       const month = selectedMonth;
       const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
-      // Historical statement: settlement stamps nulled (a later تثبيت
-      // must not zero the month), entry-date eligibility active — the
-      // exact convention of the email route and the dashboard ledger.
-      const statementPartners = partners.map(asEarnedBasis);
-      const distribution = computePartnerDistributionFromTrades(
-        statementPartners,
-        tradesInMonth
-      );
-      const totalInvestment = partners.reduce(
-        (sum, p) => sum + getPartnerInvestment(p),
-        0
-      );
+      // Each partner weighted by the capital they held THAT month
+      // (monthlyPartnerDist) — stable, entry-date-gated, settlement-blind
+      // — so the download matches the app and doesn't drift.
       const targets = selectedPartnerId
         ? partners.filter((p) => p.id === selectedPartnerId)
         : partners;
@@ -449,12 +438,9 @@ function MonthlyReportSender() {
 
       const reports: MonthlyReportData[] = [];
       for (const partner of targets) {
-        const dist = distribution[partner.id];
-        if (!dist) continue;
-        const ownershipShare =
-          totalInvestment > 0
-            ? getPartnerInvestment(partner) / totalInvestment
-            : 0;
+        const md = monthlyPartnerDist(partners, trades, partner.id, month);
+        if (!md) continue;
+        const ownershipShare = md.ownershipPct / 100;
         const entry = partner.entryDate?.trim();
         const positions: PartnerPosition[] = tradesInMonth
           .filter((t) => {
@@ -474,15 +460,15 @@ function MonthlyReportSender() {
           partner: {
             name: partner.name,
             code: partner.code,
-            ownershipPct: dist.ownershipPct,
+            ownershipPct: md.ownershipPct,
           },
           partnerSummary: {
-            investment: getPartnerInvestment(partner),
-            grossProfit: dist.grossProfit,
-            feeRatePct: dist.feeRatePct,
-            feeAmount: dist.feeAmount,
-            netProfit: dist.netProfit,
-            returnPct: dist.returnPct,
+            investment: md.investment,
+            grossProfit: md.grossProfit,
+            feeRatePct: md.feeRatePct,
+            feeAmount: md.feeAmount,
+            netProfit: md.netProfit,
+            returnPct: md.returnPct,
             currentBalance: partner.currentBalance,
             cumulativeNetProfit: cumulativeNetForPartner(
               partners,
