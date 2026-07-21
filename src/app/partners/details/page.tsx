@@ -336,6 +336,48 @@ function PartnerDetailInner() {
     []
   );
 
+  // The GP records ONE number per month (the net they report to the
+  // partner). So editing any field re-derives the other two at the
+  // partner's performance-fee rate, keeping the stored triple internally
+  // consistent (gross − fee = net) — which is what the emailed report
+  // prints. A non-positive amount means a losing month → no fee.
+  const onEditField = useCallback(
+    (field: "gross" | "fee" | "net", raw: string) => {
+      setEditVals((prev) => {
+        const next = { ...prev, [field]: raw };
+        const num = Number(raw);
+        if (raw.trim() === "" || Number.isNaN(num)) return next;
+        const rate = feeRatePct / 100;
+        const money = (n: number) => n.toFixed(2);
+        if (field === "net") {
+          if (num > 0 && rate > 0) {
+            const gross = num / (1 - rate);
+            next.gross = money(gross);
+            next.fee = money(gross - num);
+          } else {
+            next.gross = money(num);
+            next.fee = money(0);
+          }
+        } else if (field === "gross") {
+          if (num > 0 && rate > 0) {
+            const fee = num * rate;
+            next.fee = money(fee);
+            next.net = money(num - fee);
+          } else {
+            next.fee = money(0);
+            next.net = money(num);
+          }
+        } else {
+          // fee overridden manually: keep gross, recompute net.
+          const gross = Number(prev.gross) || 0;
+          next.net = money(gross - num);
+        }
+        return next;
+      });
+    },
+    [feeRatePct]
+  );
+
   const saveEditMonth = useCallback(async () => {
     if (!partnerId || !editMonth) return;
     setSavingLog(true);
@@ -617,27 +659,41 @@ function PartnerDetailInner() {
                           {row.label}
                         </span>
                         <div className="grid grid-cols-3 gap-2">
-                          {(["gross", "fee", "net"] as const).map((f) => (
+                          {(["net", "gross", "fee"] as const).map((f) => (
                             <label key={f} className="flex flex-col gap-0.5">
-                              <span className="text-[9px] text-on-surface-variant">
-                                {f === "gross"
-                                  ? "إجمالي"
-                                  : f === "fee"
-                                    ? "الرسوم"
-                                    : "الصافي"}
+                              <span
+                                className={`text-[9px] ${
+                                  f === "net"
+                                    ? "font-bold text-primary"
+                                    : "text-on-surface-variant"
+                                }`}
+                              >
+                                {f === "net"
+                                  ? "الصافي"
+                                  : f === "gross"
+                                    ? "الإجمالي"
+                                    : "الرسوم"}
                               </span>
                               <input
                                 type="number"
                                 step="0.01"
+                                inputMode="decimal"
                                 value={editVals[f]}
-                                onChange={(e) =>
-                                  setEditVals((v) => ({ ...v, [f]: e.target.value }))
-                                }
-                                className="w-full rounded border border-outline-variant/50 bg-zinc-950/80 px-2 py-1 font-mono text-xs text-on-surface outline-none focus:border-primary/50"
+                                onChange={(e) => onEditField(f, e.target.value)}
+                                className={`w-full rounded border bg-zinc-950/80 px-2 py-1 font-mono text-xs text-on-surface outline-none focus:border-primary/50 ${
+                                  f === "net"
+                                    ? "border-primary/50"
+                                    : "border-outline-variant/50"
+                                }`}
                               />
                             </label>
                           ))}
                         </div>
+                        <p className="text-[9px] leading-relaxed text-on-surface-variant/80">
+                          اكتب <span className="text-primary">الصافي</span> فقط —
+                          يُحسب الإجمالي والرسوم ({feeRatePct.toFixed(0)}٪)
+                          تلقائياً.
+                        </p>
                         <div className="flex gap-2 pt-1">
                           <button
                             onClick={saveEditMonth}
