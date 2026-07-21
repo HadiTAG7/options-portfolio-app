@@ -39,6 +39,10 @@ export interface Database {
           email: string | null;
           // Supabase Auth linkage (migration 013) — absent before it runs.
           auth_user_id?: string | null;
+          // GP commission pot + partial-withdrawal offset. Firestore is
+          // schemaless so these need no migration; absent → treated as 0.
+          gpFeesAccrued?: number | null;
+          profitTakenGross?: number | null;
         };
         Insert: {
           id?: string;
@@ -68,6 +72,8 @@ export interface Database {
           archived_at?: string | null;
           email?: string | null;
           auth_user_id?: string | null;
+          gpFeesAccrued?: number | null;
+          profitTakenGross?: number | null;
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];

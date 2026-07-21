@@ -31,6 +31,18 @@ export interface Partner {
   baseCapital: number;
   balanceHistory: BalanceHistoryEntry[];
   archivedAt: string | null;
+  // GP-only commission pot: performance fees locked in from LP
+  // settlements but not yet withdrawn or capitalized by the GP. It only
+  // grows as LPs settle and only shrinks when the GP withdraws or
+  // capitalizes it — never from ordinary partner activity. 0/absent for
+  // LPs (and for the GP until the first LP settles under the new model).
+  gpFeesAccrued: number;
+  // Gross profit already paid out via PARTIAL profit withdrawals since
+  // this partner's last full settlement. The distribution engine
+  // subtracts it from the computed gross so the remainder stays pending
+  // (instead of being force-capitalized). Reset to 0 whenever a full
+  // settlement stamp is written (تثبيت / full profit withdrawal).
+  profitTakenGross: number;
 }
 
 // ============================================================

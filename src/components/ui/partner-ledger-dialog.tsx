@@ -183,9 +183,9 @@ export function PartnerLedgerDialog({
           {distribution.isManager ? (
             <LedgerRow
               step="04"
-              labelAr="الرسوم المحصّلة من الشركاء"
-              labelEn="Performance Fees Collected (from LPs)"
-              value={`+${formatCurrency(distribution.feeAmount)}`}
+              labelAr="العمولة المتراكمة (محصّلة + معلقة)"
+              labelEn="Accrued Commission (pending + collected)"
+              value={`+${formatCurrency(distribution.feeAmount + distribution.accruedFees)}`}
               tone="emerald"
               icon={<TrendingUp size={12} />}
             />
@@ -206,7 +206,7 @@ export function PartnerLedgerDialog({
               <div className="rounded-md border border-amber-400/20 bg-amber-400/5 p-4">
                 <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-amber-300/80">
                   <Crown size={11} />
-                  Fee Sources · مصادر الرسوم
+                  مصادر الرسوم المعلقة · Pending Fee Sources
                 </div>
                 <div className="space-y-1.5">
                   {distribution.collectedFromLps.map((row) => {
@@ -244,7 +244,7 @@ export function PartnerLedgerDialog({
                 </p>
                 <p className="mt-1 text-[10px] text-zinc-600">
                   {distribution.isManager
-                    ? "Gross + Collected Fees"
+                    ? "Gross + Commission (pending + accrued)"
                     : "Gross − Performance Fee"}
                 </p>
               </div>

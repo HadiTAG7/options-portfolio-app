@@ -11,6 +11,7 @@ import {
   tradeProfit,
   tradeProfitDate,
   tradeMonthKey,
+  asEarnedBasis,
 } from "@/lib/partner-profit";
 import {
   generatePartnerReportPDF,
@@ -51,6 +52,8 @@ function rowToPartner(row: PartnerRow): Partner {
       ? (row.balanceHistory as Partner["balanceHistory"])
       : [],
     archivedAt: row.archived_at ?? null,
+    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
+    profitTakenGross: safeNumber(row.profitTakenGross),
   };
 }
 
@@ -183,10 +186,7 @@ export async function POST(request: NextRequest) {
     // statement of what was EARNED in the month. A later settlement
     // moved that profit into capital — it doesn't un-earn it, and a
     // settled partner's statement must not read $0.
-    const statementPartners = partners.map((p) => ({
-      ...p,
-      lastSettlementDate: null,
-    }));
+    const statementPartners = partners.map(asEarnedBasis);
     const distribution = computePartnerDistributionFromTrades(
       statementPartners,
       tradesInMonth

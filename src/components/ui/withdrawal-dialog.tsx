@@ -66,12 +66,17 @@ export function WithdrawalDialog({
   const safeAmount = !isNaN(numericAmount) && numericAmount > 0 ? numericAmount : 0;
   const profitPortion = Math.min(safeAmount, availableProfit);
   const capitalPortion = Math.max(0, safeAmount - profitPortion);
-  // Withdrawal settles ALL pending profit: whatever the partner doesn't
-  // take in cash is auto-capitalized into their investment by the store.
+  // A partial profit withdrawal now LEAVES the remainder pending — it is
+  // no longer auto-capitalized into the investment. Capital moves only by
+  // capitalPortion.
   const profitRemainder =
     profitPortion > 0 ? Math.max(0, availableProfit - profitPortion) : 0;
-  const settlesProfit = availableProfit > 0 && safeAmount > 0;
-  const newCapitalBalance = balance - capitalPortion + profitRemainder;
+  // Performance fee locked to the GP's commission on the profit actually
+  // withdrawn — prorated, since `feeAmount` is the fee on the FULL pending
+  // profit and only part is being settled here.
+  const lockedFee =
+    availableProfit > 0 ? feeAmount * (profitPortion / availableProfit) : 0;
+  const newCapitalBalance = balance - capitalPortion;
   const percentage =
     !isNaN(numericAmount) && maxWithdrawable > 0
       ? Math.min((numericAmount / maxWithdrawable) * 100, 100)
@@ -385,20 +390,20 @@ export function WithdrawalDialog({
                 {profitRemainder > 0 && (
                   <div className="flex justify-between">
                     <span className="text-on-surface-variant">
-                      باقي الأرباح — يُثبت تلقائياً في رأس المال
+                      باقي الأرباح — تبقى معلقة (لا تُثبَّت)
                     </span>
-                    <span className="font-mono text-primary font-bold">
-                      +{formatCurrency(profitRemainder)}
+                    <span className="font-mono text-on-surface-variant font-bold">
+                      {formatCurrency(profitRemainder)}
                     </span>
                   </div>
                 )}
-                {settlesProfit && feeAmount > 0 && (
+                {profitPortion > 0 && lockedFee > 0 && (
                   <div className="flex justify-between">
                     <span className="text-tertiary/90">
-                      رسوم الأداء — تُقيد للمدير (GP)
+                      رسوم الأداء — تُقيد لعمولة المدير (GP)
                     </span>
                     <span className="font-mono text-tertiary font-bold">
-                      {formatCurrency(feeAmount)}
+                      {formatCurrency(lockedFee)}
                     </span>
                   </div>
                 )}

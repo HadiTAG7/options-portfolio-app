@@ -51,6 +51,8 @@ export const partners: Partner[] = [
     balanceHistory: [{ date: "2023-01-15", balance: 4000000 }],
     archivedAt: null,
     email: null,
+    gpFeesAccrued: 0,
+    profitTakenGross: 0,
   },
   {
     id: "K-77312",
@@ -75,6 +77,8 @@ export const partners: Partner[] = [
     balanceHistory: [{ date: "2023-03-22", balance: 2800000 }],
     archivedAt: null,
     email: null,
+    gpFeesAccrued: 0,
+    profitTakenGross: 0,
   },
   {
     id: "K-91283",
@@ -99,6 +103,8 @@ export const partners: Partner[] = [
     balanceHistory: [{ date: "2023-06-10", balance: 1200000 }],
     archivedAt: null,
     email: null,
+    gpFeesAccrued: 0,
+    profitTakenGross: 0,
   },
   {
     id: "K-44521",
@@ -123,6 +129,8 @@ export const partners: Partner[] = [
     balanceHistory: [{ date: "2023-02-01", balance: 1700000 }],
     archivedAt: null,
     email: null,
+    gpFeesAccrued: 0,
+    profitTakenGross: 0,
   },
   {
     id: "K-55192",
@@ -147,6 +155,8 @@ export const partners: Partner[] = [
     balanceHistory: [{ date: "2023-04-18", balance: 2050000 }],
     archivedAt: null,
     email: null,
+    gpFeesAccrued: 0,
+    profitTakenGross: 0,
   },
   {
     id: "K-62847",
@@ -171,6 +181,8 @@ export const partners: Partner[] = [
     balanceHistory: [{ date: "2023-05-30", balance: 2000000 }],
     archivedAt: null,
     email: null,
+    gpFeesAccrued: 0,
+    profitTakenGross: 0,
   },
 ];
 
@@ -201,6 +213,8 @@ export const partnerDetail: PartnerDetail = {
   baseCapital: 1700000,
   balanceHistory: [{ date: "2023-02-01", balance: 1700000 }],
   archivedAt: null,
+  gpFeesAccrued: 0,
+  profitTakenGross: 0,
   totalEquity: 428190.42,
   netPnL: 54201.18,
   dailyChangePercent: 2.4,

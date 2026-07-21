@@ -28,6 +28,7 @@ import {
   computePortfolioDistribution,
   tradeProfit,
   tradeMonthKey,
+  asEarnedBasis,
   MANAGEMENT_FEE_RATE,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
@@ -62,9 +63,11 @@ export default function DashboardPage() {
     () => computePartnerDistributionFromTrades(partners, trades),
     [partners, trades]
   );
-  // Realized net profit booked this cycle. Zero-sum GP/LP fees cancel,
-  // so this equals total eligible realized trade profit. Resets to $0
-  // after every "تثبيت" / withdrawal settlement.
+  // Realized net profit booked across all partners. LP fees net against
+  // the GP's pending fees, so this is total eligible realized trade
+  // profit PLUS the GP's accrued commission pot (which now rides on the
+  // GP's net so AUM stays whole). Trends toward $0 as partners settle
+  // and the GP draws the pot down.
   const realizedNetTotal = useMemo(
     () =>
       Object.values(realizedDistribution).reduce(
@@ -74,18 +77,13 @@ export default function DashboardPage() {
     [realizedDistribution]
   );
   // Total GP performance fees EARNED across all realized trades,
-  // settlement-blind (lastSettlementDate nulled) — the same basis as
-  // the monthly ledger's fee column, so the card equals Σ of those
-  // rows. Using the settlement-aware realizedDistribution here made the
-  // card read $0 once every partner had been settled (the fees were
-  // already moved into GP capital by creditGpFee), which looked like
-  // the fees had "disappeared." This figure is what the GP has earned,
-  // whether or not it's been capitalized yet.
+  // settlement-blind (asEarnedBasis) — the same basis as the monthly
+  // ledger's fee column, so this card equals Σ of those rows. It's the
+  // GP's LIFETIME fees earned, independent of whether each fee is still
+  // pending, locked into the commission pot, or already withdrawn — so
+  // it never drops when an LP settles.
   const gpFeeTotal = useMemo(() => {
-    const statementPartners = partners.map((p) => ({
-      ...p,
-      lastSettlementDate: null,
-    }));
+    const statementPartners = partners.map(asEarnedBasis);
     return Object.values(
       computePartnerDistributionFromTrades(statementPartners, trades)
     )
@@ -165,10 +163,7 @@ export default function DashboardPage() {
     // `${key}-31` is a safe string upper bound (see partnerCapitalAsOf).
     const capitalAsOf = (monthEnd: string) =>
       partners.reduce((sum, p) => sum + partnerCapitalAsOf(p, monthEnd), 0);
-    const statementPartners = partners.map((p) => ({
-      ...p,
-      lastSettlementDate: null,
-    }));
+    const statementPartners = partners.map(asEarnedBasis);
     const tradesByMonth: Record<string, typeof trades> = {};
     for (const t of trades) {
       const key = tradeMonthKey(t);

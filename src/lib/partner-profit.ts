@@ -1,5 +1,5 @@
 import type { Partner, Trade } from "@/types";
-import { getPartnerInvestment } from "@/lib/utils";
+import { getPartnerInvestment, safeNumber } from "@/lib/utils";
 
 // Legacy default fee rate. The GP/LP logic reads each partner's own
 // managementFeeRate, but this constant is still exported for consumers
@@ -9,6 +9,26 @@ export const MANAGEMENT_FEE_RATE = 0.2;
 
 export function isManagerPartner(p: Partner): boolean {
   return p.isAdmin === true || p.name?.trim() === "المدير";
+}
+
+// Strip a partner's running settlement state so the engine reports what
+// was EARNED over a given set of trades, ignoring later bookkeeping:
+//   • lastSettlementDate → null : a تثبيت/withdrawal doesn't un-earn a
+//     past month's profit, so historical statements must not read $0.
+//   • profitTakenGross   → 0    : a partial withdrawal today must not
+//     retroactively shrink a prior month's recorded profit.
+//   • gpFeesAccrued      → 0    : the GP's commission pot is a running
+//     total, not a per-month figure — it would otherwise be double
+//     counted into every historical month's GP net.
+// Used by every historical/statement view (dashboard ledger + fees card,
+// per-partner monthly logs, emailed reports).
+export function asEarnedBasis(p: Partner): Partner {
+  return {
+    ...p,
+    lastSettlementDate: null,
+    profitTakenGross: 0,
+    gpFeesAccrued: 0,
+  };
 }
 
 // Realized (or upfront-collected) P&L of a trade.
@@ -119,6 +139,13 @@ export interface PartnerDistribution {
   netProfit: number;
   isManager: boolean;
   returnPct: number;
+  // GP-only commission pot (partners.gpFeesAccrued): performance fees
+  // locked in from LP settlements, awaiting the GP's own withdraw /
+  // capitalize. 0 for LPs. The GP's TOTAL commission shown in the UI is
+  // `feeAmount + accruedFees` (pending live fees + locked-in pot) — a
+  // number that never drops when an LP settles (the fee just moves from
+  // the pending side to the accrued side).
+  accruedFees: number;
   // For the GP only: which LP each collected fee came from. Empty for LPs.
   collectedFromLps: { partnerId: string; amount: number }[];
   // The amount a settlement action (تثبيت / profit withdrawal) may
@@ -216,6 +243,9 @@ export function computePortfolioDistribution(
       netProfit,
       isManager,
       returnPct,
+      // Projection only — the accrued commission pot is a realized,
+      // settlement-driven balance, not part of a hypothetical split.
+      accruedFees: 0,
       collectedFromLps,
       settleableNet: isManager ? gross : netProfit,
     };
@@ -261,6 +291,16 @@ export function computePartnerDistributionFromTrades(
     }
   }
 
+  // Subtract gross profit already withdrawn via PARTIAL profit
+  // withdrawals (Issue 2). A partial withdrawal deliberately does NOT
+  // stamp a settlement, so those trades still count above — this offset
+  // removes exactly the slice already paid out, leaving the rest as
+  // genuine pending profit (fees below then apply to the remainder).
+  for (const p of partners) {
+    const taken = safeNumber(p.profitTakenGross);
+    if (taken > 0) grossById[p.id] = Math.max(0, grossById[p.id] - taken);
+  }
+
   const lpFeeById: Record<string, number> = {};
   let totalLpFees = 0;
   for (const p of partners) {
@@ -283,10 +323,16 @@ export function computePartnerDistributionFromTrades(
 
     let feeAmount: number;
     let netProfit: number;
+    let accruedFees = 0;
     let collectedFromLps: PartnerDistribution["collectedFromLps"] = [];
     if (isManager) {
+      accruedFees = safeNumber(p.gpFeesAccrued);
       feeAmount = totalLpFees;
-      netProfit = gross + totalLpFees;
+      // GP net folds in the accrued commission pot so the GP's Current
+      // Balance and the fund AUM stay whole: when a settled LP's fee
+      // moves into the pot (instead of into GP capital, as it used to),
+      // it must still count somewhere on the GP's row.
+      netProfit = gross + totalLpFees + accruedFees;
       collectedFromLps = partners
         .filter((lp) => lp.id !== managerId && (lpFeeById[lp.id] ?? 0) > 0)
         .map((lp) => ({ partnerId: lp.id, amount: lpFeeById[lp.id] ?? 0 }));
@@ -307,6 +353,7 @@ export function computePartnerDistributionFromTrades(
       netProfit,
       isManager,
       returnPct,
+      accruedFees,
       collectedFromLps,
       settleableNet: isManager ? gross : netProfit,
     };

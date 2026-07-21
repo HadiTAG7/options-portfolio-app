@@ -9,6 +9,7 @@ import {
   computePartnerDistributionFromTrades,
   isManagerPartner,
   tradeMonthKey,
+  asEarnedBasis,
 } from "@/lib/partner-profit";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
@@ -224,10 +225,7 @@ function PartnerDetailInner() {
   // manager's monthly ledger.
   const monthlyLog = useMemo(() => {
     if (!partnerId) return [];
-    const statementPartners = partners.map((p) => ({
-      ...p,
-      lastSettlementDate: null,
-    }));
+    const statementPartners = partners.map(asEarnedBasis);
     const tradesByMonth: Record<string, typeof trades> = {};
     for (const t of trades) {
       const key = tradeMonthKey(t);
@@ -305,6 +303,12 @@ function PartnerDetailInner() {
   // number the Partners table shows in its NET column.
   const pendingNet = dist?.netProfit ?? 0;
   const pendingFee = dist?.feeAmount ?? 0;
+  // GP commission pot (0 for LPs). netProfit folds the pot in, so a
+  // "this cycle" figure must peel it back off; the pot is a standing
+  // balance, not this cycle's earnings.
+  const gpAccrued = dist?.accruedFees ?? 0;
+  const cyclePendingNet = pendingNet - gpAccrued;
+  const gpCommissionTotal = pendingFee + gpAccrued;
   const monthlyLogTotal = monthlyLog.reduce((s, r) => s + r.net, 0);
 
   const CAPS = "text-[11px] font-bold uppercase tracking-[0.12em]";
@@ -366,11 +370,11 @@ function PartnerDetailInner() {
                 </p>
                 <span
                   className={`font-mono text-sm font-bold tabular-nums ${
-                    pendingNet >= 0 ? "text-primary" : "text-error"
+                    cyclePendingNet >= 0 ? "text-primary" : "text-error"
                   }`}
                 >
-                  {pendingNet >= 0 ? "+" : ""}
-                  {formatCurrency(pendingNet)}
+                  {cyclePendingNet >= 0 ? "+" : ""}
+                  {formatCurrency(cyclePendingNet)}
                 </span>
               </div>
               <div className="h-10 w-px bg-outline-variant" />
@@ -392,33 +396,62 @@ function PartnerDetailInner() {
           </div>
         </div>
 
-        {/* Pending performance fee */}
+        {/* GP commission pot / LP pending fee */}
         <div className="glass-card rounded-2xl p-8 !border-amber-400/30">
           <p className={`${CAPS} mb-2 text-on-surface-variant`}>
-            {isGP ? "رسوم الأداء المحصّلة" : "رسوم الأداء المعلقة"}
+            {isGP ? "عمولة المدير" : "رسوم الأداء المعلقة"}
           </p>
           <h2 className="mb-5 font-mono text-4xl font-semibold tabular-nums text-amber-300">
-            {formatCurrency(pendingFee)}
+            {formatCurrency(isGP ? gpCommissionTotal : pendingFee)}
           </h2>
           <div>
-            <div className="flex items-center justify-between border-b border-outline-variant/40 py-2.5">
-              <span className="text-xs text-on-surface-variant">
-                النسبة التقديرية
-              </span>
-              <span className="font-mono text-sm tabular-nums text-on-surface">
-                {feeRatePct.toFixed(0)}%
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-2.5">
-              <span className="text-xs text-on-surface-variant">
-                طريقة الاحتساب
-              </span>
-              <span className="text-xs text-on-surface-variant">
-                {isGP
-                  ? "تُقيد لرأس مالك عند التسوية"
-                  : "تُخصم من الربح عند التسوية"}
-              </span>
-            </div>
+            {isGP ? (
+              <>
+                <div className="flex items-center justify-between border-b border-outline-variant/40 py-2.5">
+                  <span className="text-xs text-on-surface-variant">
+                    متاحة الآن
+                  </span>
+                  <span className="font-mono text-sm tabular-nums text-on-surface">
+                    {formatCurrency(gpAccrued)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-b border-outline-variant/40 py-2.5">
+                  <span className="text-xs text-on-surface-variant">
+                    معلقة (تتحرر عند تسوية الشركاء)
+                  </span>
+                  <span className="font-mono text-sm tabular-nums text-on-surface">
+                    {formatCurrency(pendingFee)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2.5">
+                  <span className="text-xs text-on-surface-variant">
+                    طريقة الاحتساب
+                  </span>
+                  <span className="text-xs text-on-surface-variant">
+                    محفظة مستقلة — تسحبها أو تثبّتها بنفسك
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between border-b border-outline-variant/40 py-2.5">
+                  <span className="text-xs text-on-surface-variant">
+                    النسبة التقديرية
+                  </span>
+                  <span className="font-mono text-sm tabular-nums text-on-surface">
+                    {feeRatePct.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2.5">
+                  <span className="text-xs text-on-surface-variant">
+                    طريقة الاحتساب
+                  </span>
+                  <span className="text-xs text-on-surface-variant">
+                    تُخصم من الربح عند التسوية
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

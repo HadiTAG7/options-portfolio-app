@@ -10,6 +10,7 @@ import { AddPartnerDialog } from "@/components/ui/add-partner-dialog";
 import { EditPartnerDialog } from "@/components/ui/edit-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { DepositDialog } from "@/components/ui/deposit-dialog";
+import { GpCommissionDialog } from "@/components/ui/gp-commission-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent, getPartnerInvestment } from "@/lib/utils";
@@ -92,6 +93,8 @@ export default function PartnersPage() {
     handleWithdrawal,
     capitalizeProfits,
     handleDeposit,
+    withdrawGpCommission,
+    capitalizeGpCommission,
     notification,
     clearNotification,
   } = usePartnersStore();
@@ -100,6 +103,10 @@ export default function PartnersPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<Partner | null>(null);
   const [depositTarget, setDepositTarget] = useState<Partner | null>(null);
+  // GP commission wallet dialog target (the manager row).
+  const [commissionTarget, setCommissionTarget] = useState<Partner | null>(
+    null
+  );
   // Clean-Slate override: depositing while pending profit exists is
   // allowed, but only through an explicit warning confirm (the deposit
   // re-weights everyone's already-earned pending profit).
@@ -214,6 +221,14 @@ export default function PartnersPage() {
     await handleDeposit(partner, amount, refetch);
   }
 
+  async function onWithdrawCommission(partner: Partner, amount: number) {
+    await withdrawGpCommission(partner, amount, refetch);
+  }
+
+  async function onCapitalizeCommission(partner: Partner, amount: number) {
+    await capitalizeGpCommission(partner, amount, refetch);
+  }
+
   async function handleCapitalizeConfirm() {
     if (!capitalizeTarget) return;
     const netProfit = settleableFor(capitalizeTarget.id);
@@ -273,6 +288,25 @@ export default function PartnersPage() {
         partner={depositTarget}
         onClose={() => setDepositTarget(null)}
         onSubmit={onDeposit}
+      />
+
+      {/* GP Commission wallet — withdraw as cash or capitalize into capital */}
+      <GpCommissionDialog
+        open={commissionTarget !== null}
+        partner={commissionTarget}
+        accrued={
+          commissionTarget
+            ? (tradeDistribution[commissionTarget.id]?.accruedFees ?? 0)
+            : 0
+        }
+        pending={
+          commissionTarget
+            ? (tradeDistribution[commissionTarget.id]?.feeAmount ?? 0)
+            : 0
+        }
+        onClose={() => setCommissionTarget(null)}
+        onWithdraw={onWithdrawCommission}
+        onCapitalize={onCapitalizeCommission}
       />
 
       {/* Clean-Slate override — deposit requested while pending profit
@@ -605,11 +639,19 @@ export default function PartnersPage() {
             // another تثبيت.
             const tradeNet = dist.settleableNet;
             const profitPositive = dist.netProfit >= 0;
-            // Current Balance = Investment + realized net profit. Equals
-            // Investment exactly until a trade settles. Σ across all
-            // cards == the AUM hero.
+            // Current Balance = Investment + realized net profit. For the
+            // GP, dist.netProfit already folds in the accrued commission
+            // pot, so this stays whole. Σ across all cards == the AUM hero.
             const currentBalance = dist.investment + dist.netProfit;
             const isGP = dist.isManager;
+            // GP commission wallet split (both 0 for LPs):
+            //   accrued  = locked in, actionable now (withdraw/capitalize)
+            //   pending  = fees on unsettled LP profit, not yet actionable
+            // Total shown on the card = accrued + pending — a number that
+            // never drops when an LP settles (pending just becomes accrued).
+            const gpAccrued = dist.accruedFees;
+            const gpPendingFee = dist.feeAmount;
+            const gpCommissionTotal = gpAccrued + gpPendingFee;
             return (
               <article
                 key={partner.id}
@@ -738,7 +780,7 @@ export default function PartnersPage() {
                   </div>
                   <div className="flex flex-col gap-1 border-x border-zinc-800/40 px-2">
                     <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
-                      {isGP ? "رسوم (GP)" : `رسوم · ${dist.feeRatePct.toFixed(0)}%`}
+                      {isGP ? "عمولة (GP)" : `رسوم · ${dist.feeRatePct.toFixed(0)}%`}
                     </span>
                     <span
                       className={`font-mono text-xs font-bold tabular-nums ${
@@ -746,13 +788,20 @@ export default function PartnersPage() {
                       }`}
                       title={
                         isGP
-                          ? "الرسوم المحصّلة من جميع الشركاء المحدودين"
+                          ? `عمولة المدير المتراكمة — متاحة ${formatCurrency(gpAccrued)} + معلقة ${formatCurrency(gpPendingFee)}. لا تنقص إلا بسحبك أو تثبيتك لها.`
                           : `رسوم الأداء بنسبة ${dist.feeRatePct.toFixed(2)}%`
                       }
                     >
                       {isGP ? "+" : "-"}
-                      {formatCurrency(Math.abs(dist.feeAmount))}
+                      {formatCurrency(
+                        Math.abs(isGP ? gpCommissionTotal : dist.feeAmount)
+                      )}
                     </span>
+                    {isGP && (
+                      <span className="font-mono text-[8px] font-semibold tabular-nums text-zinc-500">
+                        متاح {formatCurrency(gpAccrued)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1 pr-2">
                     <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
@@ -810,6 +859,17 @@ export default function PartnersPage() {
                       سحب
                     </button>
                   </div>
+                  {/* GP-only: commission wallet (accrued fees) */}
+                  {isGP && (
+                    <button
+                      onClick={() => setCommissionTarget(partner)}
+                      className="flex items-center justify-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-amber-200 transition-all duration-200 hover:scale-[1.02] hover:border-amber-400/55 hover:bg-amber-400/15"
+                      title="محفظة العمولة — سحب نقداً أو تثبيت في رأس المال"
+                    >
+                      <Icon name="savings" className="!text-xs" />
+                      عمولتي · متاح {formatCurrency(gpAccrued)}
+                    </button>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setLedgerTarget(partner)}

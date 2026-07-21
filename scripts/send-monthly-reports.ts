@@ -27,6 +27,7 @@ import {
   tradeMonthKey,
   tradeProfit,
   tradeProfitDate,
+  asEarnedBasis,
 } from "../src/lib/partner-profit";
 import { getPartnerInvestment, safeNumber } from "../src/lib/utils";
 import type {
@@ -132,6 +133,8 @@ function rowToPartner(row: any): Partner {
       ? row.balanceHistory
       : [],
     archivedAt: row.archived_at ?? null,
+    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
+    profitTakenGross: safeNumber(row.profitTakenGross),
   };
 }
 
@@ -167,10 +170,7 @@ ok(`loaded ${partners.length} partners, ${trades.length} trades`);
 
 // ── Statement math — identical to the app's email route ─────────────
 const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
-const statementPartners = partners.map((p) => ({
-  ...p,
-  lastSettlementDate: null,
-}));
+const statementPartners = partners.map(asEarnedBasis);
 const distribution = computePartnerDistributionFromTrades(
   statementPartners,
   tradesInMonth

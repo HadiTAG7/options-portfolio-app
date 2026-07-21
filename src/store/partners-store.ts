@@ -38,6 +38,8 @@ function rowToPartner(row: PartnerRow): Partner {
       ? (row.balanceHistory as Partner["balanceHistory"])
       : [],
     archivedAt: row.archived_at ?? null,
+    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
+    profitTakenGross: safeNumber(row.profitTakenGross),
   };
 }
 
@@ -66,10 +68,13 @@ interface Notification {
 
 // GP performance-fee transfer that must accompany an LP settlement.
 // When an LP capitalizes or withdraws profit, their pending trades get
-// stamped settled and stop generating the GP's fee — so the fee has to
-// be credited to the GP's row at that exact moment or it evaporates.
+// stamped settled and stop generating the GP's fee — so the fee is
+// locked into the GP's commission pot (gpFeesAccrued) at that exact
+// moment or it evaporates. It is NO LONGER poured into the GP's capital;
+// the GP later chooses to withdraw or capitalize the pot themselves.
 export interface FeeTransfer {
-  amount: number; // the settling LP's feeAmount from the distribution
+  amount: number; // fee to lock in (full pending fee, or a prorated slice
+  //                 on a partial profit withdrawal)
   gpId: string; // partner id of the General Partner row to credit
   lpId: string; // the settling LP — journaled on the Fee transaction
   lpName: string; // for the Fee transaction's human-readable note
@@ -138,17 +143,29 @@ interface PartnersState {
     amount: number,
     onDone?: () => Promise<void>
   ) => Promise<void>;
+  // GP-only commission-pot actions. The pot (gpFeesAccrued) accumulates
+  // from LP settlements and only ever moves through one of these two.
+  withdrawGpCommission: (
+    partner: Partner,
+    amount: number,
+    onDone?: () => Promise<void>
+  ) => Promise<void>;
+  capitalizeGpCommission: (
+    partner: Partner,
+    amount: number,
+    onDone?: () => Promise<void>
+  ) => Promise<void>;
   clearNotification: () => void;
 }
 
-// Credit the GP's capital with a settling LP's performance fee and log
-// it as a 'Fee' transaction. Reads the GP row fresh from the DB (the
-// store's cached copy may be stale) and adds the fee to every balance
-// column so the Investment/Current Balance views pick it up
-// immediately. Non-fatal by design: the LP's own settlement has
-// already committed, so a failure here is surfaced loudly in the
-// console but doesn't roll anything back.
-async function creditGpFee(transfer: FeeTransfer): Promise<boolean> {
+// Lock a settling LP's performance fee into the GP's commission pot
+// (gpFeesAccrued) and log it as a 'Fee' transaction. Reads the GP row
+// fresh from the DB (the store's cached copy may be stale) and ADDS to
+// gpFeesAccrued only — capital columns are deliberately untouched, so
+// the GP's Investment never moves on an LP settlement. Non-fatal by
+// design: the LP's own settlement has already committed, so a failure
+// here is surfaced loudly in the console but doesn't roll anything back.
+async function accrueGpFee(transfer: FeeTransfer): Promise<boolean> {
   const fee = Number(transfer.amount) || 0;
   if (fee <= 0 || !transfer.gpId) return false;
 
@@ -160,7 +177,7 @@ async function creditGpFee(transfer: FeeTransfer): Promise<boolean> {
 
   if (gpFetchError || !gpRow) {
     console.error(
-      "[creditGpFee] Could not load GP row — fee NOT credited:",
+      "[accrueGpFee] Could not load GP row — fee NOT accrued:",
       gpFetchError
     );
     return false;
@@ -169,16 +186,13 @@ async function creditGpFee(transfer: FeeTransfer): Promise<boolean> {
   const { error: gpUpdateError } = await supabase
     .from("partners")
     .update({
-      currentBalance: safeNumber(gpRow.currentBalance) + fee,
-      total_balance: safeNumber(gpRow.total_balance) + fee,
-      totalDeposits: safeNumber(gpRow.totalDeposits) + fee,
-      baseCapital: safeNumber(gpRow.baseCapital) + fee,
+      gpFeesAccrued: safeNumber(gpRow.gpFeesAccrued) + fee,
     })
     .eq("id", transfer.gpId);
 
   if (gpUpdateError) {
     console.error(
-      "[creditGpFee] GP update failed — fee NOT credited:",
+      "[accrueGpFee] GP update failed — fee NOT accrued:",
       gpUpdateError
     );
     return false;
@@ -262,27 +276,59 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     //    investment columns (totalDeposits / baseCapital) so future
     //    ownership % is computed against the smaller stake.
     //  - profitRemainder  → pending profit the partner did NOT withdraw.
-    //    The settlement stamp below wipes ALL pending trade profit, so
-    //    the remainder must be capitalized into the balance columns in
-    //    the same update — otherwise a partial profit withdrawal would
-    //    silently forfeit the rest (it would be neither paid out nor
-    //    added to capital).
+    //    It now STAYS pending (Issue 2): a partial profit withdrawal no
+    //    longer stamps a full settlement, so the remainder keeps showing
+    //    as this partner's pending profit for the GP to handle later.
+    //    (profitRemainder > 0 implies capitalPortion === 0, since the
+    //    split takes profit before capital.)
     const profitPortion = Math.min(amount, profit);
     const capitalPortion = Math.max(0, amount - profitPortion);
     const profitRemainder = Math.max(0, profit - profitPortion);
 
-    const newCurrentBalance = balance - capitalPortion + profitRemainder;
-    const newTotalBalance =
-      safeNumber(partner.totalBalance) - capitalPortion + profitRemainder;
+    // Three settlement shapes:
+    //  - full profit settle: all pending profit taken as cash (maybe plus
+    //    capital) → stamp a settlement and clear the partial offset.
+    //  - partial profit:     some pending profit left → no stamp; grow the
+    //    offset by the gross just taken so the rest stays pending.
+    //  - pure capital:       no pending profit at all → leave settlement
+    //    state untouched (a capital withdrawal isn't a profit settlement).
+    const isFullProfitSettle = profitPortion > 0 && profitRemainder === 0;
+    const isPartialProfit = profitRemainder > 0;
+
+    // Fee locked into the GP's commission pot NOW = fee on the profit
+    // actually settled this action. feeTransfer.amount is the fee on the
+    // FULL pending profit, so prorate by the fraction being resolved.
+    const lockedFee =
+      feeTransfer && profit > 0
+        ? feeTransfer.amount * (profitPortion / profit)
+        : 0;
+    // Gross equivalent of the cash profit taken (net + its fee) — what
+    // the offset must grow by so the engine drops exactly this slice.
+    const grossTakenNow = profitPortion + lockedFee;
+
+    // Capital columns move ONLY by capitalPortion now — the remainder is
+    // no longer folded into capital.
+    const newCurrentBalance = balance - capitalPortion;
+    const newTotalBalance = safeNumber(partner.totalBalance) - capitalPortion;
     const newTotalWithdrawals = safeNumber(partner.totalWithdrawals) + amount;
-    const newTotalDeposits =
-      Math.max(0, safeNumber(partner.totalDeposits) - capitalPortion) +
-      profitRemainder;
-    const newBaseCapital =
-      Math.max(
-        0,
-        (safeNumber(partner.baseCapital) || balance) - capitalPortion
-      ) + profitRemainder;
+    const newTotalDeposits = Math.max(
+      0,
+      safeNumber(partner.totalDeposits) - capitalPortion
+    );
+    const newBaseCapital = Math.max(
+      0,
+      (safeNumber(partner.baseCapital) || balance) - capitalPortion
+    );
+    const prevTakenGross = safeNumber(partner.profitTakenGross);
+    // Settlement bookkeeping applied to the update below.
+    const settlementPatch: {
+      last_settlement_date?: string;
+      profitTakenGross?: number;
+    } = isFullProfitSettle
+      ? { last_settlement_date: new Date().toISOString(), profitTakenGross: 0 }
+      : isPartialProfit
+        ? { profitTakenGross: prevTakenGross + grossTakenNow }
+        : {};
     const today = new Date().toISOString().split("T")[0];
 
     const newHistoryEntry: BalanceHistoryEntry = {
@@ -295,10 +341,11 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const updatedHistory = [...existingHistory, newHistoryEntry];
 
     // --- 1a. Update the numeric fields (guaranteed to exist) ---
-    // Stamp last_settlement_date so the distribution engine treats all
-    // prior trade profits as "settled" — profit resets to $0.
-    // totalDeposits / baseCapital shrink ONLY by capitalPortion (pure
-    // profit payouts leave investment untouched).
+    // settlementPatch stamps last_settlement_date (and clears the offset)
+    // only on a FULL profit settle; on a partial withdrawal it grows the
+    // offset instead so the remainder stays pending. totalDeposits /
+    // baseCapital shrink ONLY by capitalPortion (profit payouts leave
+    // investment untouched).
     const { error: updateError } = await supabase
       .from("partners")
       .update({
@@ -307,7 +354,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         "totalWithdrawals": newTotalWithdrawals,
         "totalDeposits": newTotalDeposits,
         "baseCapital": newBaseCapital,
-        last_settlement_date: new Date().toISOString(),
+        ...settlementPatch,
       })
       .eq("id", partner.id);
 
@@ -395,33 +442,26 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       );
     }
 
-    // --- 4. Journal the auto-capitalized remainder ---
-    if (profitRemainder > 0) {
-      const remainderLogged = await logTransaction({
-        investorId: partner.id,
-        amount: profitRemainder,
-        type: "Capitalize",
-        note: "تثبيت تلقائي لباقي الأرباح عند السحب",
-      });
-      if (!remainderLogged) logFailed = true;
-    }
+    // --- 4. (Removed) No auto-capitalize of the remainder ---
+    // A partial profit withdrawal now leaves profitRemainder pending
+    // (see settlementPatch above); nothing is force-moved into capital.
 
-    // --- 5. Credit the GP's performance fee for the settled profit ---
-    // The settlement stamp above just wiped this partner's pending
-    // trade profit; the GP's fee claim on it dies with it unless we
-    // move the fee into the GP's capital right now.
+    // --- 5. Lock the GP's performance fee into the commission pot ---
+    // Only the fee on the profit ACTUALLY settled this action (lockedFee)
+    // is locked in; the fee on any remainder stays pending with it. This
+    // adds to the GP's pot, never to GP capital.
     let feeCredited = false;
-    if (profit > 0 && feeTransfer && feeTransfer.gpId !== partner.id) {
-      feeCredited = await creditGpFee(feeTransfer);
+    if (lockedFee > 0 && feeTransfer && feeTransfer.gpId !== partner.id) {
+      feeCredited = await accrueGpFee({ ...feeTransfer, amount: lockedFee });
     }
 
     // --- 6. Success! Update UI immediately ---
     const remainderNote =
       profitRemainder > 0
-        ? ` وتم تثبيت باقي الأرباح (${formatCurrency(profitRemainder)}) في رأس المال`
+        ? ` — تبقّى ${formatCurrency(profitRemainder)} أرباح معلقة كما هي`
         : "";
     const feeNote = feeCredited
-      ? ` — رسوم الأداء (${formatCurrency(feeTransfer!.amount)}) قُيدت للمدير`
+      ? ` — رسوم الأداء (${formatCurrency(lockedFee)}) قُيدت لعمولة المدير`
       : "";
     set({
       notification: {
@@ -473,6 +513,8 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         totalDeposits: newBalance,
         baseCapital: newBalance,
         last_settlement_date: settlementDate,
+        // Full settlement — clear any partial-withdrawal offset.
+        profitTakenGross: 0,
       })
       .eq("id", partner.id)
       .select()
@@ -517,16 +559,17 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       note: "تثبيت الأرباح في رأس المال",
     });
 
-    // Credit the GP's performance fee for the profit that was just
-    // settled — the settlement stamp stops these trades from
-    // generating the fee, so this is the moment it must move.
+    // Lock the GP's performance fee on the just-settled profit into the
+    // commission pot — the settlement stamp stops these trades from
+    // generating the fee, so this is the moment it must move. It goes to
+    // the pot, not GP capital.
     let feeCredited = false;
     if (feeTransfer && feeTransfer.gpId !== partner.id) {
-      feeCredited = await creditGpFee(feeTransfer);
+      feeCredited = await accrueGpFee(feeTransfer);
     }
 
     const feeNote = feeCredited
-      ? ` — رسوم الأداء (${formatCurrency(feeTransfer!.amount)}) قُيدت للمدير`
+      ? ` — رسوم الأداء (${formatCurrency(feeTransfer!.amount)}) قُيدت لعمولة المدير`
       : "";
     set({
       notification: {
@@ -666,6 +709,153 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       notification: {
         type: "success",
         message: `تم إيداع ${formatCurrency(amount)} في حساب ${partner.name} بنجاح${depositLogged ? "" : LOG_WARN}`,
+      },
+    });
+
+    if (onDone) await onDone();
+    await get().fetchPartners();
+  },
+
+  // Withdraw part or all of the GP's accrued commission as CASH. Draws
+  // down gpFeesAccrued only — capital is untouched (the commission was
+  // never in capital). Money leaves the fund, journaled as a Withdrawal.
+  withdrawGpCommission: async (partner, amount, onDone) => {
+    set({ error: null, notification: null });
+    const accrued = safeNumber(partner.gpFeesAccrued);
+
+    if (amount <= 0) {
+      const msg = "مبلغ السحب يجب أن يكون أكبر من صفر";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+    if (amount > accrued + 0.005) {
+      const msg = `المبلغ يتجاوز العمولة المتاحة (${formatCurrency(accrued)})`;
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    const newAccrued = Math.max(0, accrued - amount);
+    const { data, error: updateError } = await supabase
+      .from("partners")
+      .update({ gpFeesAccrued: newAccrued })
+      .eq("id", partner.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      const msg = `فشل سحب العمولة: ${updateError.message}`;
+      set({ notification: { type: "error", message: msg } });
+      throw updateError;
+    }
+    if (!data) {
+      const msg = "لم يتم تحديث أي سجل. تحقق من الصلاحيات.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    const logged = await logTransaction({
+      investorId: partner.id,
+      amount,
+      type: "Withdrawal",
+      note: "سحب عمولة المدير (نقداً)",
+    });
+
+    set({
+      notification: {
+        type: "success",
+        message: `تم سحب عمولة بقيمة ${formatCurrency(amount)} للمدير${logged ? "" : LOG_WARN}`,
+      },
+    });
+
+    if (onDone) await onDone();
+    await get().fetchPartners();
+  },
+
+  // Capitalize part or all of the GP's accrued commission INTO capital:
+  // moves gpFeesAccrued → investment columns so it starts earning as the
+  // GP's own stake. Deliberately does NOT stamp last_settlement_date —
+  // that would wipe the GP's pending TRADE profit, which is unrelated to
+  // the commission pot.
+  capitalizeGpCommission: async (partner, amount, onDone) => {
+    set({ error: null, notification: null });
+    const accrued = safeNumber(partner.gpFeesAccrued);
+
+    if (amount <= 0) {
+      const msg = "لا توجد عمولة للتثبيت";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+    if (amount > accrued + 0.005) {
+      const msg = `المبلغ يتجاوز العمولة المتاحة (${formatCurrency(accrued)})`;
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    const oldBalance = safeNumber(partner.currentBalance);
+    const oldTotalBalance = safeNumber(partner.totalBalance);
+    const oldTotalDeposits = safeNumber(partner.totalDeposits);
+    const oldBaseCapital = safeNumber(partner.baseCapital) || oldBalance;
+    const newAccrued = Math.max(0, accrued - amount);
+    const newBalance = oldBalance + amount;
+    const today = new Date().toISOString().split("T")[0];
+
+    const { data, error: updateError } = await supabase
+      .from("partners")
+      .update({
+        currentBalance: newBalance,
+        total_balance: oldTotalBalance + amount,
+        totalDeposits: oldTotalDeposits + amount,
+        baseCapital: oldBaseCapital + amount,
+        gpFeesAccrued: newAccrued,
+      })
+      .eq("id", partner.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      const msg = `فشل تثبيت العمولة: ${updateError.message}`;
+      set({ notification: { type: "error", message: msg } });
+      throw updateError;
+    }
+    if (!data) {
+      const msg = "لم يتم تحديث أي سجل. تحقق من الصلاحيات.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    // balanceHistory snapshot (tolerate a missing/stale column).
+    try {
+      const existingHistory = Array.isArray(partner.balanceHistory)
+        ? partner.balanceHistory
+        : [];
+      const updatedHistory = [
+        ...existingHistory,
+        { date: today, balance: newBalance } as BalanceHistoryEntry,
+      ];
+      await supabase
+        .from("partners")
+        .update({
+          balanceHistory: updatedHistory as unknown as BalanceHistoryEntry[],
+        })
+        .eq("id", partner.id);
+    } catch (e) {
+      console.error(
+        "[capitalizeGpCommission] balanceHistory update threw (non-fatal):",
+        e
+      );
+    }
+
+    const logged = await logTransaction({
+      investorId: partner.id,
+      amount,
+      type: "Capitalize",
+      note: "تثبيت عمولة المدير في رأس المال",
+    });
+
+    set({
+      notification: {
+        type: "success",
+        message: `تم تثبيت عمولة بقيمة ${formatCurrency(amount)} في رأس مال المدير${logged ? "" : LOG_WARN}`,
       },
     });
 

@@ -30,6 +30,7 @@ import {
   tradeMonthKey,
   tradeProfit,
   tradeProfitDate,
+  asEarnedBasis,
 } from "@/lib/partner-profit";
 import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
@@ -427,10 +428,7 @@ function MonthlyReportSender() {
       // Historical statement: settlement stamps nulled (a later تثبيت
       // must not zero the month), entry-date eligibility active — the
       // exact convention of the email route and the dashboard ledger.
-      const statementPartners = partners.map((p) => ({
-        ...p,
-        lastSettlementDate: null,
-      }));
+      const statementPartners = partners.map(asEarnedBasis);
       const distribution = computePartnerDistributionFromTrades(
         statementPartners,
         tradesInMonth

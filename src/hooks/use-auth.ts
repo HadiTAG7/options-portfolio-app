@@ -50,6 +50,8 @@ function rowToPartnerLite(row: PartnerRow): Partner {
     baseCapital: safeNumber(row.baseCapital) || currentBalance,
     balanceHistory: [],
     archivedAt: row.archived_at ?? null,
+    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
+    profitTakenGross: safeNumber(row.profitTakenGross),
   };
 }
 

@@ -40,6 +40,8 @@ function rowToPartner(row: PartnerRow): Partner {
       : [],
     archivedAt: row.archived_at ?? null,
     email: row.email ?? null,
+    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
+    profitTakenGross: safeNumber(row.profitTakenGross),
   };
 }
 
