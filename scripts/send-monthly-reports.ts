@@ -190,6 +190,53 @@ ok(
   `loaded ${partners.length} partners, ${trades.length} trades, ${mpSnap.size} stored monthly records`
 );
 
+// ── Auto-freeze: lock this month's numbers so they never drift ───────
+// The log/report recompute each month from TODAY's ownership, so any
+// later deposit / withdrawal / capitalization re-splits every past
+// month. Freezing writes each partner's computed {gross, fee, net} for
+// the report month into monthly_profits ONCE; thereafter the app and
+// every report read the stored value instead of recomputing. Guards:
+//   • only COMPLETED months freeze (never the in-progress current one),
+//   • an existing record (a GP hand-edit or an earlier freeze) is never
+//     overwritten — so manual corrections always win.
+// This is what makes "الأرقام القديمة تتغير" impossible going forward.
+//
+// Only the JUST-ENDED month is auto-frozen (month === previous month):
+// it hasn't drifted yet, so its live figures are still correct. Older
+// months are never auto-frozen — a back-dated manual run would otherwise
+// lock a value that has ALREADY drifted; those must be corrected by the
+// GP (in-app edit) or are already stored (and stored always wins).
+if (month === previousMonthKey()) {
+  let frozen = 0;
+  for (const p of partners) {
+    const key = `${month}__${p.id}`;
+    if (storedByKey.has(key)) continue; // preserve edits / prior freeze
+    const md = monthlyPartnerDist(partners, trades, p.id, month);
+    if (!md) continue;
+    const gross = md.grossProfit;
+    const fee = md.feeAmount;
+    const net = md.netProfit;
+    if (gross === 0 && net === 0) continue; // nothing earned that month
+    await db.collection("monthly_profits").doc(key).set({
+      id: key,
+      month,
+      partnerId: p.id,
+      gross,
+      fee,
+      net,
+      updated_at: new Date().toISOString(),
+    });
+    storedByKey.set(key, { gross, fee, net });
+    (storedNetByPartner[p.id] ??= {})[month] = net;
+    frozen++;
+  }
+  ok(`froze ${frozen} monthly record(s) for ${month} (drift-proof)`);
+} else {
+  console.log(
+    `↷ ${month} is not the just-ended month — not auto-freezing (correct it in-app; stored values always win)`
+  );
+}
+
 // ── Statement math — identical to the app's email route ─────────────
 // Per-partner monthly figures come from monthlyPartnerDist inside the
 // loop: each partner weighted by the capital they held THAT month
