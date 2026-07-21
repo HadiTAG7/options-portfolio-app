@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { safeNumber, formatCurrency, getPartnerInvestment } from "@/lib/utils";
-import type { Partner } from "@/types";
+import type { Partner, FundOperation, PartnerSnapshot } from "@/types";
 import type { PartnerRow, BalanceHistoryEntry } from "@/types/database";
 
 function rowToPartner(row: PartnerRow): Partner {
@@ -97,6 +97,9 @@ async function logTransaction(row: {
   type: "Deposit" | "Withdrawal" | "Fee" | "Capitalize";
   note?: string;
   relatedPartnerId?: string;
+  // Groups this row with the rest of one operation, so undo removes them
+  // together.
+  opId?: string;
 }): Promise<boolean> {
   try {
     const { error } = await supabase.from("transactions").insert({
@@ -106,6 +109,7 @@ async function logTransaction(row: {
       date: new Date().toISOString().split("T")[0],
       note: row.note ?? null,
       related_partner_id: row.relatedPartnerId ?? null,
+      opId: row.opId ?? null,
     });
     if (error) {
       console.warn(`[logTransaction] ${row.type} journal failed:`, error.message);
@@ -155,19 +159,98 @@ interface PartnersState {
     amount: number,
     onDone?: () => Promise<void>
   ) => Promise<void>;
+  // Reverse a past money operation: restore every touched row to its
+  // captured before-state and delete the ledger rows it created.
+  undoOperation: (
+    op: FundOperation,
+    onDone?: () => Promise<void>
+  ) => Promise<void>;
   clearNotification: () => void;
+}
+
+// Full restorable before-state of a partner row (DB-column keyed) — the
+// unit an undo puts back. Built from the in-memory Partner...
+function snapshotFromPartner(p: Partner): PartnerSnapshot {
+  return {
+    id: p.id,
+    currentBalance: safeNumber(p.currentBalance),
+    total_balance: safeNumber(p.totalBalance),
+    totalDeposits: safeNumber(p.totalDeposits),
+    totalWithdrawals: safeNumber(p.totalWithdrawals),
+    baseCapital: safeNumber(p.baseCapital),
+    last_settlement_date: p.lastSettlementDate ?? null,
+    profitTakenGross: safeNumber(p.profitTakenGross),
+    gpFeesAccrued: safeNumber(p.gpFeesAccrued),
+    balanceHistory: Array.isArray(p.balanceHistory) ? p.balanceHistory : [],
+  };
+}
+
+// ...or from a raw DB row (used to snapshot the GP inside accrueGpFee,
+// which already fetches the row fresh).
+function snapshotFromRow(row: Record<string, unknown>): PartnerSnapshot {
+  return {
+    id: String(row.id),
+    currentBalance: safeNumber(row.currentBalance),
+    total_balance: safeNumber(row.total_balance),
+    totalDeposits: safeNumber(row.totalDeposits),
+    totalWithdrawals: safeNumber(row.totalWithdrawals),
+    baseCapital: safeNumber(row.baseCapital),
+    last_settlement_date: (row.last_settlement_date as string | null) ?? null,
+    profitTakenGross: safeNumber(row.profitTakenGross),
+    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
+    balanceHistory: Array.isArray(row.balanceHistory)
+      ? (row.balanceHistory as BalanceHistoryEntry[])
+      : [],
+  };
+}
+
+// Persist an undo-journal entry after an operation commits. Best-effort:
+// a failure here can't roll back the (already committed) operation, so it
+// just means that one op won't be undoable — warned loudly, never thrown.
+async function recordOperation(op: {
+  id: string;
+  kind: FundOperation["kind"];
+  label: string;
+  snapshots: PartnerSnapshot[];
+}): Promise<void> {
+  try {
+    const { error } = await supabase.from("operations").insert({
+      id: op.id,
+      at: new Date().toISOString(),
+      kind: op.kind,
+      label: op.label,
+      partnerIds: op.snapshots.map((s) => s.id),
+      snapshots: op.snapshots,
+      reversedAt: null,
+    });
+    if (error) {
+      console.warn(
+        "[recordOperation] failed — this operation won't be undoable:",
+        error.message
+      );
+    }
+  } catch (e) {
+    console.warn(
+      "[recordOperation] threw — this operation won't be undoable:",
+      e
+    );
+  }
 }
 
 // Lock a settling LP's performance fee into the GP's commission pot
 // (gpFeesAccrued) and log it as a 'Fee' transaction. Reads the GP row
 // fresh from the DB (the store's cached copy may be stale) and ADDS to
 // gpFeesAccrued only — capital columns are deliberately untouched, so
-// the GP's Investment never moves on an LP settlement. Non-fatal by
-// design: the LP's own settlement has already committed, so a failure
-// here is surfaced loudly in the console but doesn't roll anything back.
-async function accrueGpFee(transfer: FeeTransfer): Promise<boolean> {
+// the GP's Investment never moves on an LP settlement. Returns the GP's
+// BEFORE snapshot so the caller can add it to the operation's undo
+// record. Non-fatal by design: the LP's own settlement has already
+// committed, so a failure here is surfaced loudly but rolls nothing back.
+async function accrueGpFee(
+  transfer: FeeTransfer,
+  opId?: string
+): Promise<{ ok: boolean; before: PartnerSnapshot | null }> {
   const fee = Number(transfer.amount) || 0;
-  if (fee <= 0 || !transfer.gpId) return false;
+  if (fee <= 0 || !transfer.gpId) return { ok: false, before: null };
 
   const { data: gpRow, error: gpFetchError } = await supabase
     .from("partners")
@@ -180,8 +263,11 @@ async function accrueGpFee(transfer: FeeTransfer): Promise<boolean> {
       "[accrueGpFee] Could not load GP row — fee NOT accrued:",
       gpFetchError
     );
-    return false;
+    return { ok: false, before: null };
   }
+
+  // Capture the GP's pre-accrual state for undo BEFORE the update.
+  const before = snapshotFromRow(gpRow as unknown as Record<string, unknown>);
 
   const { error: gpUpdateError } = await supabase
     .from("partners")
@@ -195,7 +281,7 @@ async function accrueGpFee(transfer: FeeTransfer): Promise<boolean> {
       "[accrueGpFee] GP update failed — fee NOT accrued:",
       gpUpdateError
     );
-    return false;
+    return { ok: false, before: null };
   }
 
   // Ledger entry — names the LP whose settlement generated the fee.
@@ -205,9 +291,10 @@ async function accrueGpFee(transfer: FeeTransfer): Promise<boolean> {
     type: "Fee",
     note: `رسوم أداء من تسوية ${transfer.lpName}`,
     relatedPartnerId: transfer.lpId,
+    opId,
   });
 
-  return true;
+  return { ok: true, before };
 }
 
 export const usePartnersStore = create<PartnersState>((set, get) => ({
@@ -331,6 +418,12 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         : {};
     const today = new Date().toISOString().split("T")[0];
 
+    // Undo journal: one op id groups every row this withdrawal writes,
+    // and we snapshot the partner's full before-state now (the GP's is
+    // captured by accrueGpFee below if a fee is locked in).
+    const opId = crypto.randomUUID();
+    const opSnapshots: PartnerSnapshot[] = [snapshotFromPartner(partner)];
+
     const newHistoryEntry: BalanceHistoryEntry = {
       date: today,
       balance: newCurrentBalance,
@@ -423,6 +516,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
           : capitalPortion > 0
             ? "سحب من رأس المال"
             : "سحب أرباح",
+      opId,
     });
     if (!withdrawLogged) logFailed = true;
 
@@ -452,8 +546,21 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     // adds to the GP's pot, never to GP capital.
     let feeCredited = false;
     if (lockedFee > 0 && feeTransfer && feeTransfer.gpId !== partner.id) {
-      feeCredited = await accrueGpFee({ ...feeTransfer, amount: lockedFee });
+      const feeRes = await accrueGpFee(
+        { ...feeTransfer, amount: lockedFee },
+        opId
+      );
+      feeCredited = feeRes.ok;
+      if (feeRes.before) opSnapshots.push(feeRes.before);
     }
+
+    // --- 5b. Record the undo journal entry (best-effort) ---
+    await recordOperation({
+      id: opId,
+      kind: "withdrawal",
+      label: `سحب ${formatCurrency(amount)} — ${partner.name}`,
+      snapshots: opSnapshots,
+    });
 
     // --- 6. Success! Update UI immediately ---
     const remainderNote =
@@ -500,6 +607,10 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const oldTotalBalance = safeNumber(partner.totalBalance);
     const newBalance = oldBalance + netProfitAmount;
     const settlementDate = new Date().toISOString();
+
+    // Undo journal.
+    const opId = crypto.randomUUID();
+    const opSnapshots: PartnerSnapshot[] = [snapshotFromPartner(partner)];
 
     console.log("[capitalizeProfits] Partner:", partner.name, partner.id);
     console.log("[capitalizeProfits] Net profit to capitalize:", netProfitAmount);
@@ -557,6 +668,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       amount: netProfitAmount,
       type: "Capitalize",
       note: "تثبيت الأرباح في رأس المال",
+      opId,
     });
 
     // Lock the GP's performance fee on the just-settled profit into the
@@ -565,8 +677,17 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     // the pot, not GP capital.
     let feeCredited = false;
     if (feeTransfer && feeTransfer.gpId !== partner.id) {
-      feeCredited = await accrueGpFee(feeTransfer);
+      const feeRes = await accrueGpFee(feeTransfer, opId);
+      feeCredited = feeRes.ok;
+      if (feeRes.before) opSnapshots.push(feeRes.before);
     }
+
+    await recordOperation({
+      id: opId,
+      kind: "capitalize",
+      label: `تثبيت أرباح ${formatCurrency(netProfitAmount)} — ${partner.name}`,
+      snapshots: opSnapshots,
+    });
 
     const feeNote = feeCredited
       ? ` — رسوم الأداء (${formatCurrency(feeTransfer!.amount)}) قُيدت لعمولة المدير`
@@ -611,6 +732,10 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const newTotalDeposits = oldTotalDeposits + amount;
     const newBaseCapital = oldBaseCapital + amount;
     const today = new Date().toISOString().split("T")[0];
+
+    // Undo journal.
+    const opId = crypto.randomUUID();
+    const opSnapshots: PartnerSnapshot[] = [snapshotFromPartner(partner)];
 
     // --- 1a. Update numeric fields with .select() to detect RLS silent failures ---
     // Note: deposits MUST NOT stamp last_settlement_date — that field gates
@@ -690,6 +815,7 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       amount,
       type: "Deposit",
       note: "إيداع رأس مال",
+      opId,
     });
 
     // --- 3. Recalculate ownership (non-blocking) ---
@@ -704,6 +830,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     } catch (rpcCatchErr) {
       console.error("[handleDeposit] recalculate_ownership threw:", rpcCatchErr);
     }
+
+    await recordOperation({
+      id: opId,
+      kind: "deposit",
+      label: `إيداع ${formatCurrency(amount)} — ${partner.name}`,
+      snapshots: opSnapshots,
+    });
 
     set({
       notification: {
@@ -735,6 +868,8 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     }
 
     const newAccrued = Math.max(0, accrued - amount);
+    const opId = crypto.randomUUID();
+    const opSnapshots: PartnerSnapshot[] = [snapshotFromPartner(partner)];
     const { data, error: updateError } = await supabase
       .from("partners")
       .update({ gpFeesAccrued: newAccrued })
@@ -758,6 +893,14 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       amount,
       type: "Withdrawal",
       note: "سحب عمولة المدير (نقداً)",
+      opId,
+    });
+
+    await recordOperation({
+      id: opId,
+      kind: "commission_withdraw",
+      label: `سحب عمولة ${formatCurrency(amount)} — ${partner.name}`,
+      snapshots: opSnapshots,
     });
 
     set({
@@ -798,6 +941,10 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     const newAccrued = Math.max(0, accrued - amount);
     const newBalance = oldBalance + amount;
     const today = new Date().toISOString().split("T")[0];
+
+    // Undo journal.
+    const opId = crypto.randomUUID();
+    const opSnapshots: PartnerSnapshot[] = [snapshotFromPartner(partner)];
 
     const { data, error: updateError } = await supabase
       .from("partners")
@@ -850,6 +997,14 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       amount,
       type: "Capitalize",
       note: "تثبيت عمولة المدير في رأس المال",
+      opId,
+    });
+
+    await recordOperation({
+      id: opId,
+      kind: "commission_capitalize",
+      label: `تثبيت عمولة ${formatCurrency(amount)} — ${partner.name}`,
+      snapshots: opSnapshots,
     });
 
     set({
@@ -857,6 +1012,79 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         type: "success",
         message: `تم تثبيت عمولة بقيمة ${formatCurrency(amount)} في رأس مال المدير${logged ? "" : LOG_WARN}`,
       },
+    });
+
+    if (onDone) await onDone();
+    await get().fetchPartners();
+  },
+
+  // Reverse a past operation. Restores the snapshotted rows exactly and
+  // removes the ledger rows the operation created, so everything returns
+  // to how it was. Guarded so a NEWER still-applied operation on the same
+  // partner can't be silently clobbered (undo the newest first).
+  undoOperation: async (op, onDone) => {
+    set({ error: null, notification: null });
+
+    if (op.reversedAt) {
+      const msg = "هذه العملية متراجَع عنها مسبقاً.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    const touched = new Set(
+      op.partnerIds && op.partnerIds.length > 0
+        ? op.partnerIds
+        : op.snapshots.map((s) => s.id)
+    );
+
+    // Block if a later, still-applied op shares any of these partners.
+    const { data: allOps } = await supabase
+      .from("operations")
+      .select("*")
+      .order("at", { ascending: false });
+    const clash = (allOps ?? []).find(
+      (o) =>
+        !o.reversedAt &&
+        String(o.id) !== op.id &&
+        String(o.at) > String(op.at) &&
+        Array.isArray(o.partnerIds) &&
+        o.partnerIds.some((pid: string) => touched.has(pid))
+    );
+    if (clash) {
+      const msg = `لا يمكن التراجع: توجد عملية أحدث (${clash.label}) على نفس الشريك. تراجع عنها أولاً.`;
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
+    // Restore each touched partner row to its captured before-state.
+    for (const snap of op.snapshots) {
+      const { id, ...fields } = snap;
+      const { error: restoreErr } = await supabase
+        .from("partners")
+        .update(fields)
+        .eq("id", id);
+      if (restoreErr) {
+        const msg = `فشل استرجاع بيانات الشريك: ${restoreErr.message}`;
+        set({ notification: { type: "error", message: msg } });
+        throw restoreErr;
+      }
+    }
+
+    // Remove the ledger rows this operation created (best-effort).
+    try {
+      await supabase.from("transactions").delete().eq("opId", op.id);
+    } catch (e) {
+      console.warn("[undoOperation] ledger cleanup failed (non-fatal):", e);
+    }
+
+    // Mark the operation reversed (kept for our own audit trail).
+    await supabase
+      .from("operations")
+      .update({ reversedAt: new Date().toISOString() })
+      .eq("id", op.id);
+
+    set({
+      notification: { type: "success", message: `تم التراجع عن: ${op.label}` },
     });
 
     if (onDone) await onDone();

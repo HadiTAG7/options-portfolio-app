@@ -125,6 +125,47 @@ export interface FundTransaction {
   createdAt: string;
   note: string | null;
   relatedPartnerId: string | null;
+  // Groups every row a single money operation created, so an undo can
+  // find and remove them together. Absent on pre-undo-feature rows.
+  opId?: string | null;
+}
+
+// The full restorable before-state of one partner row (DB-column keyed).
+// Captured before a money operation runs so an undo can put the row back
+// exactly — every money and settlement field, not just the balance.
+export interface PartnerSnapshot {
+  id: string;
+  currentBalance: number;
+  total_balance: number;
+  totalDeposits: number;
+  totalWithdrawals: number;
+  baseCapital: number;
+  last_settlement_date: string | null;
+  profitTakenGross: number;
+  gpFeesAccrued: number;
+  balanceHistory: BalanceHistoryEntry[];
+}
+
+export type FundOperationKind =
+  | "withdrawal"
+  | "capitalize"
+  | "deposit"
+  | "commission_withdraw"
+  | "commission_capitalize";
+
+// One reversible money operation (the undo journal). Stored in the
+// `operations` Firestore collection (GP-only). `snapshots` holds the
+// BEFORE state of every partner row the operation touched, so undo is a
+// straight restore; `partnerIds` mirrors their ids for the LIFO/overlap
+// safety check.
+export interface FundOperation {
+  id: string;
+  at: string; // ISO timestamp
+  kind: FundOperationKind;
+  label: string; // Arabic, human-readable
+  partnerIds: string[];
+  snapshots: PartnerSnapshot[];
+  reversedAt: string | null;
 }
 
 // ============================================================

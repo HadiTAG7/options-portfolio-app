@@ -153,6 +153,8 @@ export interface Database {
           // un-migrated environments.
           note?: string | null;
           related_partner_id?: string | null;
+          // Groups rows created by one undoable operation (schemaless).
+          opId?: string | null;
         };
         Insert: {
           id?: string;
@@ -163,8 +165,36 @@ export interface Database {
           created_at?: string;
           note?: string | null;
           related_partner_id?: string | null;
+          opId?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["transactions"]["Insert"]>;
+        Relationships: [];
+      };
+      // Undo journal — one doc per reversible money operation. Firestore
+      // collection (no SQL equivalent); typed here so the shimmed client
+      // stays type-checked.
+      operations: {
+        Row: {
+          id: string;
+          at: string;
+          kind: string;
+          label: string;
+          partnerIds: string[];
+          snapshots: unknown[];
+          reversedAt: string | null;
+          created_at?: string;
+        };
+        Insert: {
+          id?: string;
+          at: string;
+          kind: string;
+          label: string;
+          partnerIds: string[];
+          snapshots: unknown[];
+          reversedAt?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["operations"]["Insert"]>;
         Relationships: [];
       };
     };
@@ -185,3 +215,4 @@ export type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
 export type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
 export type ActiveStockRow = Database["public"]["Tables"]["active_stocks"]["Row"];
 export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
+export type OperationRow = Database["public"]["Tables"]["operations"]["Row"];

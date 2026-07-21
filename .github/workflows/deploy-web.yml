@@ -45,3 +45,18 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
             npx firebase-tools@14 deploy --only hosting --project option-porfolio --non-interactive
           rm -f /tmp/sa.json
+
+      # Firestore security rules (adds the `operations` collection used by
+      # the undo feature). Non-blocking: if the service account lacks the
+      # rules-deploy permission, hosting has already succeeded — publish
+      # firestore.rules manually from the console as a fallback.
+      - name: Deploy Firestore rules
+        continue-on-error: true
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
+            npx firebase-tools@14 deploy --only firestore:rules --project option-porfolio --non-interactive \
+            || echo "::warning::Firestore rules deploy failed — publish firestore.rules manually if the operations log errors."
+          rm -f /tmp/sa.json

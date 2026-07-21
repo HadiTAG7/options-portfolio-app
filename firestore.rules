@@ -42,6 +42,11 @@ service cloud.firestore {
       allow write: if isGP();
     }
 
+    // Undo journal — GP only (it holds every partner's snapshots).
+    match /operations/{id} {
+      allow read, write: if isGP();
+    }
+
     // Anything else: denied.
     match /{document=**} {
       allow read, write: if false;
