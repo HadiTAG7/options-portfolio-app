@@ -197,6 +197,35 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["operations"]["Insert"]>;
         Relationships: [];
       };
+      // Frozen monthly-profit records (one doc per month+partner) so the
+      // profit log is stored, not re-computed. GP-editable. Firestore
+      // collection; no SQL equivalent.
+      monthly_profits: {
+        Row: {
+          id: string;
+          month: string;
+          partnerId: string;
+          gross: number;
+          fee: number;
+          net: number;
+          updated_at?: string | null;
+          created_at?: string;
+        };
+        Insert: {
+          id?: string;
+          month: string;
+          partnerId: string;
+          gross: number;
+          fee: number;
+          net: number;
+          updated_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["monthly_profits"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -216,3 +245,5 @@ export type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
 export type ActiveStockRow = Database["public"]["Tables"]["active_stocks"]["Row"];
 export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 export type OperationRow = Database["public"]["Tables"]["operations"]["Row"];
+export type MonthlyProfitRow =
+  Database["public"]["Tables"]["monthly_profits"]["Row"];

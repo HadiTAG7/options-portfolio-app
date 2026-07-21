@@ -146,6 +146,18 @@ export interface PartnerSnapshot {
   balanceHistory: BalanceHistoryEntry[];
 }
 
+// A frozen monthly-profit record for one partner in one month. Stored so
+// the profit log never re-computes (and drifts) — the GP can edit it to
+// match what was actually recorded/sent. id = `${month}__${partnerId}`.
+export interface MonthlyProfit {
+  id: string;
+  month: string; // YYYY-MM
+  partnerId: string;
+  gross: number;
+  fee: number;
+  net: number;
+}
+
 export type FundOperationKind =
   | "withdrawal"
   | "capitalize"

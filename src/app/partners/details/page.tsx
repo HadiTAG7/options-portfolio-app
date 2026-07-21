@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useMemo } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
@@ -15,6 +15,7 @@ import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useOperations } from "@/hooks/use-operations";
+import { useMonthlyProfits, monthlyKey } from "@/hooks/use-monthly-profits";
 import { useAuth } from "@/hooks/use-auth";
 import { usePartnersStore } from "@/store/partners-store";
 import { TransactionList } from "@/components/ui/transaction-list";
@@ -87,6 +88,11 @@ function PartnerDetailInner() {
   // the GP can read the operations collection.
   const { isGP: viewerIsGP } = useAuth();
   const { operations, refetch: refetchOps } = useOperations(viewerIsGP);
+  const {
+    entries: storedMonthly,
+    saveEntry: saveMonthlyProfit,
+    seedAll: seedMonthlyProfits,
+  } = useMonthlyProfits(viewerIsGP);
   const { undoOperation } = usePartnersStore();
 
   const partner = useMemo(
@@ -269,9 +275,10 @@ function PartnerDetailInner() {
       .sort()
       .reverse()
       .map((key) => {
-        // Each month weighted by that month's actual ownership — stable,
-        // won't drift when capital changes later.
-        const md = monthlyPartnerNet(partners, trades, partnerId, key);
+        // Prefer the stored (frozen, possibly GP-edited) value; fall back
+        // to a live compute for months not yet saved.
+        const stored = storedMonthly.get(monthlyKey(key, partnerId));
+        const md = stored ?? monthlyPartnerNet(partners, trades, partnerId, key);
         const [y, m] = key.split("-");
         return {
           key,
@@ -279,10 +286,11 @@ function PartnerDetailInner() {
           gross: md.gross,
           fee: md.fee,
           net: md.net,
+          stored: !!stored,
         };
       })
       .filter((r) => r.gross !== 0 || r.net !== 0);
-  }, [partnerId, partners, trades]);
+  }, [partnerId, partners, trades, storedMonthly]);
 
   // Capital timeline — reconstructed from balanceHistory snapshots.
   // The per-event history (which change was a deposit vs a
@@ -305,6 +313,58 @@ function PartnerDetailInner() {
     });
     return rows.reverse();
   }, [partner]);
+
+  // GP inline-edit state for the stored profit log.
+  const [editMonth, setEditMonth] = useState<string | null>(null);
+  const [editVals, setEditVals] = useState<{ gross: string; fee: string; net: string }>(
+    { gross: "", fee: "", net: "" }
+  );
+  const [savingLog, setSavingLog] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [logErr, setLogErr] = useState<string | null>(null);
+
+  const startEditMonth = useCallback(
+    (key: string, gross: number, fee: number, net: number) => {
+      setLogErr(null);
+      setEditMonth(key);
+      setEditVals({
+        gross: String(gross.toFixed(2)),
+        fee: String(fee.toFixed(2)),
+        net: String(net.toFixed(2)),
+      });
+    },
+    []
+  );
+
+  const saveEditMonth = useCallback(async () => {
+    if (!partnerId || !editMonth) return;
+    setSavingLog(true);
+    setLogErr(null);
+    try {
+      await saveMonthlyProfit(editMonth, partnerId, {
+        gross: Number(editVals.gross) || 0,
+        fee: Number(editVals.fee) || 0,
+        net: Number(editVals.net) || 0,
+      });
+      setEditMonth(null);
+    } catch (e) {
+      setLogErr(e instanceof Error ? e.message : "فشل حفظ الرقم");
+    } finally {
+      setSavingLog(false);
+    }
+  }, [partnerId, editMonth, editVals, saveMonthlyProfit]);
+
+  const onSeedAll = useCallback(async () => {
+    setSeeding(true);
+    setLogErr(null);
+    try {
+      await seedMonthlyProfits(partners, trades);
+    } catch (e) {
+      setLogErr(e instanceof Error ? e.message : "فشل تثبيت الأرقام");
+    } finally {
+      setSeeding(false);
+    }
+  }, [seedMonthlyProfits, partners, trades]);
 
   const loading = partnersLoading || tradesLoading;
 
@@ -498,8 +558,25 @@ function PartnerDetailInner() {
             <h3 className="font-headline text-xl font-bold text-on-surface">
               سجل الأرباح
             </h3>
-            <Icon name="calendar_month" className="text-on-surface-variant" />
+            {viewerIsGP ? (
+              <button
+                onClick={onSeedAll}
+                disabled={seeding}
+                className="inline-flex items-center gap-1 rounded-md border border-outline-variant/50 px-2.5 py-1 text-[10px] font-bold text-on-surface-variant transition-colors hover:bg-white/5 hover:text-on-surface disabled:opacity-50"
+                title="حفظ أرقام كل الشهور كسجل ثابت (لا يستبدل رقماً عدّلته)"
+              >
+                <Icon name="lock" className="!text-xs" />
+                {seeding ? "جاري الحفظ..." : "تثبيت الكل"}
+              </button>
+            ) : (
+              <Icon name="calendar_month" className="text-on-surface-variant" />
+            )}
           </div>
+          {logErr && (
+            <div className="mb-3 rounded-md border border-error/30 bg-error/10 px-3 py-2 text-[11px] text-error">
+              {logErr}
+            </div>
+          )}
           {monthlyLog.length > 0 && (
             <div className="mb-4 flex items-baseline justify-between rounded-xl bg-surface-container-low px-4 py-3">
               <span className={`${CAPS} text-on-surface-variant`}>
@@ -527,32 +604,105 @@ function PartnerDetailInner() {
             </div>
           ) : (
             <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-              {monthlyLog.map((row) => (
-                <div
-                  key={row.key}
-                  className="flex flex-col gap-1 rounded-xl bg-surface-container-low p-4 transition-colors hover:bg-surface-container-high"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-on-surface">
-                      {row.label}
-                    </span>
-                    <span
-                      className={`font-mono text-sm font-bold tabular-nums ${
-                        row.net >= 0 ? "text-primary" : "text-error"
-                      }`}
-                    >
-                      {row.net >= 0 ? "+" : ""}
-                      {formatCurrency(row.net)}
-                    </span>
+              {monthlyLog.map((row) => {
+                const editing = editMonth === row.key;
+                return (
+                  <div
+                    key={row.key}
+                    className="flex flex-col gap-1 rounded-xl bg-surface-container-low p-4 transition-colors hover:bg-surface-container-high"
+                  >
+                    {editing ? (
+                      <div className="space-y-2">
+                        <span className="text-sm font-semibold text-on-surface">
+                          {row.label}
+                        </span>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(["gross", "fee", "net"] as const).map((f) => (
+                            <label key={f} className="flex flex-col gap-0.5">
+                              <span className="text-[9px] text-on-surface-variant">
+                                {f === "gross"
+                                  ? "إجمالي"
+                                  : f === "fee"
+                                    ? "الرسوم"
+                                    : "الصافي"}
+                              </span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editVals[f]}
+                                onChange={(e) =>
+                                  setEditVals((v) => ({ ...v, [f]: e.target.value }))
+                                }
+                                className="w-full rounded border border-outline-variant/50 bg-zinc-950/80 px-2 py-1 font-mono text-xs text-on-surface outline-none focus:border-primary/50"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={saveEditMonth}
+                            disabled={savingLog}
+                            className="flex-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-on-primary transition-all hover:brightness-110 disabled:opacity-60"
+                          >
+                            {savingLog ? "جاري الحفظ..." : "حفظ"}
+                          </button>
+                          <button
+                            onClick={() => setEditMonth(null)}
+                            disabled={savingLog}
+                            className="flex-1 rounded-md border border-outline-variant/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:bg-white/5 disabled:opacity-60"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-sm font-semibold text-on-surface">
+                            {row.label}
+                            {row.stored && (
+                              <span
+                                className="rounded-full bg-primary/10 px-1.5 py-[1px] text-[8px] font-bold text-primary"
+                                title="رقم محفوظ (ثابت)"
+                              >
+                                محفوظ
+                              </span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-mono text-sm font-bold tabular-nums ${
+                                row.net >= 0 ? "text-primary" : "text-error"
+                              }`}
+                            >
+                              {row.net >= 0 ? "+" : ""}
+                              {formatCurrency(row.net)}
+                            </span>
+                            {viewerIsGP && (
+                              <button
+                                onClick={() =>
+                                  startEditMonth(row.key, row.gross, row.fee, row.net)
+                                }
+                                className="text-on-surface-variant/60 transition-colors hover:text-primary"
+                                title="تعديل رقم هذا الشهر"
+                              >
+                                <Icon name="edit" className="!text-sm" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-on-surface-variant">
+                          <span>
+                            {isGP ? "إجمالي" : "قبل الرسوم"}:{" "}
+                            {formatCurrency(row.gross)}
+                          </span>
+                          <span>الرسوم: {formatCurrency(Math.abs(row.fee))}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="flex justify-between text-[11px] text-on-surface-variant">
-                    <span>
-                      {isGP ? "إجمالي" : "قبل الرسوم"}: {formatCurrency(row.gross)}
-                    </span>
-                    <span>الرسوم: {formatCurrency(Math.abs(row.fee))}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

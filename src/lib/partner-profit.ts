@@ -401,16 +401,29 @@ export function cumulativeNetForPartner(
   partners: Partner[],
   trades: Trade[],
   partnerId: string,
-  uptoMonthKey: string
+  uptoMonthKey: string,
+  // Optional per-month stored net for THIS partner (month → net). When a
+  // month has a stored (frozen/edited) value it wins over the live one,
+  // so the cumulative matches the saved log.
+  storedNetByMonth?: Record<string, number>
 ): number {
   const monthKeys = new Set<string>();
   for (const t of trades) {
     const k = tradeMonthKey(t);
     if (k && k <= uptoMonthKey) monthKeys.add(k);
   }
+  if (storedNetByMonth) {
+    for (const k of Object.keys(storedNetByMonth)) {
+      if (k <= uptoMonthKey) monthKeys.add(k);
+    }
+  }
   let total = 0;
   for (const key of monthKeys) {
-    total += monthlyPartnerNet(partners, trades, partnerId, key).net;
+    const stored = storedNetByMonth?.[key];
+    total +=
+      stored !== undefined
+        ? stored
+        : monthlyPartnerNet(partners, trades, partnerId, key).net;
   }
   return total;
 }

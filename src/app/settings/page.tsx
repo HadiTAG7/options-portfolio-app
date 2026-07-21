@@ -31,6 +31,7 @@ import {
   cumulativeNetForPartner,
   monthlyPartnerDist,
 } from "@/lib/partner-profit";
+import { useMonthlyProfits, monthlyKey } from "@/hooks/use-monthly-profits";
 import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
 import { Wrench } from "lucide-react";
@@ -354,6 +355,7 @@ function SettingsCard({
 function MonthlyReportSender() {
   const { partners } = usePartners();
   const { trades } = useTrades();
+  const { entries: storedMonthly } = useMonthlyProfits(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -436,11 +438,28 @@ function MonthlyReportSender() {
         Number(m) - 1
       ).toLocaleString("en-US", { month: "long", year: "numeric" });
 
+      // Per-partner stored net map (month → net) for the cumulative.
+      const storedNetFor = (pid: string): Record<string, number> => {
+        const o: Record<string, number> = {};
+        for (const [k, v] of storedMonthly) {
+          const idx = k.indexOf("__");
+          if (idx > 0 && k.slice(idx + 2) === pid) o[k.slice(0, idx)] = v.net;
+        }
+        return o;
+      };
+
       const reports: MonthlyReportData[] = [];
       for (const partner of targets) {
         const md = monthlyPartnerDist(partners, trades, partner.id, month);
-        if (!md) continue;
-        const ownershipShare = md.ownershipPct / 100;
+        const st = storedMonthly.get(monthlyKey(month, partner.id));
+        if (!md && !st) continue;
+        // Stored (frozen/edited) value wins; live compute is the fallback.
+        const gross = st?.gross ?? md?.grossProfit ?? 0;
+        const fee = st?.fee ?? md?.feeAmount ?? 0;
+        const net = st?.net ?? md?.netProfit ?? 0;
+        const investment = md?.investment ?? 0;
+        const returnPct = investment > 0 ? (net / investment) * 100 : 0;
+        const ownershipShare = (md?.ownershipPct ?? 0) / 100;
         const entry = partner.entryDate?.trim();
         const positions: PartnerPosition[] = tradesInMonth
           .filter((t) => {
@@ -460,21 +479,22 @@ function MonthlyReportSender() {
           partner: {
             name: partner.name,
             code: partner.code,
-            ownershipPct: md.ownershipPct,
+            ownershipPct: md?.ownershipPct ?? 0,
           },
           partnerSummary: {
-            investment: md.investment,
-            grossProfit: md.grossProfit,
-            feeRatePct: md.feeRatePct,
-            feeAmount: md.feeAmount,
-            netProfit: md.netProfit,
-            returnPct: md.returnPct,
+            investment,
+            grossProfit: gross,
+            feeRatePct: md?.feeRatePct ?? partner.managementFeeRate,
+            feeAmount: fee,
+            netProfit: net,
+            returnPct,
             currentBalance: partner.currentBalance,
             cumulativeNetProfit: cumulativeNetForPartner(
               partners,
               trades,
               partner.id,
-              month
+              month,
+              storedNetFor(partner.id)
             ),
           },
           positions,

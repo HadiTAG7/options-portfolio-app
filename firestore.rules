@@ -47,6 +47,14 @@ service cloud.firestore {
       allow read, write: if isGP();
     }
 
+    // Frozen monthly-profit records. GP writes/reads all; an LP may read
+    // only their own month rows (same shape as transactions).
+    match /monthly_profits/{id} {
+      allow read: if isGP()
+        || (signedIn() && resource.data.partnerId == request.auth.token.partnerId);
+      allow write: if isGP();
+    }
+
     // Anything else: denied.
     match /{document=**} {
       allow read, write: if false;

@@ -166,7 +166,29 @@ const trades: Trade[] = tSnap.docs.map((d) => {
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-ok(`loaded ${partners.length} partners, ${trades.length} trades`);
+// Stored (frozen / GP-edited) monthly-profit records win over the live
+// compute so emails match exactly what's shown/recorded in the app.
+const mpSnap = await db.collection("monthly_profits").get();
+const storedByKey = new Map<
+  string,
+  { gross: number; fee: number; net: number }
+>();
+const storedNetByPartner: Record<string, Record<string, number>> = {};
+for (const d of mpSnap.docs) {
+  const r = d.data();
+  const mo = String(r.month);
+  const pid = String(r.partnerId);
+  storedByKey.set(`${mo}__${pid}`, {
+    gross: safeNumber(r.gross),
+    fee: safeNumber(r.fee),
+    net: safeNumber(r.net),
+  });
+  (storedNetByPartner[pid] ??= {})[mo] = safeNumber(r.net);
+}
+
+ok(
+  `loaded ${partners.length} partners, ${trades.length} trades, ${mpSnap.size} stored monthly records`
+);
 
 // ── Statement math — identical to the app's email route ─────────────
 // Per-partner monthly figures come from monthlyPartnerDist inside the
@@ -212,13 +234,21 @@ for (const partner of targets) {
     continue;
   }
   const md = monthlyPartnerDist(partners, trades, partner.id, month);
-  if (!md) {
+  const st = storedByKey.get(`${month}__${partner.id}`);
+  if (!md && !st) {
     console.warn(`⏭ ${partner.name}: skipped (no distribution data)`);
     skipped++;
     continue;
   }
 
-  const ownershipShare = md.ownershipPct / 100;
+  // Stored (frozen/edited) value wins; live compute is the fallback.
+  const gross = st?.gross ?? md?.grossProfit ?? 0;
+  const fee = st?.fee ?? md?.feeAmount ?? 0;
+  const net = st?.net ?? md?.netProfit ?? 0;
+  const investment = md?.investment ?? 0;
+  const returnPct = investment > 0 ? (net / investment) * 100 : 0;
+
+  const ownershipShare = (md?.ownershipPct ?? 0) / 100;
   const entry = partner.entryDate?.trim();
   const positions: PartnerPosition[] = tradesInMonth
     .filter((t) => {
@@ -238,21 +268,22 @@ for (const partner of targets) {
     partner: {
       name: partner.name,
       code: partner.code,
-      ownershipPct: md.ownershipPct,
+      ownershipPct: md?.ownershipPct ?? 0,
     },
     partnerSummary: {
-      investment: md.investment,
-      grossProfit: md.grossProfit,
-      feeRatePct: md.feeRatePct,
-      feeAmount: md.feeAmount,
-      netProfit: md.netProfit,
-      returnPct: md.returnPct,
+      investment,
+      grossProfit: gross,
+      feeRatePct: md?.feeRatePct ?? partner.managementFeeRate,
+      feeAmount: fee,
+      netProfit: net,
+      returnPct,
       currentBalance: partner.currentBalance,
       cumulativeNetProfit: cumulativeNetForPartner(
         partners,
         trades,
         partner.id,
-        month
+        month,
+        storedNetByPartner[partner.id]
       ),
     },
     positions,
