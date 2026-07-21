@@ -12,6 +12,7 @@ import {
   tradeProfitDate,
   tradeMonthKey,
   asEarnedBasis,
+  cumulativeNetForPartner,
 } from "@/lib/partner-profit";
 import {
   generatePartnerReportPDF,
@@ -275,6 +276,12 @@ export async function POST(request: NextRequest) {
           netProfit: dist.netProfit,
           returnPct: dist.returnPct,
           currentBalance: partner.currentBalance,
+          cumulativeNetProfit: cumulativeNetForPartner(
+            partners,
+            trades,
+            partner.id,
+            month
+          ),
         },
         positions,
       };

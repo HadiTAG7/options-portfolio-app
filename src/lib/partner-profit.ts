@@ -362,6 +362,37 @@ export function computePartnerDistributionFromTrades(
   return result;
 }
 
+// Cumulative NET profit for one partner across every month up to and
+// including `uptoMonthKey` (YYYY-MM). Sums the partner's per-month net on
+// the same settlement-blind, entry-date-gated basis the monthly report
+// uses for the current month, so a partner's running total reconciles
+// with the sequence of monthly reports they've received. Per-month
+// summation (not one all-time pass) is deliberate: the performance fee
+// is charged per profitable month, so a losing month can't shelter an
+// earlier month's fee.
+export function cumulativeNetForPartner(
+  partners: Partner[],
+  trades: Trade[],
+  partnerId: string,
+  uptoMonthKey: string
+): number {
+  const basis = partners.map(asEarnedBasis);
+  const byMonth: Record<string, Trade[]> = {};
+  for (const t of trades) {
+    const k = tradeMonthKey(t);
+    if (!k || k > uptoMonthKey) continue;
+    (byMonth[k] ??= []).push(t);
+  }
+  let total = 0;
+  for (const key of Object.keys(byMonth)) {
+    const d = computePartnerDistributionFromTrades(basis, byMonth[key])[
+      partnerId
+    ];
+    total += d?.netProfit ?? 0;
+  }
+  return total;
+}
+
 export interface FundBreakdown {
   originalCapital: number;
   generatedProfit: number;

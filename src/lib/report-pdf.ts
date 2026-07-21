@@ -23,6 +23,9 @@ export interface MonthlyReportData {
     netProfit: number;
     returnPct: number;
     currentBalance: number;
+    // Running total of this partner's NET profit across every month up
+    // to and including this report's month.
+    cumulativeNetProfit: number;
   };
   positions: PartnerPosition[];
 }
@@ -104,6 +107,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
       ["Gross Profit", fmt(data.partnerSummary.grossProfit)],
       [`Management Fee (${data.partnerSummary.feeRatePct.toFixed(0)}%)`, fmt(data.partnerSummary.feeAmount)],
       ["Net Profit", fmt(data.partnerSummary.netProfit)],
+      ["Total Profit To Date", fmt(data.partnerSummary.cumulativeNetProfit)],
       ["Return %", `${profitPositive ? "+" : ""}${data.partnerSummary.returnPct.toFixed(2)}%`],
     ],
     theme: "grid",

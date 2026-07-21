@@ -140,6 +140,15 @@ function reportPage(data: MonthlyReportData): string {
       </div>
     </div>
 
+    <!-- Total profit to date (cumulative net across all months) -->
+    <div class="cumustrip ${s.cumulativeNetProfit >= 0 ? "" : "neg"}">
+      <div>
+        <p class="ctitle">إجمالي أرباحك حتى الآن</p>
+        <p class="csub">TOTAL PROFIT TO DATE · حتى ${arPeriod(data.periodKey)}</p>
+      </div>
+      <p class="cval mono ${s.cumulativeNetProfit >= 0 ? "up" : "down"}">${s.cumulativeNetProfit >= 0 ? "+" : ""}${money(s.cumulativeNetProfit)}</p>
+    </div>
+
     <!-- Positions -->
     <div class="positions">
       <div class="sec-title">
@@ -234,6 +243,15 @@ ${fontFaceCss}
   .tile .sub{margin-top:1.5mm;font-size:6pt;letter-spacing:1.2px;color:var(--faint);font-weight:700}
   .tile.accent{border-color:var(--emerald-bright);background:#f2fbf7;box-shadow:inset 0 0 0 .35mm var(--emerald-bright)}
   .tile.accent.neg{border-color:var(--rose);background:#fdf3f5;box-shadow:inset 0 0 0 .35mm var(--rose)}
+
+  /* Cumulative profit-to-date strip */
+  .cumustrip{display:flex;justify-content:space-between;align-items:center;
+    margin:6mm 14mm 0;padding:4.5mm 6mm;border:.4mm solid var(--emerald-bright);
+    border-radius:2.5mm;background:#f2fbf7}
+  .cumustrip.neg{border-color:var(--rose);background:#fdf3f5}
+  .cumustrip .ctitle{font-size:11pt;font-weight:700}
+  .cumustrip .csub{margin-top:1mm;font-size:6.5pt;letter-spacing:1px;color:var(--faint);font-weight:700}
+  .cumustrip .cval{font-size:16pt;font-weight:700}
 
   /* Positions */
   .positions{padding:8mm 14mm 0}

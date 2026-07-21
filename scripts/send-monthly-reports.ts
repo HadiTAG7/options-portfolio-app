@@ -28,6 +28,7 @@ import {
   tradeProfit,
   tradeProfitDate,
   asEarnedBasis,
+  cumulativeNetForPartner,
 } from "../src/lib/partner-profit";
 import { getPartnerInvestment, safeNumber } from "../src/lib/utils";
 import type {
@@ -255,6 +256,12 @@ for (const partner of targets) {
       netProfit: dist.netProfit,
       returnPct: dist.returnPct,
       currentBalance: partner.currentBalance,
+      cumulativeNetProfit: cumulativeNetForPartner(
+        partners,
+        trades,
+        partner.id,
+        month
+      ),
     },
     positions,
   };

@@ -31,6 +31,7 @@ import {
   tradeProfit,
   tradeProfitDate,
   asEarnedBasis,
+  cumulativeNetForPartner,
 } from "@/lib/partner-profit";
 import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
@@ -483,6 +484,12 @@ function MonthlyReportSender() {
             netProfit: dist.netProfit,
             returnPct: dist.returnPct,
             currentBalance: partner.currentBalance,
+            cumulativeNetProfit: cumulativeNetForPartner(
+              partners,
+              trades,
+              partner.id,
+              month
+            ),
           },
           positions,
         });
