@@ -16,6 +16,7 @@ function rowToTransaction(row: TransactionRow): FundTransaction {
     createdAt: row.created_at,
     note: row.note ?? null,
     relatedPartnerId: row.related_partner_id ?? null,
+    opId: row.opId ?? null,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { BookOpen, Undo2 } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -11,7 +11,6 @@ import { EditPartnerDialog } from "@/components/ui/edit-partner-dialog";
 import { WithdrawalDialog } from "@/components/ui/withdrawal-dialog";
 import { DepositDialog } from "@/components/ui/deposit-dialog";
 import { GpCommissionDialog } from "@/components/ui/gp-commission-dialog";
-import { OperationsLogDialog } from "@/components/ui/operations-log-dialog";
 import { PartnerLedgerDialog } from "@/components/ui/partner-ledger-dialog";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatPercent, getPartnerInvestment } from "@/lib/utils";
@@ -96,7 +95,6 @@ export default function PartnersPage() {
     handleDeposit,
     withdrawGpCommission,
     capitalizeGpCommission,
-    undoOperation,
     notification,
     clearNotification,
   } = usePartnersStore();
@@ -109,8 +107,6 @@ export default function PartnersPage() {
   const [commissionTarget, setCommissionTarget] = useState<Partner | null>(
     null
   );
-  // Operations log / undo dialog.
-  const [showOpsLog, setShowOpsLog] = useState(false);
   // Clean-Slate override: depositing while pending profit exists is
   // allowed, but only through an explicit warning confirm (the deposit
   // re-weights everyone's already-earned pending profit).
@@ -233,10 +229,6 @@ export default function PartnersPage() {
     await capitalizeGpCommission(partner, amount, refetch);
   }
 
-  async function onUndoOperation(op: Parameters<typeof undoOperation>[0]) {
-    await undoOperation(op, refetch);
-  }
-
   async function handleCapitalizeConfirm() {
     if (!capitalizeTarget) return;
     const netProfit = settleableFor(capitalizeTarget.id);
@@ -315,13 +307,6 @@ export default function PartnersPage() {
         onClose={() => setCommissionTarget(null)}
         onWithdraw={onWithdrawCommission}
         onCapitalize={onCapitalizeCommission}
-      />
-
-      {/* Operations log — undo any recent money operation */}
-      <OperationsLogDialog
-        open={showOpsLog}
-        onClose={() => setShowOpsLog(false)}
-        onUndo={onUndoOperation}
       />
 
       {/* Clean-Slate override — deposit requested while pending profit
@@ -575,14 +560,6 @@ export default function PartnersPage() {
             title="بحث في الشركاء"
           >
             <Icon name={searchOpen ? "close" : "search"} className="!text-lg" />
-          </button>
-          <button
-            onClick={() => setShowOpsLog(true)}
-            className="flex items-center gap-1.5 rounded-md border border-zinc-700/60 bg-zinc-950/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-300 transition-all duration-200 hover:border-emerald-500/40 hover:text-emerald-300"
-            title="سجل العمليات والتراجع عنها"
-          >
-            <Undo2 size={13} />
-            سجل العمليات
           </button>
           <button
             onClick={() => setShowAddDialog(true)}

@@ -19,16 +19,21 @@ function rowToOperation(row: OperationRow): FundOperation {
   };
 }
 
-// The undo journal, newest first. Fetches on mount and exposes refetch
-// (the operations-log dialog refetches every time it opens, and after an
-// undo). Empty/erroring silently → an empty list (the collection may not
-// exist yet before the first operation, or if rules aren't deployed).
-export function useOperations() {
+// The undo journal, newest first. `enabled` gates the read (the
+// operations collection is GP-only, so LP viewers pass false to avoid a
+// denied read). Empty/erroring resolves to an empty list (the collection
+// may not exist yet before the first operation, or if rules aren't
+// deployed) — undo simply won't be offered.
+export function useOperations(enabled: boolean = true) {
   const [operations, setOperations] = useState<FundOperation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOperations = useCallback(async () => {
+    if (!enabled) {
+      setOperations([]);
+      return;
+    }
     setLoading(true);
     setError(null);
     const { data, error: fetchError } = await supabase
@@ -44,7 +49,7 @@ export function useOperations() {
       setOperations((data ?? []).map(rowToOperation));
     }
     setLoading(false);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     // Deferred a tick — fetchOperations flips loading synchronously,

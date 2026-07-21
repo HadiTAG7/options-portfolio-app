@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Icon } from "@/components/ui/icon";
@@ -14,8 +14,12 @@ import {
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { useTransactions } from "@/hooks/use-transactions";
+import { useOperations } from "@/hooks/use-operations";
+import { useAuth } from "@/hooks/use-auth";
+import { usePartnersStore } from "@/store/partners-store";
 import { TransactionList } from "@/components/ui/transaction-list";
 import { CapitalChart } from "@/components/ui/capital-chart";
+import type { FundOperation } from "@/types";
 
 // Format "$120 | 15 Nov" from a strike and an ISO-ish expiry string.
 function formatExpiry(expiry: string): string {
@@ -69,7 +73,8 @@ function PartnerDetailInner() {
   const searchParams = useSearchParams();
   const partnerId = searchParams.get("id") ?? "";
 
-  const { partners, loading: partnersLoading } = usePartners();
+  const { partners, loading: partnersLoading, refetch: refetchPartners } =
+    usePartners();
   const {
     trades,
     sellPuts,
@@ -78,14 +83,44 @@ function PartnerDetailInner() {
     loading: tradesLoading,
   } = useTrades();
 
+  // Viewer role (not the viewed partner) — only the GP may undo, and only
+  // the GP can read the operations collection.
+  const { isGP: viewerIsGP } = useAuth();
+  const { operations, refetch: refetchOps } = useOperations(viewerIsGP);
+  const { undoOperation } = usePartnersStore();
+
   const partner = useMemo(
     () => partners.find((p) => p.id === partnerId),
     [partners, partnerId]
   );
 
   // The partner's journal for the statement section below.
-  const { transactions, loading: txLoading } = useTransactions(
-    partnerId || null
+  const { transactions, loading: txLoading, refetch: refetchTx } =
+    useTransactions(partnerId || null);
+
+  // opId → the operation undoable right now. LIFO/overlap-safe: iterating
+  // newest-first, an op is undoable only if none of its partners were
+  // already claimed by a newer still-applied op. GP-only.
+  const undoableByOpId = useMemo(() => {
+    if (!viewerIsGP) return undefined;
+    const claimed = new Set<string>();
+    const map = new Map<string, FundOperation>();
+    for (const op of operations) {
+      if (op.reversedAt) continue;
+      const overlaps = op.partnerIds.some((p) => claimed.has(p));
+      if (!overlaps) map.set(op.id, op);
+      op.partnerIds.forEach((p) => claimed.add(p));
+    }
+    return map;
+  }, [operations, viewerIsGP]);
+
+  const onUndoOperation = useCallback(
+    async (op: FundOperation) => {
+      await undoOperation(op, async () => {
+        await Promise.all([refetchTx(), refetchOps(), refetchPartners()]);
+      });
+    },
+    [undoOperation, refetchTx, refetchOps, refetchPartners]
   );
 
   // Single source of truth: the same trade-based distribution engine
@@ -758,6 +793,8 @@ function PartnerDetailInner() {
             loading={txLoading}
             exportFilename={`statement-${partner.code || partner.name}.csv`}
             maxHeightClass="max-h-[420px]"
+            undoableByOpId={undoableByOpId}
+            onUndo={onUndoOperation}
           />
         </div>
       </div>
