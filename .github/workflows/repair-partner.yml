@@ -2,21 +2,18 @@
 # Reverses a withdrawal session (Withdrawal + auto-Capitalize remainder +
 # the GP fee it credited) on one partner and restores their prior state.
 #
-# Triggered by a commit-message flag on push to the working branch (the
-# repo's default branch is elsewhere, so workflow_dispatch isn't
-# available here):
-#   • commit contains [repair-dry]    → DRY RUN, prints the plan only
-#   • commit contains [repair-apply]  → APPLIES the reversal
-# Ordinary pushes (no flag) skip the job entirely. Partner/date default
-# to علي الغانم / 2026-07-21 (override via workflow_dispatch inputs where
-# available). Uses the existing FIREBASE_SERVICE_ACCOUNT secret.
+# DORMANT by design: no push trigger (a commit-message flag was used once
+# to run the علي الغانم 2026-07-21 reversal, then removed so it can never
+# fire by accident). Left here as a documented, reusable tool. To run it
+# again, temporarily re-add a push trigger + [repair-apply] flag on the
+# working branch (the repo default branch is elsewhere, so
+# workflow_dispatch isn't available from here). Always DRY_RUN=1 first.
+#
+# Uses the existing FIREBASE_SERVICE_ACCOUNT secret.
 
 name: Repair Partner Operation
 
 on:
-  push:
-    branches:
-      - claude/write-app-prompt-8V4uK
   workflow_dispatch:
     inputs:
       partner_name:
@@ -34,10 +31,6 @@ on:
 
 jobs:
   repair:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.head_commit.message, '[repair-dry]') ||
-      contains(github.event.head_commit.message, '[repair-apply]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,5 +49,5 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           PARTNER_NAME: ${{ inputs.partner_name || 'علي الغانم' }}
           TARGET_DATE: ${{ inputs.target_date || '2026-07-21' }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || (contains(github.event.head_commit.message, '[repair-apply]') && '0' || '1') }}
+          DRY_RUN: ${{ inputs.dry_run || '1' }}
         run: npx tsx scripts/repair-partner-op.ts
