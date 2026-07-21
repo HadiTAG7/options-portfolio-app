@@ -1,0 +1,50 @@
+# One-off repair for money operations recorded BEFORE the undo feature.
+# Reverses a withdrawal session (Withdrawal + auto-Capitalize remainder +
+# the GP fee it credited) on one partner and restores their prior state.
+#
+# ON DEMAND ONLY. Actions → "Repair Partner Operation" → Run workflow.
+# Leave dry_run = "1" first to preview the plan (writes nothing); read the
+# run log, then run again with dry_run = "0" to apply.
+#
+# Uses the existing FIREBASE_SERVICE_ACCOUNT secret.
+
+name: Repair Partner Operation
+
+on:
+  workflow_dispatch:
+    inputs:
+      partner_name:
+        description: "اسم الشريك"
+        required: false
+        default: "علي الغانم"
+      target_date:
+        description: "تاريخ العملية YYYY-MM-DD"
+        required: false
+        default: "2026-07-21"
+      dry_run:
+        description: "1 = معاينة فقط (لا يكتب) · 0 = تنفيذ"
+        required: false
+        default: "1"
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run repair
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PARTNER_NAME: ${{ inputs.partner_name }}
+          TARGET_DATE: ${{ inputs.target_date }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: npx tsx scripts/repair-partner-op.ts
