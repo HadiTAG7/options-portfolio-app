@@ -34,8 +34,96 @@ import {
 import { useMonthlyProfits, monthlyKey } from "@/hooks/use-monthly-profits";
 import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
+import { buildPartnerEmailHtml } from "@/lib/report-email";
+import { firebaseDb } from "@/lib/firebase";
+import { collection, addDoc } from "firebase/firestore";
+import type { Partner, Trade } from "@/types";
 import { Wrench } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+
+// Build each partner's report for a month, preferring the STORED (frozen /
+// GP-edited) figures and falling back to the live compute — the single
+// source both the browser PDF and the in-app email send draw from, so
+// they never diverge. Returns the partner alongside the data so the send
+// path can address the email.
+function buildMonthlyReports(
+  partners: Partner[],
+  trades: Trade[],
+  storedMonthly: Map<string, { gross: number; fee: number; net: number }>,
+  month: string,
+  targets: Partner[]
+): { partner: Partner; data: MonthlyReportData }[] {
+  const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
+  const [y, m] = month.split("-");
+  const periodLabel = new Date(Number(y), Number(m) - 1).toLocaleString(
+    "en-US",
+    { month: "long", year: "numeric" }
+  );
+  const storedNetFor = (pid: string): Record<string, number> => {
+    const o: Record<string, number> = {};
+    for (const [k, v] of storedMonthly) {
+      const idx = k.indexOf("__");
+      if (idx > 0 && k.slice(idx + 2) === pid) o[k.slice(0, idx)] = v.net;
+    }
+    return o;
+  };
+
+  const out: { partner: Partner; data: MonthlyReportData }[] = [];
+  for (const partner of targets) {
+    const md = monthlyPartnerDist(partners, trades, partner.id, month);
+    const st = storedMonthly.get(monthlyKey(month, partner.id));
+    if (!md && !st) continue;
+    const gross = st?.gross ?? md?.grossProfit ?? 0;
+    const fee = st?.fee ?? md?.feeAmount ?? 0;
+    const net = st?.net ?? md?.netProfit ?? 0;
+    const investment = md?.investment ?? 0;
+    const returnPct = investment > 0 ? (net / investment) * 100 : 0;
+    const ownershipShare = (md?.ownershipPct ?? 0) / 100;
+    const entry = partner.entryDate?.trim();
+    const positions: PartnerPosition[] = tradesInMonth
+      .filter((t) => {
+        const profitDate = tradeProfitDate(t);
+        if (!profitDate) return false;
+        return !entry || entry <= profitDate;
+      })
+      .map((t) => ({
+        ticker: t.ticker,
+        type: t.type,
+        share: tradeProfit(t) * ownershipShare,
+      }));
+
+    out.push({
+      partner,
+      data: {
+        periodLabel,
+        periodKey: month,
+        partner: {
+          name: partner.name,
+          code: partner.code,
+          ownershipPct: md?.ownershipPct ?? 0,
+        },
+        partnerSummary: {
+          investment,
+          grossProfit: gross,
+          feeRatePct: md?.feeRatePct ?? partner.managementFeeRate,
+          feeAmount: fee,
+          netProfit: net,
+          returnPct,
+          currentBalance: partner.currentBalance,
+          cumulativeNetProfit: cumulativeNetForPartner(
+            partners,
+            trades,
+            partner.id,
+            month,
+            storedNetFor(partner.id)
+          ),
+        },
+        positions,
+      },
+    });
+  }
+  return out;
+}
 
 const REFRESH_OPTIONS: { value: FundSettings["priceRefreshInterval"]; label: string }[] = [
   { value: "manual", label: "Manual Only" },
@@ -383,33 +471,71 @@ function MonthlyReportSender() {
     return list;
   }, []);
 
+  // Send from the site: enqueue one document per partner into the Firestore
+  // `mail` collection. The Firebase "Trigger Email" extension picks each up
+  // and delivers it via Gmail — no server route needed, so it works on the
+  // static hosting. Uses the STORED (frozen/edited) report figures, so the
+  // emailed numbers match exactly what the app and the log show.
   async function handleSend() {
     setSending(true);
     setResult(null);
     setError(null);
-
     try {
-      const res = await fetch("/api/reports/send-monthly", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          month: selectedMonth,
-          partnerId: selectedPartnerId || undefined,
-        }),
-      });
+      const targets = (
+        selectedPartnerId
+          ? partners.filter((p) => p.id === selectedPartnerId)
+          : partners
+      ).filter((p) => p.email);
 
-      const data = await res.json();
+      const built = buildMonthlyReports(
+        partners,
+        trades,
+        storedMonthly,
+        selectedMonth,
+        targets
+      );
 
-      if (!res.ok || !data.success) {
-        setError(data.error || "فشل في إرسال التقارير");
+      if (built.length === 0) {
+        setError("لا يوجد شركاء لديهم بريد إلكتروني وأرباح لهذا الشهر");
         return;
       }
 
-      setResult(data);
-    } catch {
-      setError(
-        "تعذر الوصول لخدمة الإرسال على الخادم — استضافتك قد لا تشغّل مسارات API. استخدم زر «تنزيل التقارير PDF» بالأسفل ثم أرسلها بنفسك."
-      );
+      const results: Array<{ name: string; status: string; reason?: string }> =
+        [];
+      let queued = 0;
+      let failed = 0;
+      for (const { partner, data } of built) {
+        try {
+          const { subject, html } = buildPartnerEmailHtml(data);
+          await addDoc(collection(firebaseDb(), "mail"), {
+            to: partner.email,
+            message: { subject, html },
+          });
+          queued++;
+          results.push({ name: partner.name, status: "queued" });
+        } catch (e) {
+          failed++;
+          results.push({
+            name: partner.name,
+            status: "failed",
+            reason: e instanceof Error ? e.message : "خطأ",
+          });
+        }
+      }
+
+      setResult({
+        sentCount: queued,
+        skippedCount: targets.length - built.length,
+        errorCount: failed,
+        results,
+      });
+      if (queued === 0 && failed > 0) {
+        setError(
+          "تعذّر إضافة الرسائل لقائمة الإرسال — تأكد أن إضافة «Trigger Email» مثبّتة وأن قواعد mail منشورة."
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "فشل في تجهيز الرسائل للإرسال");
     } finally {
       setSending(false);
     }
@@ -425,81 +551,19 @@ function MonthlyReportSender() {
 
     try {
       const month = selectedMonth;
-      const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
-      // Each partner weighted by the capital they held THAT month
-      // (monthlyPartnerDist) — stable, entry-date-gated, settlement-blind
-      // — so the download matches the app and doesn't drift.
       const targets = selectedPartnerId
         ? partners.filter((p) => p.id === selectedPartnerId)
         : partners;
-      const [y, m] = month.split("-");
-      const periodLabel = new Date(
-        Number(y),
-        Number(m) - 1
-      ).toLocaleString("en-US", { month: "long", year: "numeric" });
-
-      // Per-partner stored net map (month → net) for the cumulative.
-      const storedNetFor = (pid: string): Record<string, number> => {
-        const o: Record<string, number> = {};
-        for (const [k, v] of storedMonthly) {
-          const idx = k.indexOf("__");
-          if (idx > 0 && k.slice(idx + 2) === pid) o[k.slice(0, idx)] = v.net;
-        }
-        return o;
-      };
-
-      const reports: MonthlyReportData[] = [];
-      for (const partner of targets) {
-        const md = monthlyPartnerDist(partners, trades, partner.id, month);
-        const st = storedMonthly.get(monthlyKey(month, partner.id));
-        if (!md && !st) continue;
-        // Stored (frozen/edited) value wins; live compute is the fallback.
-        const gross = st?.gross ?? md?.grossProfit ?? 0;
-        const fee = st?.fee ?? md?.feeAmount ?? 0;
-        const net = st?.net ?? md?.netProfit ?? 0;
-        const investment = md?.investment ?? 0;
-        const returnPct = investment > 0 ? (net / investment) * 100 : 0;
-        const ownershipShare = (md?.ownershipPct ?? 0) / 100;
-        const entry = partner.entryDate?.trim();
-        const positions: PartnerPosition[] = tradesInMonth
-          .filter((t) => {
-            const profitDate = tradeProfitDate(t);
-            if (!profitDate) return false;
-            return !entry || entry <= profitDate;
-          })
-          .map((t) => ({
-            ticker: t.ticker,
-            type: t.type,
-            share: tradeProfit(t) * ownershipShare,
-          }));
-
-        reports.push({
-          periodLabel,
-          periodKey: month,
-          partner: {
-            name: partner.name,
-            code: partner.code,
-            ownershipPct: md?.ownershipPct ?? 0,
-          },
-          partnerSummary: {
-            investment,
-            grossProfit: gross,
-            feeRatePct: md?.feeRatePct ?? partner.managementFeeRate,
-            feeAmount: fee,
-            netProfit: net,
-            returnPct,
-            currentBalance: partner.currentBalance,
-            cumulativeNetProfit: cumulativeNetForPartner(
-              partners,
-              trades,
-              partner.id,
-              month,
-              storedNetFor(partner.id)
-            ),
-          },
-          positions,
-        });
-      }
+      // Same builder the email send uses — stored figures win, live compute
+      // is the fallback — so the downloaded PDF and the emailed report never
+      // differ. Each month weighted by capital held THAT month (stable).
+      const reports = buildMonthlyReports(
+        partners,
+        trades,
+        storedMonthly,
+        month,
+        targets
+      ).map((b) => b.data);
 
       if (reports.length === 0) {
         setDownloadMsg("لا توجد بيانات لهذا الشهر");
@@ -537,7 +601,7 @@ function MonthlyReportSender() {
           إرسال التقارير الشهرية
         </p>
         <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
-          Send PDF reports via email · لكل مستثمر
+          إرسال التقرير بالإيميل لكل مستثمر · via email
         </p>
       </div>
 
@@ -600,6 +664,11 @@ function MonthlyReportSender() {
           </button>
         </div>
 
+        <p className="text-[10px] leading-relaxed text-zinc-500">
+          «إرسال» يرسل التقرير بالعربي من داخل الموقع مباشرة عبر إضافة
+          Firebase «Trigger Email» (يتطلب تفعيلها مرة واحدة).
+        </p>
+
         {/* Server-free path: generate the same PDFs in the browser. */}
         <button
           onClick={handleDownload}
@@ -642,7 +711,7 @@ function MonthlyReportSender() {
           <div className="flex items-center gap-4 text-[11px]">
             {result.sentCount > 0 && (
               <span className="text-emerald-400 font-bold">
-                ✓ {result.sentCount} تم الإرسال
+                ✓ {result.sentCount} أُضيفت للإرسال
               </span>
             )}
             {result.skippedCount > 0 && (

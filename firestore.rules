@@ -55,6 +55,14 @@ service cloud.firestore {
       allow write: if isGP();
     }
 
+    // Outgoing mail queue for the Firebase "Trigger Email" extension. The
+    // GP enqueues one report document per partner from the app; the
+    // extension (admin SDK) reads it and stamps delivery status. GP-only —
+    // the docs carry partner report data.
+    match /mail/{id} {
+      allow read, create: if isGP();
+    }
+
     // Anything else: denied.
     match /{document=**} {
       allow read, write: if false;
