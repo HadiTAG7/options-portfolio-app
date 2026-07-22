@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { BACKEND } from "@/lib/backend";
-import { adminDb, adminAuth } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
 import type { Partner, Trade } from "@/types";
 import { safeNumber } from "@/lib/utils";
 import {
@@ -21,6 +21,36 @@ function previousMonthKey(): string {
   d.setDate(1);
   d.setMonth(d.getMonth() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Verify the caller's Firebase ID token WITHOUT firebase-admin/auth. Its
+// jwks-rsa → jose dependency is ESM-only and crashes under Vercel's
+// serverless loader (ERR_REQUIRE_ESM). Google's Identity Toolkit REST
+// endpoint verifies the token's signature + expiry server-side and returns
+// the account's custom claims, so we can gate on gp === true. The web API
+// key is public (it already ships in the client bundle).
+const FIREBASE_WEB_API_KEY = "AIzaSyBRJS4nWcPyVD97gQXm9G9yWFhMfxAK7E0";
+async function callerIsGP(idToken: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_WEB_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      users?: Array<{ customAttributes?: string }>;
+    };
+    const attrs = data.users?.[0]?.customAttributes;
+    if (!attrs) return false;
+    const claims = JSON.parse(attrs) as { gp?: boolean };
+    return claims.gp === true;
+  } catch {
+    return false;
+  }
 }
 
 type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
@@ -76,12 +106,7 @@ export async function POST(request: NextRequest) {
     const authz = request.headers.get("authorization") || "";
     const idToken = authz.startsWith("Bearer ") ? authz.slice(7).trim() : "";
     if (idToken) {
-      try {
-        const decoded = await adminAuth().verifyIdToken(idToken);
-        gpOk = decoded.gp === true;
-      } catch {
-        gpOk = false;
-      }
+      gpOk = await callerIsGP(idToken);
     }
 
     if (!secretOk && !gpOk) {

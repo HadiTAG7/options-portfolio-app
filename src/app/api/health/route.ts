@@ -1,10 +1,12 @@
-// Temporary diagnostic. No static imports, so if THIS 500s the problem is
-// route-handler infra on Vercel; if it returns JSON, the handler layer is
-// fine and the payload tells us whether firebase-admin loads/inits and
-// whether the env vars arrived. Delete once the send route is confirmed.
+// Temporary diagnostic. Tests firebase-admin Firestore vs Auth SEPARATELY
+// so we know Firestore-admin works even though firebase-admin/auth fails
+// under Vercel's loader (jwks-rsa → jose ERR_REQUIRE_ESM). Delete once the
+// send route is confirmed.
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const msg = (e: unknown) =>
+    "FAIL: " + (e instanceof Error ? e.message : String(e));
   const out: Record<string, unknown> = {
     ok: true,
     node: process.version,
@@ -13,13 +15,11 @@ export async function GET() {
     hasGmailPass: !!process.env.GMAIL_APP_PASSWORD,
   };
   try {
-    const mod = await import("@/lib/firebase-admin");
-    mod.adminAuth();
-    mod.adminDb();
-    out.firebaseAdmin = "ok";
+    const { adminDb } = await import("@/lib/firebase-admin");
+    const snap = await adminDb().collection("partners").limit(1).get();
+    out.adminDbFirestore = `ok (${snap.size} doc read)`;
   } catch (e) {
-    out.firebaseAdmin =
-      "FAIL: " + (e instanceof Error ? e.message : String(e));
+    out.adminDbFirestore = msg(e);
   }
   return Response.json(out);
 }
