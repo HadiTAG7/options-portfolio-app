@@ -46,17 +46,16 @@ jobs:
             npx firebase-tools@14 deploy --only hosting --project option-porfolio --non-interactive
           rm -f /tmp/sa.json
 
-      # Firestore security rules (adds the `operations` collection used by
-      # the undo feature). Non-blocking: if the service account lacks the
-      # rules-deploy permission, hosting has already succeeded — publish
-      # firestore.rules manually from the console as a fallback.
+      # Firestore security rules — deployed via the Rules REST API (see
+      # scripts/deploy-rules.mjs) and VERIFIED afterwards. The previous CLI
+      # step ended in `|| echo …`, which masked a failing deploy: the
+      # operations + monthly_profits rules silently never went live and
+      # their writes hit the catch-all deny. This fails loudly in the log
+      # (prints ✓/✗ + whether the new matches are actually active). Kept
+      # non-blocking so a rules hiccup can't block a hosting deploy — but
+      # check this step's log, not just its status.
       - name: Deploy Firestore rules
         continue-on-error: true
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
-            npx firebase-tools@14 deploy --only firestore:rules --project option-porfolio --non-interactive \
-            || echo "::warning::Firestore rules deploy failed — publish firestore.rules manually if the operations log errors."
-          rm -f /tmp/sa.json
+        run: node scripts/deploy-rules.mjs
