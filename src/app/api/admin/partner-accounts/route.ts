@@ -41,10 +41,10 @@ function jsonError(status: number, message: string) {
 // firestore.rules authorize by.
 async function postFirebase(request: NextRequest) {
   try {
-    let auth: ReturnType<typeof adminAuth>;
+    let auth: Awaited<ReturnType<typeof adminAuth>>;
     let db: ReturnType<typeof adminDb>;
     try {
-      auth = adminAuth();
+      auth = await adminAuth();
       db = adminDb();
     } catch (e) {
       return jsonError(
