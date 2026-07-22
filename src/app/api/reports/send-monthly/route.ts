@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { BACKEND } from "@/lib/backend";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import type { Partner, Trade } from "@/types";
 import { safeNumber } from "@/lib/utils";
 import {
@@ -13,11 +13,15 @@ import {
   cumulativeNetForPartner,
   monthlyPartnerDist,
 } from "@/lib/partner-profit";
-import {
-  generatePartnerReportPDF,
-  type MonthlyReportData,
-  type PartnerPosition,
-} from "@/lib/report-pdf";
+import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
+import { buildPartnerEmailHtml } from "@/lib/report-email";
+
+function previousMonthKey(): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
 
@@ -59,19 +63,32 @@ function rowToPartner(row: PartnerRow): Partner {
 
 export async function POST(request: NextRequest) {
   try {
-    // Optional shared-secret guard. This endpoint is otherwise
-    // unauthenticated and can email every partner — set REPORT_SECRET
-    // in the deployment env and the same value must arrive in the
-    // x-report-secret header. Left unset, the guard is off (dev mode).
+    // Auth: this endpoint can email every partner, so require the caller
+    // to be the GP. The app sends the signed-in user's Firebase ID token
+    // (Authorization: Bearer …); we verify it and require the gp claim.
+    // An optional REPORT_SECRET (x-report-secret header) is also accepted
+    // for non-browser callers. One of the two must pass.
     const requiredSecret = process.env.REPORT_SECRET;
-    if (requiredSecret) {
-      const provided = request.headers.get("x-report-secret");
-      if (provided !== requiredSecret) {
-        return Response.json(
-          { success: false, error: "Unauthorized." },
-          { status: 401 }
-        );
+    const providedSecret = request.headers.get("x-report-secret");
+    const secretOk = !!requiredSecret && providedSecret === requiredSecret;
+
+    let gpOk = false;
+    const authz = request.headers.get("authorization") || "";
+    const idToken = authz.startsWith("Bearer ") ? authz.slice(7).trim() : "";
+    if (idToken) {
+      try {
+        const decoded = await adminAuth().verifyIdToken(idToken);
+        gpOk = decoded.gp === true;
+      } catch {
+        gpOk = false;
       }
+    }
+
+    if (!secretOk && !gpOk) {
+      return Response.json(
+        { success: false, error: "Unauthorized — سجّل الدخول كمدير." },
+        { status: 401 }
+      );
     }
 
     const { month, partnerId } = (await request.json()) as {
@@ -172,6 +189,55 @@ export async function POST(request: NextRequest) {
       createdAt: r.created_at ?? null,
     }));
 
+    // Stored (frozen / GP-edited) monthly-profit records win over the live
+    // compute so the email matches the app and the log exactly.
+    const storedByKey = new Map<
+      string,
+      { gross: number; fee: number; net: number }
+    >();
+    const storedNetByPartner: Record<string, Record<string, number>> = {};
+    if (BACKEND === "firebase") {
+      const mpSnap = await adminDb().collection("monthly_profits").get();
+      for (const d of mpSnap.docs) {
+        const r = d.data();
+        const mo = String(r.month);
+        const pid = String(r.partnerId);
+        storedByKey.set(`${mo}__${pid}`, {
+          gross: safeNumber(r.gross),
+          fee: safeNumber(r.fee),
+          net: safeNumber(r.net),
+        });
+        (storedNetByPartner[pid] ??= {})[mo] = safeNumber(r.net);
+      }
+
+      // Auto-freeze the just-ended month so its numbers stop drifting —
+      // same guard as the reports workflow: only the previous month, and
+      // never overwriting an existing / GP-edited record.
+      if (month === previousMonthKey()) {
+        for (const p of partners) {
+          const key = `${month}__${p.id}`;
+          if (storedByKey.has(key)) continue;
+          const fm = monthlyPartnerDist(partners, trades, p.id, month);
+          if (!fm || (fm.grossProfit === 0 && fm.netProfit === 0)) continue;
+          await adminDb().collection("monthly_profits").doc(key).set({
+            id: key,
+            month,
+            partnerId: p.id,
+            gross: fm.grossProfit,
+            fee: fm.feeAmount,
+            net: fm.netProfit,
+            updated_at: new Date().toISOString(),
+          });
+          storedByKey.set(key, {
+            gross: fm.grossProfit,
+            fee: fm.feeAmount,
+            net: fm.netProfit,
+          });
+          (storedNetByPartner[p.id] ??= {})[month] = fm.netProfit;
+        }
+      }
+    }
+
     // Trades whose profit belongs to the selected month — same
     // bucketing (tradeMonthKey) the dashboard uses.
     const tradesInMonth = trades.filter((t) => tradeMonthKey(t) === month);
@@ -209,7 +275,8 @@ export async function POST(request: NextRequest) {
       }
 
       const md = monthlyPartnerDist(partners, trades, partner.id, month);
-      if (!md) {
+      const st = storedByKey.get(`${month}__${partner.id}`);
+      if (!md && !st) {
         results.push({
           partnerId: partner.id,
           name: partner.name,
@@ -219,10 +286,17 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Stored (frozen / GP-edited) figures win; live compute is the
+      // fallback for months not yet saved.
+      const gross = st?.gross ?? md?.grossProfit ?? 0;
+      const fee = st?.fee ?? md?.feeAmount ?? 0;
+      const net = st?.net ?? md?.netProfit ?? 0;
+      const investment = md?.investment ?? 0;
+      const returnPct = investment > 0 ? (net / investment) * 100 : 0;
+
       // This partner's slice of each trade = their THAT-MONTH ownership ×
-      // trade P&L, restricted to trades earned on/after their entry date,
-      // so the per-trade shares sum to md.grossProfit.
-      const ownershipShare = md.ownershipPct / 100;
+      // trade P&L, restricted to trades earned on/after their entry date.
+      const ownershipShare = (md?.ownershipPct ?? 0) / 100;
       const entry = partner.entryDate?.trim();
       const positions: PartnerPosition[] = tradesInMonth
         .filter((t) => {
@@ -242,48 +316,34 @@ export async function POST(request: NextRequest) {
         partner: {
           name: partner.name,
           code: partner.code,
-          ownershipPct: md.ownershipPct,
+          ownershipPct: md?.ownershipPct ?? 0,
         },
         partnerSummary: {
-          investment: md.investment,
-          grossProfit: md.grossProfit,
-          feeRatePct: md.feeRatePct,
-          feeAmount: md.feeAmount,
-          netProfit: md.netProfit,
-          returnPct: md.returnPct,
+          investment,
+          grossProfit: gross,
+          feeRatePct: md?.feeRatePct ?? partner.managementFeeRate,
+          feeAmount: fee,
+          netProfit: net,
+          returnPct,
           currentBalance: partner.currentBalance,
           cumulativeNetProfit: cumulativeNetForPartner(
             partners,
             trades,
             partner.id,
-            month
+            month,
+            storedNetByPartner[partner.id]
           ),
         },
         positions,
       };
 
       try {
-        const pdfBuffer = generatePartnerReportPDF(reportData);
-        const filename = `report-${month}-${partner.code || partner.name}.pdf`;
-
+        const { subject, html } = buildPartnerEmailHtml(reportData);
         await transporter.sendMail({
           from: `"AlGhanim Options Desk" <${gmailUser}>`,
           to: partner.email,
-          subject: `Monthly Report - ${periodLabel} - ${partner.name}`,
-          html: `<div style="font-family: sans-serif; direction: rtl; text-align: right;">
-            <h2 style="color: #34d399;">AlGhanim Options Desk</h2>
-            <p>مرحباً ${partner.name}،</p>
-            <p>مرفق تقريرك الشهري عن أداء استثمارك لشهر <strong>${periodLabel}</strong>.</p>
-            <br/>
-            <p style="color: #999; font-size: 12px;">هذا التقرير سري ومخصص للمستثمر المعني فقط.</p>
-          </div>`,
-          attachments: [
-            {
-              filename,
-              content: pdfBuffer,
-              contentType: "application/pdf",
-            },
-          ],
+          subject,
+          html,
         });
 
         results.push({

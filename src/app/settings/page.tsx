@@ -34,9 +34,7 @@ import {
 import { useMonthlyProfits, monthlyKey } from "@/hooks/use-monthly-profits";
 import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
-import { buildPartnerEmailHtml } from "@/lib/report-email";
-import { firebaseDb } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { firebaseAuth } from "@/lib/firebase";
 import type { Partner, Trade } from "@/types";
 import { Wrench } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -471,71 +469,45 @@ function MonthlyReportSender() {
     return list;
   }, []);
 
-  // Send from the site: enqueue one document per partner into the Firestore
-  // `mail` collection. The Firebase "Trigger Email" extension picks each up
-  // and delivers it via Gmail — no server route needed, so it works on the
-  // static hosting. Uses the STORED (frozen/edited) report figures, so the
-  // emailed numbers match exactly what the app and the log show.
+  // Send from the site via the server route (runs on Vercel). The route
+  // reads the STORED (frozen/edited) figures, renders the Arabic report,
+  // and emails each partner with nodemailer + Gmail. We pass the signed-in
+  // GP's Firebase ID token so the route can verify the caller is the
+  // manager before it emails anyone.
   async function handleSend() {
     setSending(true);
     setResult(null);
     setError(null);
     try {
-      const targets = (
-        selectedPartnerId
-          ? partners.filter((p) => p.id === selectedPartnerId)
-          : partners
-      ).filter((p) => p.email);
-
-      const built = buildMonthlyReports(
-        partners,
-        trades,
-        storedMonthly,
-        selectedMonth,
-        targets
-      );
-
-      if (built.length === 0) {
-        setError("لا يوجد شركاء لديهم بريد إلكتروني وأرباح لهذا الشهر");
+      const user = firebaseAuth().currentUser;
+      const idToken = user ? await user.getIdToken() : null;
+      if (!idToken) {
+        setError("سجّل الدخول كمدير أولاً ثم أعد المحاولة.");
         return;
       }
 
-      const results: Array<{ name: string; status: string; reason?: string }> =
-        [];
-      let queued = 0;
-      let failed = 0;
-      for (const { partner, data } of built) {
-        try {
-          const { subject, html } = buildPartnerEmailHtml(data);
-          await addDoc(collection(firebaseDb(), "mail"), {
-            to: partner.email,
-            message: { subject, html },
-          });
-          queued++;
-          results.push({ name: partner.name, status: "queued" });
-        } catch (e) {
-          failed++;
-          results.push({
-            name: partner.name,
-            status: "failed",
-            reason: e instanceof Error ? e.message : "خطأ",
-          });
-        }
-      }
-
-      setResult({
-        sentCount: queued,
-        skippedCount: targets.length - built.length,
-        errorCount: failed,
-        results,
+      const res = await fetch("/api/reports/send-monthly", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          month: selectedMonth,
+          partnerId: selectedPartnerId || undefined,
+        }),
       });
-      if (queued === 0 && failed > 0) {
-        setError(
-          "تعذّر إضافة الرسائل لقائمة الإرسال — تأكد أن إضافة «Trigger Email» مثبّتة وأن قواعد mail منشورة."
-        );
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || "فشل في إرسال التقارير");
+        return;
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "فشل في تجهيز الرسائل للإرسال");
+      setResult(data);
+    } catch {
+      setError(
+        "تعذّر الاتصال بخدمة الإرسال — تأكد أن الموقع منشور على Vercel وأن المتغيرات (Gmail وحساب الخدمة) مضبوطة."
+      );
     } finally {
       setSending(false);
     }
@@ -665,8 +637,8 @@ function MonthlyReportSender() {
         </div>
 
         <p className="text-[10px] leading-relaxed text-zinc-500">
-          «إرسال» يرسل التقرير بالعربي من داخل الموقع مباشرة عبر إضافة
-          Firebase «Trigger Email» (يتطلب تفعيلها مرة واحدة).
+          «إرسال» يرسل التقرير بالعربي بالإيميل لكل شريك من داخل الموقع
+          مباشرة (النسخة المنشورة على Vercel).
         </p>
 
         {/* Server-free path: generate the same PDFs in the browser. */}
@@ -711,7 +683,7 @@ function MonthlyReportSender() {
           <div className="flex items-center gap-4 text-[11px]">
             {result.sentCount > 0 && (
               <span className="text-emerald-400 font-bold">
-                ✓ {result.sentCount} أُضيفت للإرسال
+                ✓ {result.sentCount} تم الإرسال
               </span>
             )}
             {result.skippedCount > 0 && (
