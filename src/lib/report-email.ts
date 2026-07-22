@@ -18,18 +18,23 @@ export function buildPartnerEmailHtml(data: MonthlyReportData): {
   const money = (n: number) => formatCurrency(n);
   const sign = (n: number) => (n >= 0 ? "+" : "");
   const netColor = s.netProfit >= 0 ? GREEN : RED;
+  // Return % of each figure against the partner's investment, shown inline
+  // next to the amount (gross = before-fee return, net = after-fee return).
+  const withPct = (amount: number) => {
+    const p = s.investment > 0 ? (amount / s.investment) * 100 : 0;
+    return `${sign(amount)}${money(amount)} · ${sign(p)}${p.toFixed(2)}%`;
+  };
 
   const rows: Array<[string, string, string]> = [
     ["الاستثمار", money(s.investment), "#111827"],
-    ["الربح قبل الرسوم", `${sign(s.grossProfit)}${money(s.grossProfit)}`, "#111827"],
+    ["الربح قبل الرسوم", withPct(s.grossProfit), "#111827"],
     [`الرسوم (${s.feeRatePct.toFixed(0)}%)`, `-${money(s.feeAmount)}`, RED],
-    ["صافي الربح", `${sign(s.netProfit)}${money(s.netProfit)}`, netColor],
+    ["صافي الربح", withPct(s.netProfit), netColor],
     [
       "إجمالي الأرباح حتى الآن",
       `${sign(s.cumulativeNetProfit)}${money(s.cumulativeNetProfit)}`,
       s.cumulativeNetProfit >= 0 ? GREEN : RED,
     ],
-    ["نسبة العائد", `${sign(s.returnPct)}${s.returnPct.toFixed(2)}%`, "#111827"],
   ];
 
   const bodyRows = rows
@@ -68,8 +73,8 @@ export function buildPartnerEmailHtml(data: MonthlyReportData): {
         <div style="color:#34d399;font-size:13px;margin-top:6px;">التقرير الشهري · ${data.periodLabel}</div>
       </div>
       <div style="padding:24px;">
-        <p style="font-size:15px;color:#111827;margin:0 0 4px;">مرحباً ${data.partner.name}،</p>
-        <p style="font-size:12px;color:#6b7280;margin:0 0 20px;">نسبة الملكية ${data.partner.ownershipPct.toFixed(2)}%${data.partner.code ? ` · ${data.partner.code}` : ""}</p>
+        <p style="font-size:15px;color:#111827;margin:0 0 ${data.partner.code ? "4px" : "20px"};">مرحباً ${data.partner.name}،</p>
+        ${data.partner.code ? `<p style="font-size:12px;color:#6b7280;margin:0 0 20px;">الرمز: ${data.partner.code}</p>` : ""}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eceef1;border-radius:8px;overflow:hidden;">
           ${bodyRows}
         </table>
