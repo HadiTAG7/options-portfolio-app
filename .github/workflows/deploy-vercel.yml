@@ -1,0 +1,80 @@
+# Deploy the web app to Vercel — fully automated via CI, so the in-app
+# "إرسال" button (the /api/reports/send-monthly route) runs on a real
+# server. Same pattern as the Firebase deploy: all secrets live in GitHub
+# Secrets and never touch the client or the repo.
+#
+# Required GitHub Secrets:
+#   VERCEL_TOKEN              Vercel access token (Account → Settings → Tokens)
+#   GMAIL_USER               sending Gmail address        (already present)
+#   GMAIL_APP_PASSWORD       Gmail App Password           (already present)
+#   FIREBASE_SERVICE_ACCOUNT service-account JSON         (already present)
+# Optional:
+#   VERCEL_SCOPE             team slug, if the project lives under a team
+#
+# The job creates/links the Vercel project, pushes GMAIL_* +
+# FIREBASE_SERVICE_ACCOUNT as production env vars (piped from the GitHub
+# secrets — never printed), builds, and deploys to production. It no-ops
+# cleanly until VERCEL_TOKEN is added.
+
+name: Deploy Vercel
+
+on:
+  push:
+    branches:
+      - claude/write-app-prompt-8V4uK
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -e
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN secret not set yet — add it in GitHub → Settings → Secrets → Actions, then re-run this workflow."
+            exit 0
+          fi
+
+          npm i -g vercel@latest
+          SCOPE_ARG=""
+          if [ -n "$VERCEL_SCOPE" ]; then SCOPE_ARG="--scope $VERCEL_SCOPE"; fi
+          PROJECT="options-portfolio-app"
+
+          # Create the project if it doesn't exist, then link this checkout
+          # to it (writes .vercel/ for the build/deploy steps). Both are
+          # idempotent across runs.
+          vercel project add "$PROJECT" --token "$VERCEL_TOKEN" $SCOPE_ARG 2>/dev/null || true
+          vercel link --yes --project "$PROJECT" --token "$VERCEL_TOKEN" $SCOPE_ARG
+
+          # Production env vars — piped from GitHub secrets, so the values
+          # are never echoed. Remove-then-add makes it idempotent.
+          for VAR in GMAIL_USER GMAIL_APP_PASSWORD FIREBASE_SERVICE_ACCOUNT; do
+            vercel env rm "$VAR" production -y --token "$VERCEL_TOKEN" $SCOPE_ARG 2>/dev/null || true
+            printf '%s' "${!VAR}" | vercel env add "$VAR" production --token "$VERCEL_TOKEN" $SCOPE_ARG
+          done
+
+          # Build with production env + deploy the prebuilt output.
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN" $SCOPE_ARG
+          vercel build --prod --token "$VERCEL_TOKEN"
+          URL=$(vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN" $SCOPE_ARG)
+          echo "──────────────────────"
+          echo "✓ Deployed to Vercel: $URL"
+          echo "DEPLOY_URL=$URL" >> "$GITHUB_STEP_SUMMARY"
