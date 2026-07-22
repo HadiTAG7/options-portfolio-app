@@ -19,6 +19,22 @@ function fail(m) {
   console.error(`✗ ${m}`);
   process.exit(1);
 }
+// Known, expected config gap (service account lacks rules-publish IAM):
+// warn loudly with the fix, but exit 0 so it doesn't error every deploy.
+// The rules must then be published manually until the role is granted.
+function permGap(step, detail) {
+  console.warn(
+    `⚠ Firestore rules NOT auto-deployed — the service account lacks permission to ${step}.`
+  );
+  console.warn(
+    "  Permanent fix: grant it the 'Firebase Rules Admin' role (Google Cloud → IAM)."
+  );
+  console.warn(
+    "  Until then, publish firestore.rules manually: Firebase Console → Firestore Database → Rules → Publish."
+  );
+  console.warn(`  API response:\n${detail}`);
+  process.exit(0);
+}
 if (!FIREBASE_SERVICE_ACCOUNT) fail("FIREBASE_SERVICE_ACCOUNT is required");
 
 let credJson;
@@ -52,6 +68,7 @@ console.log(`project: ${project}`);
 const created = await api("POST", `projects/${project}/rulesets`, {
   source: { files: [{ name: "firestore.rules", content: rules }] },
 });
+if (created.status === 403) permGap("create a ruleset", created.text);
 if (created.status !== 200) {
   fail(`create ruleset failed (${created.status}):\n${created.text}`);
 }
@@ -72,6 +89,12 @@ if (rel.status !== 200) {
     rulesetName,
   });
   if (createdRel.status !== 200) {
+    if (rel.status === 403 || createdRel.status === 403) {
+      permGap(
+        "publish the rules release",
+        `PATCH:\n${rel.text}\nPOST:\n${createdRel.text}`
+      );
+    }
     fail(
       `update AND create release failed.\nPATCH:\n${rel.text}\nPOST:\n${createdRel.text}`
     );
