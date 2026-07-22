@@ -1,0 +1,42 @@
+# One-off auth-claims repair. Stamps the gp/partnerId custom claims that
+# firestore.rules require for writes, for any partner the migration missed
+# (fixes "Missing or insufficient permissions").
+#
+# Feature-branch workflows can't be dispatched via the API, so this fires
+# on push when the commit message carries a flag:
+#   [claims-dry]    → diagnose only (prints before/after, writes nothing)
+#   [claims-apply]  → actually stamp the claims + link the rows
+#
+# Uses the existing FIREBASE_SERVICE_ACCOUNT secret. Money-safe: the
+# script only touches auth claims and partners.auth_user_id.
+
+name: Fix Auth Claims
+
+on:
+  push:
+    branches:
+      - claude/write-app-prompt-8V4uK
+
+jobs:
+  fix:
+    if: >-
+      contains(github.event.head_commit.message, '[claims-dry]') ||
+      contains(github.event.head_commit.message, '[claims-apply]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Reconcile auth claims
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          APPLY: ${{ contains(github.event.head_commit.message, '[claims-apply]') && '1' || '' }}
+        run: node scripts/fix-claims.mjs
