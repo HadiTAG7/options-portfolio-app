@@ -8,6 +8,12 @@ import type { NextConfig } from "next";
 const isMobileBuild = process.env.MOBILE_BUILD === "1";
 
 const nextConfig: NextConfig = {
+  // Keep heavy Node-only packages OUT of the traced serverless bundle so
+  // their dynamic requires resolve at runtime. Without this, firebase-admin
+  // (and its @google-cloud / grpc deps) fail to load inside the Vercel
+  // function — the /api routes 500 at module init even though `next build`
+  // and `next start` locally are fine (405/401 as expected).
+  serverExternalPackages: ["firebase-admin", "nodemailer"],
   ...(isMobileBuild
     ? {
         output: "export",
