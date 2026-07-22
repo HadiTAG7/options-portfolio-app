@@ -22,11 +22,11 @@ export function buildPartnerEmailHtml(data: MonthlyReportData): {
   // next to the amount (gross = before-fee return, net = after-fee return).
   const withPct = (amount: number) => {
     const p = s.investment > 0 ? (amount / s.investment) * 100 : 0;
-    return `${sign(amount)}${money(amount)} · ${sign(p)}${p.toFixed(2)}%`;
+    return `${sign(amount)}${money(amount)} <span style="font-size:11px;font-weight:normal;color:#9ca3af;">(${sign(p)}${p.toFixed(2)}%)</span>`;
   };
 
   const rows: Array<[string, string, string]> = [
-    ["الاستثمار", money(s.investment), "#111827"],
+    ["مبلغ الاستثمار", money(s.investment), "#111827"],
     ["الربح قبل الرسوم", withPct(s.grossProfit), "#111827"],
     [`الرسوم (${s.feeRatePct.toFixed(0)}%)`, `-${money(s.feeAmount)}`, RED],
     ["صافي الربح", withPct(s.netProfit), netColor],
@@ -68,9 +68,8 @@ export function buildPartnerEmailHtml(data: MonthlyReportData): {
 
   const html = `<div dir="rtl" style="margin:0;padding:24px 0;background:#f3f4f6;font-family:Tahoma,Arial,'Segoe UI',sans-serif;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
-      <div style="background:#09090b;padding:24px;text-align:center;">
-        <div style="color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.5px;">AlGhanim Options Desk</div>
-        <div style="color:#34d399;font-size:13px;margin-top:6px;">التقرير الشهري · ${data.periodLabel}</div>
+      <div style="background:#09090b;padding:20px 24px;text-align:center;">
+        <div style="color:#34d399;font-size:16px;font-weight:bold;">التقرير الشهري · ${data.periodLabel}</div>
       </div>
       <div style="padding:24px;">
         <p style="font-size:15px;color:#111827;margin:0 0 ${data.partner.code ? "4px" : "20px"};">مرحباً ${data.partner.name}،</p>
