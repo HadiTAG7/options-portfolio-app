@@ -1,0 +1,34 @@
+# One-off: clear the sub-cent pending-profit rounding residual on the GP
+# card that blocks the "إيداع" button. Flag-gated on the commit message:
+#   [zero-dry]    → report only (no writes)
+#   [zero-apply]  → apply
+# Uses the existing FIREBASE_SERVICE_ACCOUNT secret. Guarded in-script to
+# the GP row and to residuals < $0.02.
+
+name: Zero Residual
+
+on:
+  push:
+    branches:
+      - claude/write-app-prompt-8V4uK
+
+jobs:
+  run:
+    if: >-
+      contains(github.event.head_commit.message, '[zero-dry]') ||
+      contains(github.event.head_commit.message, '[zero-apply]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Zero the residual
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          APPLY: ${{ contains(github.event.head_commit.message, '[zero-apply]') && '1' || '' }}
+        run: node scripts/zero-residual.mjs
