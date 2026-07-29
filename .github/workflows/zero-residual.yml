@@ -1,9 +1,12 @@
-# One-off: clear the sub-cent pending-profit rounding residual on the GP
-# card that blocks the "إيداع" button. Flag-gated on the commit message:
+# One-off: clear the fund-wide pending-profit DUST that trips the deposit
+# (Clean-Slate) warning. Runs the real distribution engine, reports every
+# partner's pending, and only stamps settlements if all of them are dust —
+# it ABORTS if anyone has real profit owing.
+#
+# Flag-gated on the commit message:
 #   [zero-dry]    → report only (no writes)
 #   [zero-apply]  → apply
-# Uses the existing FIREBASE_SERVICE_ACCOUNT secret. Guarded in-script to
-# the GP row and to residuals < $0.02.
+# Uses the existing FIREBASE_SERVICE_ACCOUNT secret.
 
 name: Zero Residual
 
@@ -27,8 +30,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Zero the residual
+      - name: Settle pending dust
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           APPLY: ${{ contains(github.event.head_commit.message, '[zero-apply]') && '1' || '' }}
-        run: node scripts/zero-residual.mjs
+        run: npx tsx scripts/settle-dust.ts
