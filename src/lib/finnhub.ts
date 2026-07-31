@@ -64,12 +64,49 @@ export async function fetchLivePrice(ticker: string): Promise<number | null> {
   }
 }
 
+// Prefer our OWN /api/quotes proxy over calling finnhub.io from the
+// browser. Phones are the problem case: mobile networks, DNS filtering and
+// ad/privacy blockers routinely block third-party API hosts, and every
+// such failure is silent — the quote comes back null and the UI keeps
+// showing the last cached price, so prices appear frozen. Talking only to
+// our own origin removes that entirely.
+//
+// Falls back to direct Finnhub calls when the proxy isn't there — the APK
+// is a static export with no server, so it must keep working.
 export async function fetchLivePrices(
   tickers: string[]
 ): Promise<Record<string, number | null>> {
-  const unique = Array.from(new Set(tickers.map((t) => t.trim().toUpperCase()))).filter(
-    Boolean
-  );
+  const unique = Array.from(
+    new Set(tickers.map((t) => t.trim().toUpperCase()))
+  ).filter(Boolean);
+  if (unique.length === 0) return {};
+
+  try {
+    const res = await fetch("/api/quotes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbols: unique }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        quotes?: Record<string, number | null>;
+        errors?: string[];
+      };
+      if (data.quotes) {
+        if (data.errors?.length) {
+          console.warn("[finnhub] proxy reported:", data.errors.join(", "));
+        }
+        return data.quotes;
+      }
+    }
+    console.warn(
+      `[finnhub] quote proxy unavailable (HTTP ${res.status}) — falling back to direct calls`
+    );
+  } catch (err) {
+    console.warn("[finnhub] quote proxy unreachable, direct fallback:", err);
+  }
+
   const results = await Promise.all(
     unique.map(async (t) => [t, await fetchLivePrice(t)] as const)
   );
