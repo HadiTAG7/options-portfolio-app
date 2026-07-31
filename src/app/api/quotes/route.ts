@@ -49,34 +49,64 @@ export async function POST(request: Request) {
   const quotes: Record<string, number | null> = {};
   const errors: string[] = [];
 
-  await Promise.all(
-    symbols.map(async (symbol) => {
+  // Two auth styles: the token as a query param, and the documented
+  // X-Finnhub-Token header. Finnhub answered 401 to the query form from
+  // Vercel's IPs while the identical key worked elsewhere, so we try the
+  // header as a fallback before giving up on a symbol.
+  async function quote(
+    symbol: string
+  ): Promise<{ price: number | null; note?: string }> {
+    const attempts: Array<{ url: string; init?: RequestInit; label: string }> = [
+      {
+        url: `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${KEY}`,
+        label: "query",
+      },
+      {
+        url: `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}`,
+        init: { headers: { "X-Finnhub-Token": KEY } },
+        label: "header",
+      },
+    ];
+    let last = "";
+    for (const a of attempts) {
       try {
-        const res = await fetch(
-          `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${KEY}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(a.url, { ...a.init, cache: "no-store" });
         if (!res.ok) {
-          quotes[symbol] = null;
-          errors.push(`${symbol}: HTTP ${res.status}`);
-          return;
+          last = `${a.label} HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`;
+          continue;
         }
         const q = (await res.json()) as { c?: number };
         if (typeof q.c === "number" && Number.isFinite(q.c) && q.c > 0) {
-          quotes[symbol] = q.c;
-        } else {
-          quotes[symbol] = null;
-          errors.push(`${symbol}: no price`);
+          return { price: q.c };
         }
+        last = `${a.label} no price`;
       } catch (e) {
-        quotes[symbol] = null;
-        errors.push(`${symbol}: ${e instanceof Error ? e.message : "failed"}`);
+        last = `${a.label} ${e instanceof Error ? e.message : "failed"}`;
       }
+    }
+    return { price: null, note: last };
+  }
+
+  await Promise.all(
+    symbols.map(async (symbol) => {
+      const { price, note } = await quote(symbol);
+      quotes[symbol] = price;
+      if (price === null && note) errors.push(`${symbol}: ${note}`);
     })
   );
 
+  // Fingerprint only (never the key): tells us at a glance whether the
+  // deployment picked up the intended key when quotes fail.
+  const keyInfo = `${KEY.slice(0, 4)}…${KEY.slice(-4)} len=${KEY.length} src=${
+    process.env.FINNHUB_API_KEY
+      ? "FINNHUB_API_KEY"
+      : process.env.NEXT_PUBLIC_FINNHUB_API_KEY
+        ? "NEXT_PUBLIC"
+        : "fallback"
+  }`;
+
   return Response.json(
-    { quotes, errors },
+    { quotes, errors, ...(errors.length ? { keyInfo } : {}) },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
