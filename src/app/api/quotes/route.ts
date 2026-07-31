@@ -19,12 +19,17 @@
 // any GET route handler that isn't force-static, but skips POST-only ones
 // entirely — the same reason the reports route is POST. The APK falls back
 // to calling Finnhub directly, so it loses nothing.
+import { sanitizeApiKey } from "@/lib/finnhub";
+
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 // Server-side key. Prefers a real env var (rotate without a deploy) and
 // falls back to the same public key the client bundle already carried.
+// sanitizeApiKey drops placeholder junk — Vercel hands back the literal
+// "[SENSITIVE]" for env vars marked Sensitive, and that non-empty string
+// used to win the `||` chain and 401 every request.
 const KEY =
-  process.env.FINNHUB_API_KEY ||
-  process.env.NEXT_PUBLIC_FINNHUB_API_KEY ||
+  sanitizeApiKey(process.env.FINNHUB_API_KEY) ??
+  sanitizeApiKey(process.env.NEXT_PUBLIC_FINNHUB_API_KEY) ??
   "d7j294pr01qp3g1rhmigd7j294pr01qp3g1rhmj0";
 
 export async function POST(request: Request) {
@@ -98,9 +103,9 @@ export async function POST(request: Request) {
   // Fingerprint only (never the key): tells us at a glance whether the
   // deployment picked up the intended key when quotes fail.
   const keyInfo = `${KEY.slice(0, 4)}…${KEY.slice(-4)} len=${KEY.length} src=${
-    process.env.FINNHUB_API_KEY
+    sanitizeApiKey(process.env.FINNHUB_API_KEY)
       ? "FINNHUB_API_KEY"
-      : process.env.NEXT_PUBLIC_FINNHUB_API_KEY
+      : sanitizeApiKey(process.env.NEXT_PUBLIC_FINNHUB_API_KEY)
         ? "NEXT_PUBLIC"
         : "fallback"
   }`;

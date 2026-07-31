@@ -18,6 +18,27 @@ const FINNHUB_BASE = "https://finnhub.io/api/v1";
 // so the key can be rotated without touching code.
 const FALLBACK_API_KEY = "d7j294pr01qp3g1rhmigd7j294pr01qp3g1rhmj0";
 
+// Guard against placeholder junk masquerading as a key.
+//
+// Vercel writes the literal string "[SENSITIVE]" back for env vars marked
+// Sensitive, so `vercel pull && vercel build` baked
+// NEXT_PUBLIC_FINNHUB_API_KEY="[SENSITIVE]" into the bundle. Because that
+// is a non-empty string it won the `env || FALLBACK` check and every quote
+// came back 401 "Invalid API key" — silently, so prices simply froze at
+// their last cached values. Anything that isn't a plausible key is treated
+// as absent so the working fallback is used.
+export function sanitizeApiKey(value: string | undefined): string | null {
+  const k = value?.trim();
+  if (!k) return null;
+  if (k.startsWith("[") || k.includes("SENSITIVE")) return null;
+  if (k.length < 20) return null; // real Finnhub keys are ~40 chars
+  return k;
+}
+
+export function resolveApiKey(): string {
+  return sanitizeApiKey(process.env.NEXT_PUBLIC_FINNHUB_API_KEY) ?? FALLBACK_API_KEY;
+}
+
 export interface FinnhubQuote {
   c: number; // current price
   h: number; // high of the day
@@ -33,7 +54,7 @@ export interface FinnhubQuote {
 // is none. The old debug alerts fired once per ticker on app open
 // (including on partners' phones) when the key wasn't baked in.
 export async function fetchLivePrice(ticker: string): Promise<number | null> {
-  const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY || FALLBACK_API_KEY;
+  const apiKey = resolveApiKey();
   if (!apiKey) {
     console.warn(
       "[finnhub] no API key available — live prices disabled, showing cached prices"

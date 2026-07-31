@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { formatCurrency } from "@/lib/utils";
+import { resolveApiKey } from "@/lib/finnhub";
 
 interface QuoteData {
   price: number;
@@ -90,7 +91,7 @@ export default function MarketsPage() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   const fetchAll = useCallback(async () => {
-    const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+    const apiKey = resolveApiKey();
     if (!apiKey) {
       setQuotes((prev) => {
         const next = { ...prev };
@@ -130,7 +131,7 @@ export default function MarketsPage() {
     fetchAll();
   }, [fetchAll]);
 
-  const hasApiKey = !!process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+  const hasApiKey = !!resolveApiKey();
 
   return (
     <AppShell>
