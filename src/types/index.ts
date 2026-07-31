@@ -193,6 +193,10 @@ export interface ActiveStock {
   purchaseDate: string;
   costBasis: number; // computed: quantity * purchasePrice
   currentPrice?: number | null; // live quote (null if fetch failed)
+  // Previous session's close, used for the "today only" P&L card
+  // ((currentPrice − previousClose) × quantity). In-memory only — it comes
+  // from the live quote and is not persisted.
+  previousClose?: number | null;
   priceLoading?: boolean; // true while live quote is being fetched
 }
 

@@ -6,6 +6,8 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
+  Boxes,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -91,6 +93,8 @@ export default function TradesPage() {
     loading,
     error,
     totalPremium,
+    unrealizedStockPnL,
+    todayPnL,
     totalProfit,
     openCount,
     updateTrade,
@@ -299,7 +303,21 @@ export default function TradesPage() {
       )}
 
       {/* Summary Cards */}
-      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <SummaryCard
+          icon={<CalendarClock size={16} />}
+          labelAr="ربح/خسارة اليوم"
+          labelEn="Today's P&L"
+          value={formatCurrency(todayPnL)}
+          tone={todayPnL >= 0 ? "emerald" : "rose"}
+        />
+        <SummaryCard
+          icon={<Boxes size={16} />}
+          labelAr="ربح/خسارة الأسهم الحالية"
+          labelEn="Open Stock P&L"
+          value={formatCurrency(unrealizedStockPnL)}
+          tone={unrealizedStockPnL >= 0 ? "emerald" : "rose"}
+        />
         <SummaryCard
           icon={<CircleDollarSign size={16} />}
           labelAr="إجمالي العلاوات"

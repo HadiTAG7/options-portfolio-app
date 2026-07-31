@@ -94,9 +94,16 @@ export async function fetchLivePrice(ticker: string): Promise<number | null> {
 //
 // Falls back to direct Finnhub calls when the proxy isn't there — the APK
 // is a static export with no server, so it must keep working.
-export async function fetchLivePrices(
+// Current price plus the previous close, which is what "today's P&L" is
+// measured against ((price − prevClose) × qty).
+export interface LiveQuote {
+  price: number | null;
+  prevClose: number | null;
+}
+
+export async function fetchLiveQuotes(
   tickers: string[]
-): Promise<Record<string, number | null>> {
+): Promise<Record<string, LiveQuote>> {
   const unique = Array.from(
     new Set(tickers.map((t) => t.trim().toUpperCase()))
   ).filter(Boolean);
@@ -112,13 +119,22 @@ export async function fetchLivePrices(
     if (res.ok) {
       const data = (await res.json()) as {
         quotes?: Record<string, number | null>;
+        prevCloses?: Record<string, number | null>;
         errors?: string[];
       };
       if (data.quotes) {
         if (data.errors?.length) {
           console.warn("[finnhub] proxy reported:", data.errors.join(", "));
         }
-        return data.quotes;
+        return Object.fromEntries(
+          unique.map((t) => [
+            t,
+            {
+              price: data.quotes?.[t] ?? null,
+              prevClose: data.prevCloses?.[t] ?? null,
+            },
+          ])
+        );
       }
     }
     console.warn(
@@ -128,8 +144,37 @@ export async function fetchLivePrices(
     console.warn("[finnhub] quote proxy unreachable, direct fallback:", err);
   }
 
+  // Direct fallback (static APK build): fetch the full quote so today's
+  // change still works there.
+  const apiKey = resolveApiKey();
   const results = await Promise.all(
-    unique.map(async (t) => [t, await fetchLivePrice(t)] as const)
+    unique.map(async (symbol): Promise<readonly [string, LiveQuote]> => {
+      try {
+        const res = await fetch(
+          `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) return [symbol, { price: null, prevClose: null }];
+        const q = (await res.json()) as FinnhubQuote;
+        const price =
+          Number.isFinite(q.c) && q.c > 0 ? q.c : null;
+        const prevClose =
+          Number.isFinite(q.pc) && q.pc > 0 ? q.pc : null;
+        return [symbol, { price, prevClose }];
+      } catch {
+        return [symbol, { price: null, prevClose: null }];
+      }
+    })
   );
   return Object.fromEntries(results);
+}
+
+// Back-compat wrapper: prices only.
+export async function fetchLivePrices(
+  tickers: string[]
+): Promise<Record<string, number | null>> {
+  const quotes = await fetchLiveQuotes(tickers);
+  return Object.fromEntries(
+    Object.entries(quotes).map(([k, v]) => [k, v.price])
+  );
 }

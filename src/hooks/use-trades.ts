@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, safeNumber } from "@/lib/utils";
-import { fetchLivePrices } from "@/lib/finnhub";
-import { tradeProfit } from "@/lib/partner-profit";
+import { fetchLiveQuotes } from "@/lib/finnhub";
+import { tradeProfit, tradeProfitDate } from "@/lib/partner-profit";
 import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
@@ -86,13 +86,18 @@ export function useTrades() {
       prev.map((s) => ({ ...s, priceLoading: true }))
     );
 
-    const prices = await fetchLivePrices(stocks.map((s) => s.ticker));
-    console.log("[enrichWithLivePrices] Finnhub results:", prices);
+    const quotes = await fetchLiveQuotes(stocks.map((s) => s.ticker));
+    console.log("[enrichWithLivePrices] Finnhub results:", quotes);
+    const prices: Record<string, number | null> = Object.fromEntries(
+      Object.entries(quotes).map(([k, v]) => [k, v.price])
+    );
 
     setActiveStocksList((prev) =>
       prev.map((s) => ({
         ...s,
         currentPrice: prices[s.ticker.toUpperCase()] ?? s.currentPrice ?? null,
+        previousClose:
+          quotes[s.ticker.toUpperCase()]?.prevClose ?? s.previousClose ?? null,
         priceLoading: false,
       }))
     );
@@ -952,6 +957,43 @@ export function useTrades() {
       }, 0),
     [activeStocksList]
   );
+  // Today-only P&L: two pieces, matching how the rest of the app counts
+  // profit.
+  //   1. Mark-to-market move on the stock book since the previous close:
+  //      (currentPrice − previousClose) × quantity. Rows missing either
+  //      figure contribute 0 rather than a wrong number.
+  //   2. Profit realized/collected today — the same tradeProfit() the
+  //      monthly card sums, restricted to trades whose profit date is
+  //      today (premium collected on a short opened today, stock sells,
+  //      dividends).
+  const todayPnL = useMemo(() => {
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const stockMove = activeStocksList.reduce((sum, s) => {
+      const px = s.currentPrice;
+      const pc = s.previousClose;
+      if (
+        typeof px !== "number" ||
+        !Number.isFinite(px) ||
+        px <= 0 ||
+        typeof pc !== "number" ||
+        !Number.isFinite(pc) ||
+        pc <= 0
+      ) {
+        return sum;
+      }
+      return sum + (px - pc) * s.quantity;
+    }, 0);
+
+    const realizedToday = tradesList.reduce((sum, t) => {
+      const d = tradeProfitDate(t);
+      return d && d.slice(0, 10) === todayKey ? sum + tradeProfit(t) : sum;
+    }, 0);
+
+    return stockMove + realizedToday;
+  }, [activeStocksList, tradesList]);
+
   // Potential profit if every active stock hits its user-set target price.
   //   Σ (targetSellPrice − purchasePrice) × quantity
   // Rows without a target (target <= 0) contribute 0 so the number is
@@ -1003,6 +1045,7 @@ export function useTrades() {
     totalResult,
     totalProfit,
     unrealizedStockPnL,
+    todayPnL,
     potentialTargetProfit,
     projectedPortfolioValue,
     openCount,

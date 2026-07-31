@@ -52,6 +52,7 @@ export async function POST(request: Request) {
   }
 
   const quotes: Record<string, number | null> = {};
+  const prevCloses: Record<string, number | null> = {};
   const errors: string[] = [];
 
   // Two auth styles: the token as a query param, and the documented
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
   // header as a fallback before giving up on a symbol.
   async function quote(
     symbol: string
-  ): Promise<{ price: number | null; note?: string }> {
+  ): Promise<{ price: number | null; prevClose?: number | null; note?: string }> {
     const attempts: Array<{ url: string; init?: RequestInit; label: string }> = [
       {
         url: `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${KEY}`,
@@ -80,9 +81,15 @@ export async function POST(request: Request) {
           last = `${a.label} HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`;
           continue;
         }
-        const q = (await res.json()) as { c?: number };
+        // pc = previous close, which is what "today's P&L" is measured
+        // against ((c − pc) × qty).
+        const q = (await res.json()) as { c?: number; pc?: number };
         if (typeof q.c === "number" && Number.isFinite(q.c) && q.c > 0) {
-          return { price: q.c };
+          const pc =
+            typeof q.pc === "number" && Number.isFinite(q.pc) && q.pc > 0
+              ? q.pc
+              : null;
+          return { price: q.c, prevClose: pc };
         }
         last = `${a.label} no price`;
       } catch (e) {
@@ -94,8 +101,9 @@ export async function POST(request: Request) {
 
   await Promise.all(
     symbols.map(async (symbol) => {
-      const { price, note } = await quote(symbol);
+      const { price, prevClose, note } = await quote(symbol);
       quotes[symbol] = price;
+      prevCloses[symbol] = prevClose ?? null;
       if (price === null && note) errors.push(`${symbol}: ${note}`);
     })
   );
@@ -111,7 +119,7 @@ export async function POST(request: Request) {
   }`;
 
   return Response.json(
-    { quotes, errors, ...(errors.length ? { keyInfo } : {}) },
+    { quotes, prevCloses, errors, ...(errors.length ? { keyInfo } : {}) },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
