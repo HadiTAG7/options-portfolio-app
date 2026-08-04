@@ -49,6 +49,25 @@
   src: url("/fonts/material-symbols/material-symbols-outlined.woff2") format("woff2");
 }
 
+/* ── Saudi Riyal symbol (U+20C0) — self-hosted 436-byte subset.
+     SAMA's new riyal mark. Almost no OS ships a font with U+20C0 yet, so
+     without this the symbol renders as an empty box. Built from the
+     MIT-licensed saudi-riyal-symbol icon font (which follows SAMA's brand
+     guidelines) by remapping its glyph from "#" to the official codepoint
+     and subsetting to that one character.
+
+     unicode-range pins this face to U+20C0 alone, so it is downloaded only
+     when a riyal amount is on screen and can never affect any other
+     glyph — the reason the original "#" mapping was dropped. ── */
+@font-face {
+  font-family: "SAR Symbol";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/saudi-riyal/sar-symbol.woff2") format("woff2");
+  unicode-range: U+20C0;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* NOTE: non-inline @theme (was `@theme inline`) so every color token is
@@ -139,8 +158,8 @@
   --font-headline: "Thmanyah Serif Display", "Be Vietnam Pro", system-ui, sans-serif;
   --font-body: "Thmanyah Sans", "Inter", system-ui, sans-serif;
   --font-label: "Thmanyah Sans", "Inter", system-ui, sans-serif;
-  --font-sans: "Thmanyah Sans", "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "SAR Symbol", "Thmanyah Sans", "Inter", system-ui, sans-serif;
+  --font-mono: "SAR Symbol", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* Border radius — one notch softer than the original 2px/4px
      "terminal" edges; lg/xl unchanged so cards keep their look. */

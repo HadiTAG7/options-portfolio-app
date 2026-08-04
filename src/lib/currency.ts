@@ -42,6 +42,22 @@ export function toDisplayAmount(usd: number): number {
   return displayCurrency === "SAR" ? usd * sarPerUsd : usd;
 }
 
+// SAMA's new riyal mark, at its official Unicode codepoint. The glyph ships
+// with the app as a tiny self-hosted font pinned to U+20C0 (see globals.css)
+// because almost no OS has it yet — without that face it would render as an
+// empty box.
+export const SAR_SIGN = "⃀";
+
 export function currencySymbol(code: CurrencyCode = displayCurrency): string {
+  return code === "SAR" ? SAR_SIGN : "$";
+}
+
+// For places that render OUTSIDE the app's stylesheet — the emailed report
+// and the PDF builders — where the U+20C0 font isn't available and the new
+// mark would show as a box. Those surfaces are USD-only today; this exists
+// so they degrade to the legacy letterform if that ever changes.
+export function currencySymbolPlain(
+  code: CurrencyCode = displayCurrency
+): string {
   return code === "SAR" ? "ر.س" : "$";
 }
