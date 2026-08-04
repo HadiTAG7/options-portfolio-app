@@ -40,6 +40,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast } from "@/components/ui/toast";
 import { ExpiryAlert } from "@/components/ui/expiry-alert";
 import { AssignmentDialog } from "@/components/ui/assignment-dialog";
+import { DailyBreakdownDialog } from "@/components/ui/daily-breakdown-dialog";
+import type { DailyBreakdownRow } from "@/components/ui/daily-breakdown-dialog";
 import {
   annualizedRoc,
   optionCollateral,
@@ -47,7 +49,7 @@ import {
   computeWheelSummary,
 } from "@/lib/wheel-analytics";
 import { formatCurrency } from "@/lib/utils";
-import { tradeProfit, tradeMonthKey } from "@/lib/partner-profit";
+import { tradeProfit, tradeMonthKey, tradeProfitDate } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartners } from "@/hooks/use-partners";
 import type { Trade, ActiveStock } from "@/types";
@@ -147,6 +149,62 @@ export default function TradesPage() {
     return [...activeStocks].sort((a, b) => pnl(b) - pnl(a));
   }, [activeStocks]);
 
+  // Day-by-day P&L for the dialog behind the Today's card.
+  //
+  // Realized figures are reconstructed from trade profit dates, the same
+  // basis every other profit number uses. The open stock book's move can
+  // only be attributed to TODAY: we store one current price per stock plus
+  // its previous close, not a price history — so past days carry realized
+  // amounts only, and the dialog says so rather than implying otherwise.
+  const dailyRows = useMemo<DailyBreakdownRow[]>(() => {
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const byDay: Record<string, number> = {};
+    for (const t of trades) {
+      const d = tradeProfitDate(t);
+      if (!d) continue;
+      const key = d.slice(0, 10);
+      byDay[key] = (byDay[key] ?? 0) + tradeProfit(t);
+    }
+
+    const stockMoveToday = activeStocks.reduce((sum, s) => {
+      const px = s.currentPrice;
+      const pc = s.previousClose;
+      if (
+        typeof px !== "number" ||
+        !Number.isFinite(px) ||
+        px <= 0 ||
+        typeof pc !== "number" ||
+        !Number.isFinite(pc) ||
+        pc <= 0
+      ) {
+        return sum;
+      }
+      return sum + (px - pc) * s.quantity;
+    }, 0);
+
+    // Today always gets a row, even with nothing booked, so the dialog
+    // reconciles with the card that opened it.
+    const keys = new Set(Object.keys(byDay));
+    keys.add(todayKey);
+
+    return Array.from(keys)
+      .sort()
+      .reverse()
+      .map((key) => {
+        const [y, m, d] = key.split("-");
+        return {
+          date: key,
+          labelAr: `${Number(d)} ${new Date(Number(y), Number(m) - 1).toLocaleString("ar-EG", { month: "long" })} ${new Date(Number(y), 0).toLocaleString("ar-EG", { year: "numeric" })}`,
+          realized: byDay[key] ?? 0,
+          stockMove: key === todayKey ? stockMoveToday : 0,
+          isToday: key === todayKey,
+        };
+      })
+      .filter((r) => r.isToday || r.realized !== 0);
+  }, [trades, activeStocks]);
+
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.
   //
@@ -195,6 +253,7 @@ export default function TradesPage() {
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [assigningTrade, setAssigningTrade] = useState<Trade | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [dailyOpen, setDailyOpen] = useState(false);
   const pricesRefreshing = activeStocks.some((s) => s.priceLoading);
 
   // Wheel-strategy stats: annualized return on locked collateral,
@@ -390,6 +449,8 @@ export default function TradesPage() {
           labelEn="Today's P&L"
           value={formatCurrency(todayPnL)}
           tone={todayPnL >= 0 ? "emerald" : "rose"}
+          onClick={() => setDailyOpen(true)}
+          hint="عرض الربح والخسارة يوماً بيوم"
         />
         <SummaryCard
           icon={<Boxes size={16} />}
@@ -399,6 +460,12 @@ export default function TradesPage() {
           tone={unrealizedStockPnL >= 0 ? "emerald" : "rose"}
         />
       </div>
+
+      <DailyBreakdownDialog
+        open={dailyOpen}
+        rows={dailyRows}
+        onClose={() => setDailyOpen(false)}
+      />
 
       {/* Wheel strategy stats */}
       {(wheelSummary.openCount > 0 || wheelSummary.closedCount > 0) && (
@@ -1123,12 +1190,16 @@ function SummaryCard({
   labelEn,
   value,
   tone,
+  onClick,
+  hint,
 }: {
   icon: React.ReactNode;
   labelAr: string;
   labelEn: string;
   value: string;
   tone: "emerald" | "rose" | "cyan";
+  onClick?: () => void;
+  hint?: string;
 }) {
   const accent =
     tone === "emerald"
@@ -1149,9 +1220,19 @@ function SummaryCard({
             glow: "bg-cyan-500/10",
           };
 
+  // Clickable cards render as a real <button> so they're keyboard- and
+  // screen-reader-reachable rather than a div with a handler.
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
-      className={`group relative overflow-hidden rounded-xl border bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black p-5 backdrop-blur-sm transition-all duration-300 ${accent.ring}`}
+    <Tag
+      {...(onClick
+        ? { type: "button" as const, onClick, title: hint, "aria-label": hint }
+        : {})}
+      className={`group relative overflow-hidden rounded-xl border bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black p-5 text-right backdrop-blur-sm transition-all duration-300 ${accent.ring} ${
+        onClick
+          ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+          : ""
+      }`}
     >
       <div
         className={`pointer-events-none absolute -top-12 -right-8 h-32 w-32 rounded-full ${accent.glow} blur-2xl transition-opacity duration-300 group-hover:opacity-80`}
@@ -1170,7 +1251,7 @@ function SummaryCard({
       >
         {value}
       </p>
-    </div>
+    </Tag>
   );
 }
 
