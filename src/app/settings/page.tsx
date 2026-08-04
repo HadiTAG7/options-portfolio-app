@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  Coins,
   Crown,
   Database,
   Download,
@@ -24,6 +25,8 @@ import type { FundSettings } from "@/hooks/use-settings";
 import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { supabase } from "@/lib/supabase";
+import { formatNumber } from "@/lib/utils";
+import { useCurrency, useCurrencyStore } from "@/hooks/use-currency";
 import {
   tradeMonthKey,
   tradeProfit,
@@ -361,6 +364,15 @@ export default function SettingsPage() {
           </div>
         </SettingsCard>
 
+        {/* ═══════ Currency ═══════ */}
+        <SettingsCard
+          icon={<Coins size={14} className="text-emerald-300" />}
+          title="Currency"
+          subtitle="العملة وسعر الصرف"
+        >
+          <CurrencySettings />
+        </SettingsCard>
+
         {/* ═══════ Monthly Reports ═══════
             Hidden in the Capacitor build (MOBILE_BUILD=1 sets
             NEXT_PUBLIC_PLATFORM=mobile) — the underlying
@@ -404,6 +416,134 @@ export default function SettingsPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+// Display currency + the SAR rate used to convert. Everything here is
+// presentation: the fund's books stay in USD, so changing the rate can
+// never alter a stored balance — it only changes what the GP reads.
+function CurrencySettings() {
+  const currency = useCurrency();
+  const rate = useCurrencyStore((s) => s.rate);
+  const setCurrency = useCurrencyStore((s) => s.setCurrency);
+  const setRate = useCurrencyStore((s) => s.setRate);
+
+  const [draft, setDraft] = useState(String(rate));
+  const [seededFrom, setSeededFrom] = useState(rate);
+  const [saved, setSaved] = useState(false);
+
+  // Resync the input if the stored rate changes from somewhere else (a
+  // second tab). Adjusting state during render is React's documented way
+  // to derive from a prop/store value — an effect here would fire an extra
+  // render pass and trip the cascading-render lint rule.
+  if (seededFrom !== rate) {
+    setSeededFrom(rate);
+    setDraft(String(rate));
+  }
+
+  const parsed = Number(draft);
+  const valid = Number.isFinite(parsed) && parsed > 0;
+  const dirty = valid && parsed !== rate;
+
+  function save() {
+    if (!dirty) return;
+    setRate(parsed);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-[12px] font-semibold text-zinc-200">
+          عملة العرض
+        </p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+          Display currency
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {(["USD", "SAR"] as const).map((code) => (
+          <button
+            key={code}
+            type="button"
+            onClick={() => setCurrency(code)}
+            className={`rounded-md border px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-all ${
+              currency === code
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                : "border-zinc-800/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+            }`}
+          >
+            {code === "USD" ? "دولار · USD" : "ريال · SAR"}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+          سعر صرف الدولار (SAR per USD)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            step="0.001"
+            min="0"
+            inputMode="decimal"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+            }}
+            className={`flex-1 rounded-md border bg-black/60 px-4 py-2.5 font-mono text-sm text-white outline-none transition-all ${
+              draft !== "" && !valid
+                ? "border-rose-500/50 focus:ring-1 focus:ring-rose-500"
+                : "border-zinc-800/70 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40"
+            }`}
+          />
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty}
+            className="rounded-md bg-emerald-600 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white transition-all hover:bg-emerald-500 disabled:opacity-40"
+          >
+            حفظ
+          </button>
+        </div>
+        {draft !== "" && !valid && (
+          <p className="text-[10px] text-rose-400">
+            أدخل رقماً أكبر من صفر
+          </p>
+        )}
+        {saved && (
+          <p className="flex items-center gap-1 text-[10px] text-emerald-400">
+            <Check size={11} /> تم الحفظ
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-md border border-zinc-800/60 bg-zinc-950/60 p-3 space-y-1.5 text-[11px]">
+        <div className="flex justify-between">
+          <span className="text-zinc-500">السعر الحالي</span>
+          <span dir="ltr" className="font-mono text-zinc-200">
+            1 USD = {rate} SAR
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-zinc-500">مثال</span>
+          <span dir="ltr" className="font-mono text-zinc-200">
+            $1,000 = {formatNumber(Math.round(1000 * rate))} SAR
+          </span>
+        </div>
+        <p className="pt-1 leading-relaxed text-zinc-500">
+          العرض فقط — كل البيانات محفوظة بالدولار، وتغيير السعر لا يعدّل أي
+          رصيد. تقارير الشركاء (الإيميل و‏PDF) تبقى بالدولار دائماً.
+        </p>
+        <p className="leading-relaxed text-zinc-600">
+          الإعداد محفوظ على هذا الجهاز فقط (مثل باقي الإعدادات).
+        </p>
+      </div>
+    </div>
   );
 }
 
