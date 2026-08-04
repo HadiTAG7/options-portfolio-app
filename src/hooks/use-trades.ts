@@ -1025,6 +1025,13 @@ export function useTrades() {
   //   2. Realized P&L (closed options + stock sells)
   //   3. Collected premium on still-open short options
   const totalProfit = totalPremium + totalResult + unrealizedStockPnL;
+  // Realized-only profit: premium collected on open shorts + everything
+  // closed out (closed options, stock sells, dividends). Deliberately
+  // EXCLUDES the mark-to-market on open stock lots, so this equals the
+  // month-by-month ledger exactly — Σ tradeProfit over all trades is the
+  // same sum the monthly buckets are built from. The "إجمالي العائد" card
+  // uses this so clicking it opens a breakdown whose total matches.
+  const realizedProfit = totalPremium + totalResult;
   const openCount = sellPuts.length + sellCalls.length;
 
   const refreshPrices = useCallback(async () => {
@@ -1044,6 +1051,7 @@ export function useTrades() {
     totalPremium,
     totalResult,
     totalProfit,
+    realizedProfit,
     unrealizedStockPnL,
     todayPnL,
     potentialTargetProfit,

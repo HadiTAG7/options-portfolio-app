@@ -95,7 +95,7 @@ export default function TradesPage() {
     totalPremium,
     unrealizedStockPnL,
     todayPnL,
-    totalProfit,
+    realizedProfit,
     openCount,
     updateTrade,
     updateStock,
@@ -348,10 +348,10 @@ export default function TradesPage() {
         />
         <SummaryCard
           icon={<Activity size={16} />}
-          labelAr="إجمالي الربح"
-          labelEn="Total Profit"
-          value={formatCurrency(totalProfit)}
-          tone={totalProfit >= 0 ? "emerald" : "rose"}
+          labelAr="إجمالي الربح المحقق"
+          labelEn="Realized Profit"
+          value={formatCurrency(realizedProfit)}
+          tone={realizedProfit >= 0 ? "emerald" : "rose"}
         />
         <SummaryCard
           icon={<Layers size={16} />}

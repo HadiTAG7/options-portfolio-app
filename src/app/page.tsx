@@ -43,6 +43,7 @@ export default function DashboardPage() {
     sellPuts,
     sellCalls,
     totalProfit,
+    realizedProfit,
     openCount,
     loading: tradesLoading,
   } = useTrades();
@@ -98,11 +99,16 @@ export default function DashboardPage() {
   const fundBreakdown = computeFundBreakdown(partners, totalAssets);
   // Fees only accrue on realized profit, so netting the all-in yield
   // figure with the realized fee total is the honest "after fees" view.
-  const netProfitAfterFee = totalProfit - gpFeeTotal;
-  const profitPositive = totalProfit >= 0;
+  // The Total Yield card reports REALIZED profit only — collected premium
+  // plus closed results — so the monthly breakdown it opens adds up to the
+  // same number. Unrealized mark-to-market on open stock lots is excluded
+  // by design; it still counts toward fund equity (AUM) and the live
+  // portfolio projection below, which must reflect market value.
+  const netProfitAfterFee = realizedProfit - gpFeeTotal;
+  const profitPositive = realizedProfit >= 0;
   const yieldPct =
     fundBreakdown.originalCapital > 0
-      ? (totalProfit / fundBreakdown.originalCapital) * 100
+      ? (realizedProfit / fundBreakdown.originalCapital) * 100
       : 0;
 
   // ── Selected month state (drives distribution + donut center) ──
@@ -375,7 +381,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     {profitPositive ? "+" : ""}
-                    {formatWholeNumber(totalProfit)}
+                    {formatWholeNumber(realizedProfit)}
                   </span>
                   <span
                     className={`flex items-center gap-0.5 text-xs font-bold ${
