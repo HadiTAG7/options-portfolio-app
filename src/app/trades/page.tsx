@@ -148,18 +148,42 @@ export default function TradesPage() {
 
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.
+  //
+  // Early in a month there is often nothing booked yet, and a bare
+  // "0.00" reads like a bad month rather than an empty one. So when the
+  // current month is still zero we show the most recent month that
+  // actually earned something — and the card's label follows the month
+  // being displayed, so the figure is never mistaken for this month's.
   const { monthProfit, monthLabel } = useMemo(() => {
     const now = new Date();
     const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    let sum = 0;
+    const buckets: Record<string, number> = {};
     for (const t of trades) {
-      if (tradeMonthKey(t) === currentKey) sum += tradeProfit(t);
+      const key = tradeMonthKey(t);
+      if (!key) continue;
+      buckets[key] = (buckets[key] ?? 0) + tradeProfit(t);
     }
-    const label = now.toLocaleString("ar-EG", {
-      month: "long",
-      year: "numeric",
-    });
-    return { monthProfit: sum, monthLabel: label };
+    const labelFor = (key: string) => {
+      const [y, m] = key.split("-");
+      return new Date(Number(y), Number(m) - 1).toLocaleString("ar-EG", {
+        month: "long",
+        year: "numeric",
+      });
+    };
+
+    const current = buckets[currentKey] ?? 0;
+    if (current !== 0) {
+      return { monthProfit: current, monthLabel: labelFor(currentKey) };
+    }
+    // Latest EARLIER month with a non-zero result. Sorting YYYY-MM strings
+    // is chronological, so the last entry is the most recent.
+    const earlier = Object.keys(buckets)
+      .filter((k) => k < currentKey && buckets[k] !== 0)
+      .sort();
+    const fallback = earlier[earlier.length - 1];
+    return fallback
+      ? { monthProfit: buckets[fallback], monthLabel: labelFor(fallback) }
+      : { monthProfit: current, monthLabel: labelFor(currentKey) };
   }, [trades]);
 
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
