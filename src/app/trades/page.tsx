@@ -99,6 +99,7 @@ export default function TradesPage() {
     loading,
     error,
     totalPremium,
+    totalResult,
     unrealizedStockPnL,
     todayPnL,
     realizedProfit,
@@ -346,8 +347,43 @@ export default function TradesPage() {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      {/* Summary Cards — order set by the GP */}
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <SummaryCard
+          icon={<Layers size={16} />}
+          labelAr="الخيارات المفتوحة"
+          labelEn="Open Options"
+          value={String(openCount)}
+          tone="cyan"
+        />
+        <SummaryCard
+          icon={<Activity size={16} />}
+          labelAr="إجمالي الربح المحقق"
+          labelEn="Realized Profit"
+          value={formatCurrency(realizedProfit)}
+          tone={realizedProfit >= 0 ? "emerald" : "rose"}
+        />
+        <SummaryCard
+          icon={<CircleDollarSign size={16} />}
+          labelAr="إجمالي البريميوم"
+          labelEn="Total Premium"
+          value={formatCurrency(totalPremium)}
+          tone="emerald"
+        />
+        <SummaryCard
+          icon={<Banknote size={16} />}
+          labelAr="إجمالي الربح من الأسهم"
+          labelEn="Realized Stock Profit"
+          value={formatCurrency(totalResult)}
+          tone={totalResult >= 0 ? "emerald" : "rose"}
+        />
+        <SummaryCard
+          icon={<TrendingUp size={16} />}
+          labelAr={`ربح الشهر · ${monthLabel}`}
+          labelEn="Monthly Profit"
+          value={formatCurrency(monthProfit)}
+          tone={monthProfit >= 0 ? "emerald" : "rose"}
+        />
         <SummaryCard
           icon={<CalendarClock size={16} />}
           labelAr="ربح/خسارة اليوم"
@@ -361,34 +397,6 @@ export default function TradesPage() {
           labelEn="Open Stock P&L"
           value={formatCurrency(unrealizedStockPnL)}
           tone={unrealizedStockPnL >= 0 ? "emerald" : "rose"}
-        />
-        <SummaryCard
-          icon={<CircleDollarSign size={16} />}
-          labelAr="إجمالي العلاوات"
-          labelEn="Total Premium"
-          value={formatCurrency(totalPremium)}
-          tone="emerald"
-        />
-        <SummaryCard
-          icon={<TrendingUp size={16} />}
-          labelAr={`ربح الشهر · ${monthLabel}`}
-          labelEn="Monthly Profit"
-          value={formatCurrency(monthProfit)}
-          tone={monthProfit >= 0 ? "emerald" : "rose"}
-        />
-        <SummaryCard
-          icon={<Activity size={16} />}
-          labelAr="إجمالي الربح المحقق"
-          labelEn="Realized Profit"
-          value={formatCurrency(realizedProfit)}
-          tone={realizedProfit >= 0 ? "emerald" : "rose"}
-        />
-        <SummaryCard
-          icon={<Layers size={16} />}
-          labelAr="الخيارات المفتوحة"
-          labelEn="Open Options"
-          value={String(openCount)}
-          tone="cyan"
         />
       </div>
 
