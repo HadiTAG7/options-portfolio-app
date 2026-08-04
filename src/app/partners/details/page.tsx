@@ -219,7 +219,11 @@ function PartnerDetailInner() {
         globalUnrealized,
         partnerNetUnrealized,
       };
-    });
+    })
+    // Most profitable contract first, biggest loser last — ordered by the
+    // same partnerNetUnrealized the "ربح/خسارة غير محققة" column shows, so
+    // the ranking always matches what the partner reads on screen.
+    .sort((a, b) => b.partnerNetUnrealized - a.partnerNetUnrealized);
   }, [partner, partnerNetOf, ownershipPct, sellPuts, sellCalls, activeStocks]);
 
   // Stock holdings — partner-centric view with live pricing + P&L.
