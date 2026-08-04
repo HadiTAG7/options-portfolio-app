@@ -19,6 +19,7 @@ import { toCsv, downloadCsv } from "@/lib/export-csv";
 import { tradeProfit } from "@/lib/partner-profit";
 import { useTrades } from "@/hooks/use-trades";
 import type { Trade } from "@/types";
+import { useCurrency } from "@/hooks/use-currency";
 
 type HistoryCategory = "option" | "stock";
 type FilterMode = "all" | HistoryCategory;
@@ -63,6 +64,11 @@ function closeDateFor(t: Trade): string {
 }
 
 export default function HistoryPage() {
+  // Re-render this page when the display currency changes: the money
+  // formatters read module state, so a subscription here is what makes
+  // every figure below (and in child components) re-denominate.
+  useCurrency();
+
   const { closedOptions, stockSells, dividends, loading, error } = useTrades();
   const [filter, setFilter] = useState<FilterMode>("all");
 

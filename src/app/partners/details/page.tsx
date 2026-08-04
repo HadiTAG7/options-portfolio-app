@@ -21,6 +21,7 @@ import { usePartnersStore } from "@/store/partners-store";
 import { TransactionList } from "@/components/ui/transaction-list";
 import { CapitalChart } from "@/components/ui/capital-chart";
 import type { FundOperation } from "@/types";
+import { useCurrency } from "@/hooks/use-currency";
 
 // Format "$120 | 15 Nov" from a strike and an ISO-ish expiry string.
 function formatExpiry(expiry: string): string {
@@ -1008,6 +1009,11 @@ function PartnerDetailInner() {
 }
 
 export default function PartnerDetailPage() {
+  // Re-render this page when the display currency changes: the money
+  // formatters read module state, so a subscription here is what makes
+  // every figure below (and in child components) re-denominate.
+  useCurrency();
+
   return (
     <AppShell>
       <Suspense

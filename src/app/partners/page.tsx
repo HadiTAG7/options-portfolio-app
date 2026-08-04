@@ -22,8 +22,14 @@ import { usePartners } from "@/hooks/use-partners";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartnersStore } from "@/store/partners-store";
 import type { Partner } from "@/types";
+import { useCurrency } from "@/hooks/use-currency";
 
 export default function PartnersPage() {
+  // Re-render this page when the display currency changes: the money
+  // formatters read module state, so a subscription here is what makes
+  // every figure below (and in child components) re-denominate.
+  useCurrency();
+
   const {
     partners,
     loading,

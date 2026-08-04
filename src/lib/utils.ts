@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { Partner } from "@/types";
+import { currencySymbol, toDisplayAmount } from "@/lib/currency";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -12,29 +13,39 @@ export function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// All amounts flowing into these formatters are USD (the fund's book
+// currency). toDisplayAmount applies the active display currency, so a
+// single toggle re-denominates every figure in the UI without any call
+// site changing. The symbol is placed after the minus sign so negatives
+// read "-$1,234.00" / "-ر.س1,234.00" exactly as before.
+function formatMoney(
+  amount: number | null | undefined,
+  fractionDigits: number
+): string {
+  const value = toDisplayAmount(safeNumber(amount));
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Math.abs(value));
+  // Intl can round -0.004 to "0.00"; don't render a bare "-".
+  const negative = value < 0 && Number(formatted.replace(/,/g, "")) !== 0;
+  return `${negative ? "-" : ""}${currencySymbol()}${formatted}`;
+}
+
 export function formatCurrency(amount: number | null | undefined): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(safeNumber(amount));
+  return formatMoney(amount, 2);
 }
 
 export function formatCompactCurrency(amount: number | null | undefined): string {
-  const v = safeNumber(amount);
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-  return formatCurrency(v);
+  const v = toDisplayAmount(safeNumber(amount));
+  const sym = currencySymbol();
+  if (Math.abs(v) >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `${sym}${(v / 1_000).toFixed(0)}K`;
+  return formatCurrency(amount);
 }
 
 export function formatWholeNumber(amount: number | null | undefined): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(safeNumber(amount));
+  return formatMoney(amount, 0);
 }
 
 export function formatPercent(

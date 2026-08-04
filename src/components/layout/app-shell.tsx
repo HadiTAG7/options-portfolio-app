@@ -9,6 +9,7 @@ import { SidebarProvider, useSidebar } from "./sidebar-context";
 import { TopBar } from "./top-bar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrencyHydration } from "@/hooks/use-currency";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -23,6 +24,8 @@ interface AppShellProps {
 const AUTH_ENFORCED = process.env.NEXT_PUBLIC_AUTH_ENFORCED !== "0";
 
 export function AppShell({ children }: AppShellProps) {
+  // Restore the GP's saved currency choice once per session.
+  useCurrencyHydration();
   if (!AUTH_ENFORCED) {
     return (
       <SidebarProvider>

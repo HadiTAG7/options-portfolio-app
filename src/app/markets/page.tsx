@@ -14,6 +14,7 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { formatCurrency } from "@/lib/utils";
 import { resolveApiKey } from "@/lib/finnhub";
+import { useCurrency } from "@/hooks/use-currency";
 
 interface QuoteData {
   price: number;
@@ -73,6 +74,11 @@ async function fetchQuote(
 }
 
 export default function MarketsPage() {
+  // Re-render this page when the display currency changes: the money
+  // formatters read module state, so a subscription here is what makes
+  // every figure below (and in child components) re-denominate.
+  useCurrency();
+
   const [quotes, setQuotes] = useState<QuoteMap>(() => {
     const init: QuoteMap = {};
     for (const s of ALL_SYMBOLS) {

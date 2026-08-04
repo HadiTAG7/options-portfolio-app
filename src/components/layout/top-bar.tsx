@@ -7,11 +7,13 @@ import {
   Bell,
   Calendar,
   Globe,
+  Coins,
   Search,
   Wallet,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useCurrencyStore, useCurrency } from "@/hooks/use-currency";
 import { useSidebar } from "./sidebar-context";
 import { useTrades } from "@/hooks/use-trades";
 import { usePartners } from "@/hooks/use-partners";
@@ -27,6 +29,9 @@ export function TopBar() {
   const pathname = usePathname();
   const { activeStocks, sellPuts, totalProfit, loading: tradesLoading } = useTrades();
   const { partners, loading: partnersLoading } = usePartners();
+  const currency = useCurrency();
+  const rate = useCurrencyStore((s) => s.rate);
+  const toggleCurrency = useCurrencyStore((s) => s.toggle);
 
   const loading = tradesLoading || partnersLoading;
 
@@ -108,6 +113,22 @@ export function TopBar() {
             </span>
           )}
         </div>
+
+        {/* Currency switch — display only; the books stay in USD */}
+        <button
+          type="button"
+          onClick={toggleCurrency}
+          title={
+            currency === "USD"
+              ? `عرض بالريال (سعر الصرف ${rate})`
+              : "عرض بالدولار"
+          }
+          aria-label="تبديل العملة"
+          className="flex items-center gap-1.5 rounded-md border border-zinc-800/70 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-emerald-300"
+        >
+          <Coins size={13} />
+          {currency === "USD" ? "USD" : "SAR"}
+        </button>
 
         {/* Icon Actions */}
         <div className="flex items-center gap-1">
