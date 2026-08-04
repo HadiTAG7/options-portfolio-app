@@ -126,6 +126,20 @@ export default function TradesPage() {
     [activeStocks]
   );
 
+  // Trading Pit ordering: biggest unrealized winner first, biggest loser
+  // last — the same (currentPrice − purchasePrice) × qty the P&L column
+  // shows, so the sort always matches what's on screen. Lots without a
+  // live quote score 0 and land between the winners and the losers rather
+  // than being ranked on a price we don't have.
+  const sortedActiveStocks = useMemo(() => {
+    const pnl = (s: ActiveStock) => {
+      const px = s.currentPrice;
+      if (typeof px !== "number" || !Number.isFinite(px) || px <= 0) return 0;
+      return (px - s.purchasePrice) * s.quantity;
+    };
+    return [...activeStocks].sort((a, b) => pnl(b) - pnl(a));
+  }, [activeStocks]);
+
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.
   const { monthProfit, monthLabel } = useMemo(() => {
@@ -475,7 +489,7 @@ export default function TradesPage() {
               )}
 
               {!loading &&
-                activeStocks.map((stock, idx) => {
+                sortedActiveStocks.map((stock, idx) => {
                   const hasLivePrice =
                     typeof stock.currentPrice === "number" &&
                     Number.isFinite(stock.currentPrice) &&
