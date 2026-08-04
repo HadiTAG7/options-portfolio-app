@@ -9,6 +9,8 @@ import {
   ArrowDownRight,
   Receipt,
   ChevronDown,
+  BarChart3,
+  CalendarRange,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -207,6 +209,21 @@ export default function DashboardPage() {
       });
   }, [monthlyProfitBuckets, partners, trades]);
 
+  // Monthly averages across every month that has activity. Derived from
+  // monthlyLedger — the same rows the two breakdown dialogs list — so the
+  // averages always reconcile with those tables rather than being a second
+  // independent calculation.
+  const monthlyAverages = useMemo(() => {
+    const n = monthlyLedger.length;
+    if (n === 0) return { avgYield: 0, avgFees: 0, months: 0 };
+    return {
+      avgYield: monthlyLedger.reduce((sum, r) => sum + r.grossProfit, 0) / n,
+      avgFees: monthlyLedger.reduce((sum, r) => sum + r.gpFees, 0) / n,
+      months: n,
+    };
+  }, [monthlyLedger]);
+
+
   // ── Profit for selected month (or all-time) ──
   const selectedMonthProfit = useMemo(() => {
     if (selectedMonth === "all") return totalProfit;
@@ -303,9 +320,11 @@ export default function DashboardPage() {
       <ExpiryAlert openOptions={[...sellPuts, ...sellCalls]} />
 
       {/* ═══════ Hero Cards ═══════ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-8">
         {loading ? (
           <>
+            <CardSkeleton />
+            <CardSkeleton />
             <CardSkeleton />
             <CardSkeleton />
             <CardSkeleton />
@@ -313,6 +332,35 @@ export default function DashboardPage() {
           </>
         ) : (
           <>
+            {/* ── Active Positions ── */}
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.12]" />
+              <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
+                <Activity size={72} strokeWidth={1} />
+              </div>
+              <div className="relative flex flex-col gap-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                    <Activity size={18} className="text-cyan-400" />
+                  </div>
+                  <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">
+                    المراكز النشطة · Active Positions
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-5xl font-headline font-black tracking-tight text-white tabular-nums">
+                    {openCount}
+                  </span>
+                  <span className="text-sm text-zinc-400">عقد مفتوح</span>
+                </div>
+                <div className="flex items-center gap-2 text-[10px]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
+                  <span className="text-emerald-400/80 uppercase tracking-widest font-bold">
+                    Live Trading
+                  </span>
+                </div>
+              </div>
+            </div>
             {/* ── Total AUM ── */}
             <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
@@ -458,35 +506,90 @@ export default function DashboardPage() {
               </div>
             </button>
 
-            {/* ── Active Positions ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
-              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.12]" />
+            {/* ── Avg Monthly Yield ── */}
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.2)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.12]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
-                <Activity size={72} strokeWidth={1} />
+                <BarChart3 size={72} strokeWidth={1} />
               </div>
               <div className="relative flex flex-col gap-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                    <Activity size={18} className="text-cyan-400" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <BarChart3 size={18} className="text-emerald-400" />
                   </div>
                   <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">
-                    المراكز النشطة · Active Positions
+                    متوسط العائد الشهري · Avg Monthly Yield
                   </span>
                 </div>
                 <div className="flex items-baseline gap-3">
-                  <span className="text-5xl font-headline font-black tracking-tight text-white tabular-nums">
-                    {openCount}
+                  <span
+                    className={`text-4xl font-headline font-light tracking-tight font-mono tabular-nums ${
+                      monthlyAverages.avgYield >= 0
+                        ? "text-emerald-400"
+                        : "text-rose-400"
+                    }`}
+                    title="متوسط الربح المحقق شهرياً = إجمالي العائد ÷ عدد الأشهر التي فيها نشاط"
+                  >
+                    {monthlyAverages.avgYield >= 0 ? "+" : ""}
+                    {formatWholeNumber(monthlyAverages.avgYield)}
                   </span>
-                  <span className="text-sm text-zinc-400">عقد مفتوح</span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px]">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
-                  <span className="text-emerald-400/80 uppercase tracking-widest font-bold">
-                    Live Trading
+                <div className="flex items-center gap-4 text-[10px]">
+                  <span className="text-zinc-500">
+                    <span className="opacity-70">عدد الأشهر:</span>{" "}
+                    <span className="text-zinc-300 font-mono tabular-nums font-bold">
+                      {monthlyAverages.months}
+                    </span>
+                  </span>
+                  <span className="text-zinc-600">|</span>
+                  <span className="text-zinc-500">
+                    <span className="opacity-70">شهرياً · محقق</span>
                   </span>
                 </div>
               </div>
             </div>
+
+            {/* ── Avg Monthly Management Fees ── */}
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.22)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.12]" />
+              <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
+                <CalendarRange size={72} strokeWidth={1} />
+              </div>
+              <div className="relative flex flex-col gap-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-400/20">
+                    <CalendarRange size={18} className="text-cyan-300" />
+                  </div>
+                  <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">
+                    متوسط رسوم الإدارة الشهري · Avg Monthly Fees
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <span
+                    className="text-4xl font-headline font-light tracking-tight text-cyan-200 font-mono tabular-nums"
+                    title="متوسط رسوم الإدارة شهرياً = إجمالي الرسوم ÷ عدد الأشهر التي فيها نشاط"
+                  >
+                    {formatWholeNumber(monthlyAverages.avgFees)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-[10px]">
+                  <span className="text-zinc-500">
+                    <span className="opacity-70">عدد الأشهر:</span>{" "}
+                    <span className="text-zinc-300 font-mono tabular-nums font-bold">
+                      {monthlyAverages.months}
+                    </span>
+                  </span>
+                  <span className="text-zinc-600">|</span>
+                  <span className="text-zinc-500">
+                    <span className="opacity-70">نسبة الرسوم:</span>{" "}
+                    <span className="font-mono tabular-nums font-bold text-cyan-300">
+                      {(MANAGEMENT_FEE_RATE * 100).toFixed(0)}%
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
           </>
         )}
       </div>
