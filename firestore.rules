@@ -55,6 +55,14 @@ service cloud.firestore {
       allow write: if isGP();
     }
 
+    // Daily snapshots of the open stock book — what makes day-over-day
+    // stock moves computable. Fund-wide (no per-partner data), so any
+    // signed-in partner may read; only the GP writes.
+    match /daily_snapshots/{id} {
+      allow read: if signedIn();
+      allow write: if isGP();
+    }
+
     // Anything else: denied.
     match /{document=**} {
       allow read, write: if false;

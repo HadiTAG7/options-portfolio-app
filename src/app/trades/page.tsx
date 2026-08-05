@@ -54,6 +54,8 @@ import { useTrades } from "@/hooks/use-trades";
 import { usePartners } from "@/hooks/use-partners";
 import type { Trade, ActiveStock } from "@/types";
 import { useCurrency } from "@/hooks/use-currency";
+import { useAuth } from "@/hooks/use-auth";
+import { useDailySnapshots, todayKey } from "@/hooks/use-daily-snapshots";
 
 function typeBadgeClass(type: string): string {
   switch (type) {
@@ -120,6 +122,32 @@ export default function TradesPage() {
   } = useTrades();
 
   const { partners } = usePartners();
+  const { isGP: viewerIsGP } = useAuth();
+  const { snapshots, recordToday } = useDailySnapshots(!!viewerIsGP);
+
+  // Snapshot today's open-stock position once per session, after live
+  // prices have landed. This is what lets past days show a stock move
+  // tomorrow — without it, only "today" is ever computable. Guarded so a
+  // re-render can't spam writes, and skipped unless every lot has a quote
+  // so a half-loaded book never becomes the day's record.
+  const [snapshotDone, setSnapshotDone] = useState(false);
+  useEffect(() => {
+    if (!viewerIsGP || snapshotDone || activeStocks.length === 0) return;
+    const allPriced = activeStocks.every(
+      (s) => typeof s.currentPrice === "number" && (s.currentPrice ?? 0) > 0
+    );
+    if (!allPriced) return;
+    const unrealized = activeStocks.reduce(
+      (sum, s) => sum + ((s.currentPrice as number) - s.purchasePrice) * s.quantity,
+      0
+    );
+    const value = activeStocks.reduce(
+      (sum, s) => sum + (s.currentPrice as number) * s.quantity,
+      0
+    );
+    setSnapshotDone(true);
+    void recordToday(unrealized, value);
+  }, [viewerIsGP, snapshotDone, activeStocks, recordToday]);
 
   // Active stocks whose live price reached the user's target sell
   // price. Feeds the banner above the table and the row highlight.
@@ -157,8 +185,7 @@ export default function TradesPage() {
   // its previous close, not a price history — so past days carry realized
   // amounts only, and the dialog says so rather than implying otherwise.
   const dailyRows = useMemo<DailyBreakdownRow[]>(() => {
-    const now = new Date();
-    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const todayStr = todayKey();
 
     const byDay: Record<string, number> = {};
     for (const t of trades) {
@@ -184,26 +211,41 @@ export default function TradesPage() {
       return sum + (px - pc) * s.quantity;
     }, 0);
 
+    // Stock move per past day, from consecutive snapshots:
+    //   move(D) = stockUnrealized(D) − stockUnrealized(previous snapshot)
+    // The earliest snapshot has no predecessor, so it gets no move rather
+    // than being credited with the book's entire lifetime gain.
+    const moveByDay: Record<string, number> = {};
+    for (let i = 1; i < snapshots.length; i++) {
+      moveByDay[snapshots[i].date] =
+        snapshots[i].stockUnrealized - snapshots[i - 1].stockUnrealized;
+    }
+
     // Today always gets a row, even with nothing booked, so the dialog
     // reconciles with the card that opened it.
     const keys = new Set(Object.keys(byDay));
-    keys.add(todayKey);
+    for (const k of Object.keys(moveByDay)) keys.add(k);
+    keys.add(todayStr);
 
     return Array.from(keys)
       .sort()
       .reverse()
       .map((key) => {
         const [y, m, d] = key.split("-");
+        const isToday = key === todayStr;
         return {
           date: key,
           labelAr: `${Number(d)} ${new Date(Number(y), Number(m) - 1).toLocaleString("ar-EG", { month: "long" })} ${new Date(Number(y), 0).toLocaleString("ar-EG", { year: "numeric" })}`,
           realized: byDay[key] ?? 0,
-          stockMove: key === todayKey ? stockMoveToday : 0,
-          isToday: key === todayKey,
+          // Today uses the live previous-close move (accurate intraday);
+          // earlier days come from the snapshot diff.
+          stockMove: isToday ? stockMoveToday : (moveByDay[key] ?? 0),
+          hasStockMove: isToday || key in moveByDay,
+          isToday,
         };
       })
-      .filter((r) => r.isToday || r.realized !== 0);
-  }, [trades, activeStocks]);
+      .filter((r) => r.isToday || r.realized !== 0 || r.hasStockMove);
+  }, [trades, activeStocks, snapshots]);
 
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.

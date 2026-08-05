@@ -8,7 +8,8 @@ export interface DailyBreakdownRow {
   date: string; // YYYY-MM-DD
   labelAr: string; // "٣ أغسطس ٢٠٢٦"
   realized: number; // premium collected + closed results booked that day
-  stockMove: number; // mark-to-market move — today only (see note below)
+  stockMove: number; // mark-to-market move (today live, earlier days from snapshots)
+  hasStockMove: boolean; // false when no snapshot exists for that day
   isToday: boolean;
 }
 
@@ -20,13 +21,11 @@ interface DailyBreakdownDialogProps {
 
 // Day-by-day P&L, newest first.
 //
-// An honest limitation is surfaced in the footer rather than papered over:
-// only realized figures can be reconstructed for past days, because the app
-// stores one current price per stock, not a price history. So a past day
-// shows what was actually booked that day (premium collected, sales,
-// dividends) and today additionally shows the open book's move since the
-// previous close. Inventing past unrealized swings would make these numbers
-// untrustworthy, so they're simply not claimed.
+// Stock moves come from daily_snapshots (recorded from the day the feature
+// was switched on) and, for today, from the live previous-close comparison.
+// Days before snapshots existed can only show realized amounts — their
+// prices were never stored and cannot be recovered. The footer says so
+// rather than implying the blanks are zeros.
 export function DailyBreakdownDialog({
   open,
   rows,
@@ -146,7 +145,7 @@ export function DailyBreakdownDialog({
                               : "text-zinc-600"
                         }`}
                       >
-                        {r.isToday && r.stockMove !== 0
+                        {r.hasStockMove && r.stockMove !== 0
                           ? formatCurrency(r.stockMove)
                           : "—"}
                       </td>
@@ -183,9 +182,10 @@ export function DailyBreakdownDialog({
           </div>
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
             «محقق» = العلاوات المحصّلة والمبيعات والتوزيعات المسجّلة في ذلك
-            اليوم. «حركة الأسهم» تظهر لليوم الحالي فقط — التطبيق يحفظ سعراً
-            حالياً واحداً لكل سهم ولا يحفظ تاريخ الأسعار، فحركة الأيام السابقة
-            غير متوفرة.
+            اليوم. «حركة الأسهم» = تغيّر قيمة الأسهم المفتوحة في ذلك اليوم؛
+            تُسجَّل تلقائياً من الآن فصاعداً كل مرة تُفتح الصفحة، فالأيام
+            السابقة لتشغيل هذه الميزة تظهر بالمحقق فقط (أسعارها القديمة لم
+            تُحفظ ولا يمكن استرجاعها).
           </p>
         </div>
       </div>

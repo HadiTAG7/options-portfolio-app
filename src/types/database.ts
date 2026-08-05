@@ -197,6 +197,31 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["operations"]["Insert"]>;
         Relationships: [];
       };
+      // Daily snapshot of the open stock book (one doc per date) so
+      // day-over-day mark-to-market moves are recoverable. Firestore
+      // collection; no SQL equivalent.
+      daily_snapshots: {
+        Row: {
+          id: string; // YYYY-MM-DD
+          date: string;
+          stockUnrealized: number;
+          stockValue: number;
+          updated_at?: string | null;
+          created_at?: string;
+        };
+        Insert: {
+          id?: string;
+          date: string;
+          stockUnrealized: number;
+          stockValue: number;
+          updated_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["daily_snapshots"]["Insert"]
+        >;
+        Relationships: [];
+      };
       // Frozen monthly-profit records (one doc per month+partner) so the
       // profit log is stored, not re-computed. GP-editable. Firestore
       // collection; no SQL equivalent.
@@ -247,3 +272,6 @@ export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"]
 export type OperationRow = Database["public"]["Tables"]["operations"]["Row"];
 export type MonthlyProfitRow =
   Database["public"]["Tables"]["monthly_profits"]["Row"];
+
+export type DailySnapshotRow =
+  Database["public"]["Tables"]["daily_snapshots"]["Row"];
