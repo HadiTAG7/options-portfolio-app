@@ -1,0 +1,45 @@
+# Record the day's closing snapshot of the open stock book, so the Daily
+# P&L view has a complete series without depending on the GP opening the
+# app. A missing day isn't just one blank row — the NEXT day would show a
+# two-day move, since the move is a difference between consecutive
+# snapshots.
+#
+# IMPORTANT: GitHub only runs `schedule` triggers from the repository's
+# DEFAULT branch, which is why this file lives there. The checkout below
+# pins the ref to the production branch, so the job always runs the current
+# script and app code from claude/write-app-prompt-8V4uK.
+#
+# 21:15 UTC Mon–Fri is after the US close in both EDT (20:00 UTC) and EST
+# (21:00 UTC), so the snapshot reflects settled closing prices.
+#
+# Secrets: FIREBASE_SERVICE_ACCOUNT (required — the admin SDK bypasses
+# firestore.rules, so this works regardless of the published rules).
+# FINNHUB_API_KEY is optional; the script falls back to the app's key.
+
+name: Daily Snapshot
+
+on:
+  schedule:
+    - cron: "15 21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Record snapshot
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: npx tsx scripts/record-daily-snapshot.ts
