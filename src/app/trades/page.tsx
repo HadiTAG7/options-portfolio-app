@@ -603,6 +603,9 @@ export default function TradesPage() {
                 <th className="px-4 py-3 text-start font-semibold">Qty</th>
                 <th className="px-4 py-3 text-start font-semibold">Buy Price</th>
                 <th className="px-4 py-3 text-start font-semibold">Current</th>
+                <th className="px-4 py-3 text-start font-semibold">
+                  اليوم · Today
+                </th>
                 <th className="px-4 py-3 text-start font-semibold">Unrealized P&amp;L</th>
                 <th className="px-4 py-3 text-start font-semibold">Target</th>
                 <th className="px-4 py-3 text-start font-semibold">
@@ -616,14 +619,14 @@ export default function TradesPage() {
             <tbody>
               {loading && (
                 <>
-                  <TableRowSkeleton cols={10} />
-                  <TableRowSkeleton cols={10} />
+                  <TableRowSkeleton cols={11} />
+                  <TableRowSkeleton cols={11} />
                 </>
               )}
 
               {!loading && activeStocks.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-16 text-center">
+                  <td colSpan={11} className="px-4 py-16 text-center">
                     <PackageOpen
                       size={36}
                       className="mx-auto mb-2 text-zinc-700"
@@ -658,6 +661,28 @@ export default function TradesPage() {
                     : pnlNegative
                       ? "text-rose-400"
                       : "text-zinc-500";
+                  // Today's move for THIS lot: (current − previous close) × qty.
+                  // previousClose rides along with the live quote, so this needs
+                  // no stored history. Missing either side renders "—" rather
+                  // than a zero that would read as "flat today".
+                  const prevClose = stock.previousClose;
+                  const hasDayMove =
+                    hasLivePrice &&
+                    typeof prevClose === "number" &&
+                    Number.isFinite(prevClose) &&
+                    prevClose > 0;
+                  const dayAbs = hasDayMove
+                    ? (stock.currentPrice! - prevClose!) * stock.quantity
+                    : 0;
+                  const dayPct = hasDayMove
+                    ? ((stock.currentPrice! - prevClose!) / prevClose!) * 100
+                    : 0;
+                  const dayTone =
+                    dayAbs > 0
+                      ? "text-emerald-400"
+                      : dayAbs < 0
+                        ? "text-rose-400"
+                        : "text-zinc-500";
                   const hasTarget = stock.targetSellPrice > 0;
                   const potential = hasTarget
                     ? (stock.targetSellPrice - stock.purchasePrice) *
@@ -727,6 +752,29 @@ export default function TradesPage() {
                             </span>
                           ) : (
                             <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono tabular-nums">
+                          {stock.priceLoading ? (
+                            <span className="h-3 w-3 inline-block animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+                          ) : hasDayMove ? (
+                            <div className="flex flex-col">
+                              <span className={`font-bold ${dayTone}`}>
+                                {dayAbs > 0 ? "+" : ""}
+                                {formatCurrency(dayAbs)}
+                              </span>
+                              <span className={`text-[10px] ${dayTone} opacity-80`}>
+                                {dayPct > 0 ? "+" : ""}
+                                {dayPct.toFixed(2)}%
+                              </span>
+                            </div>
+                          ) : (
+                            <span
+                              className="text-zinc-600"
+                              title="لا يوجد سعر إغلاق سابق لهذا السهم بعد"
+                            >
+                              —
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 font-mono tabular-nums">
@@ -838,7 +886,7 @@ export default function TradesPage() {
                       {/* ── Expanded Detail Panel ── */}
                       {isExpanded && (
                         <tr className="border-t border-zinc-800/30">
-                          <td colSpan={10} className="p-0">
+                          <td colSpan={11} className="p-0">
                             <div className="bg-zinc-950/80 border-b border-zinc-800/40 px-6 py-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
                               {/* Related Options */}
                               {relatedOptions.length > 0 && (
