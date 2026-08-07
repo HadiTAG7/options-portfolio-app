@@ -61,7 +61,27 @@ async function main(): Promise<void> {
   const db = getFirestore();
 
   const now = new Date();
-  const dateKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+
+  // Which trading day is this run capturing?
+  //
+  // GitHub's scheduler is best-effort and routinely runs late — the first
+  // scheduled run here fired at 01:02 UTC instead of 21:15 UTC, four hours
+  // adrift. Stamping the wall-clock UTC date would then file Thursday's
+  // close under Friday, skipping a day and mis-dating the next one (the
+  // move is a difference between consecutive rows, so one bad date corrupts
+  // two of them).
+  //
+  // The schedule is 21:15 UTC, so any run before midday UTC is a late run
+  // for the PREVIOUS day. DATE=YYYY-MM-DD overrides for manual backfills.
+  const override = process.env.DATE?.trim();
+  let target = new Date(now);
+  if (override && /^\d{4}-\d{2}-\d{2}$/.test(override)) {
+    target = new Date(`${override}T12:00:00Z`);
+  } else if (now.getUTCHours() < 12) {
+    target.setUTCDate(target.getUTCDate() - 1);
+  }
+  const dateKey = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}-${String(target.getUTCDate()).padStart(2, "0")}`;
+  ok(`run at ${now.toISOString()} → recording trading day ${dateKey}`);
 
   const snap = await db.collection("active_stocks").get();
   const stocks = snap.docs.map((d) => {

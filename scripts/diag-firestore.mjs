@@ -97,4 +97,24 @@ for (const d of pSnap.docs) {
     }
   }
 }
+// ── 3. daily_snapshots: is the series actually accumulating? ────────
+const snaps = await db.collection("daily_snapshots").get();
+console.log(`\ndaily_snapshots: ${snaps.size} doc(s)`);
+const rows = snaps.docs
+  .map((d) => d.data())
+  .sort((a, b) => String(a.date ?? a.id).localeCompare(String(b.date ?? b.id)));
+let prev = null;
+for (const r of rows) {
+  const u = Number(r.stockUnrealized) || 0;
+  const move = prev === null ? null : u - prev;
+  console.log(
+    `  ${r.date ?? r.id}  unrealized=$${u.toFixed(2)}` +
+      (move === null ? "  (first — no move)" : `  move=$${move.toFixed(2)}`)
+  );
+  prev = u;
+}
+if (rows.length < 2) {
+  warn("fewer than 2 snapshots — no day-over-day move can exist yet");
+}
+
 ok("diagnostic complete");
