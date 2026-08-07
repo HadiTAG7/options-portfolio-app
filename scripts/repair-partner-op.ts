@@ -17,7 +17,7 @@
 //
 // Env:
 //   FIREBASE_SERVICE_ACCOUNT   service-account JSON (existing secret)
-//   PARTNER_NAME               default "علي الغانم"
+//   PARTNER_NAME               required — the partner to repair
 //   TARGET_DATE                YYYY-MM-DD of the session, default 2026-07-21
 //   DRY_RUN                    "1" (default) = preview, "0" = apply
 import { cert, initializeApp } from "firebase-admin/app";
@@ -30,7 +30,7 @@ import type { Partner, Trade } from "../src/types";
 
 const {
   FIREBASE_SERVICE_ACCOUNT,
-  PARTNER_NAME = "علي الغانم",
+  PARTNER_NAME = "",
   TARGET_DATE = "2026-07-21",
   DRY_RUN = "1",
 } = process.env;
