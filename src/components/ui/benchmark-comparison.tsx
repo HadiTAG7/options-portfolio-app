@@ -11,7 +11,8 @@ import {
 export interface FundMonth {
   key: string; // YYYY-MM
   labelAr: string;
-  profit: number;
+  profit: number; // gross, before the GP performance fee
+  fees: number; // GP performance fee taken that month
   capital: number;
 }
 
@@ -31,6 +32,10 @@ export interface FundMonth {
 export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
   const { series, loading, errors, symbols, setSymbols } = useBenchmarks(12);
   const [editing, setEditing] = useState(false);
+  // Net of fees by default: a partner's real alternative is buying the index
+  // itself, which carries no performance fee, so comparing the fund's GROSS
+  // return against it would overstate what a partner actually earns.
+  const [netOfFees, setNetOfFees] = useState(true);
   const [draft, setDraft] = useState(symbols.join(", "));
 
   // Oldest → newest for the table; chaining needs chronological order.
@@ -40,8 +45,11 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
   );
   const monthKeys = useMemo(() => rows.map((r) => r.key), [rows]);
 
-  const fundMonthPct = (m: FundMonth): number | null =>
-    m.capital > 0 ? (m.profit / m.capital) * 100 : null;
+  const fundMonthPct = (m: FundMonth): number | null => {
+    if (m.capital <= 0) return null;
+    const profit = netOfFees ? m.profit - m.fees : m.profit;
+    return (profit / m.capital) * 100;
+  };
 
   const fundCumulative = useMemo(() => {
     let factor = 1;
@@ -53,7 +61,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
       any = true;
     }
     return any ? (factor - 1) * 100 : null;
-  }, [rows]);
+  }, [rows, netOfFees]);
 
   function startEdit() {
     setDraft(symbols.join(", "));
@@ -93,6 +101,32 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
           </div>
         </div>
 
+        <div className="flex items-center gap-2">
+          <div className="flex overflow-hidden rounded-md border border-zinc-800/70">
+            {(
+              [
+                [true, "بعد الرسوم"],
+                [false, "قبل الرسوم"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={label}
+                onClick={() => setNetOfFees(v)}
+                title={
+                  v
+                    ? "صافي ما يستلمه الشريك بعد خصم رسوم الأداء"
+                    : "أداء الاستراتيجية قبل خصم الرسوم"
+                }
+                className={`px-2.5 py-1.5 text-[10px] font-bold transition-colors ${
+                  netOfFees === v
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         {editing ? (
           <div className="flex items-center gap-2">
             <input
@@ -131,6 +165,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
             المؤشرات
           </button>
         )}
+        </div>
       </div>
 
       {errors.length > 0 && (
@@ -253,7 +288,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
       </div>
 
       <p className="mt-5 max-w-3xl text-[11px] leading-6 text-zinc-500">
-        عائد الصندوق = ربح الشهر ÷ رأس المال في ذلك الشهر، والتراكمي مركّب
+        عائد الصندوق = {netOfFees ? "ربح الشهر بعد خصم رسوم الأداء" : "ربح الشهر قبل الرسوم"} ÷ رأس المال في ذلك الشهر، والتراكمي مركّب
         (مضروب لا مجموع) ليكون قابلاً للمقارنة مع مؤشر. أرقام المؤشرات
         بأسعار الإغلاق <span className="text-zinc-400">المعدّلة</span> فتشمل
         التوزيعات — مهم لصناديق الدخل الشهري مثل JEPQ التي يُدفع عائدها

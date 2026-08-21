@@ -227,6 +227,7 @@ export default function DashboardPage() {
           key: r.key,
           labelAr: r.labelAr,
           profit: r.grossProfit,
+          fees: r.gpFees,
           capital: r.totalCapital,
         })),
     [monthlyLedger]
