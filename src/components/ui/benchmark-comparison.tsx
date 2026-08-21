@@ -144,11 +144,15 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
           <thead>
             <tr className="border-b border-zinc-800/60 text-[10px] uppercase tracking-widest text-zinc-500">
               <th className="px-3 py-2.5 text-start font-semibold">الشهر</th>
-              <th className="px-3 py-2.5 text-start font-semibold text-emerald-400">
+              <th className="bg-emerald-500/[0.06] px-3 py-2.5 text-right font-semibold text-emerald-400">
                 صندوقك
               </th>
               {symbols.map((s) => (
-                <th key={s} className="px-3 py-2.5 text-start font-semibold">
+                <th
+                  key={s}
+                  dir="ltr"
+                  className="px-3 py-2.5 text-right font-semibold"
+                >
                   {s}
                 </th>
               ))}
@@ -175,7 +179,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
                   <td className="px-3 py-2.5 text-zinc-300">{r.labelAr}</td>
                   <td
                     dir="ltr"
-                    className={`px-3 py-2.5 text-start font-mono font-bold tabular-nums ${tone(f)}`}
+                    className={`bg-emerald-500/[0.06] px-3 py-2.5 text-right font-mono font-bold tabular-nums ${tone(f)}`}
                   >
                     {pct(f)}
                   </td>
@@ -185,7 +189,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
                       <td
                         key={s}
                         dir="ltr"
-                        className={`px-3 py-2.5 text-start font-mono tabular-nums ${tone(b)}`}
+                        className={`px-3 py-2.5 text-right font-mono tabular-nums ${tone(b)}`}
                       >
                         {loading && !series[s] ? "…" : pct(b)}
                       </td>
@@ -203,7 +207,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
                 </td>
                 <td
                   dir="ltr"
-                  className={`px-3 py-3 text-start font-mono font-bold tabular-nums ${tone(fundCumulative)}`}
+                  className={`bg-emerald-500/[0.08] px-3 py-3 text-right font-mono font-bold tabular-nums ${tone(fundCumulative)}`}
                 >
                   {pct(fundCumulative)}
                 </td>
@@ -211,7 +215,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
                   <td
                     key={s}
                     dir="ltr"
-                    className={`px-3 py-3 text-start font-mono font-bold tabular-nums ${tone(cumulativeReturnPct(series[s], monthKeys))}`}
+                    className={`px-3 py-3 text-right font-mono font-bold tabular-nums ${tone(cumulativeReturnPct(series[s], monthKeys))}`}
                   >
                     {pct(cumulativeReturnPct(series[s], monthKeys))}
                   </td>
@@ -221,7 +225,9 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
                 <td className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                   الفرق · Alpha
                 </td>
-                <td className="px-3 py-2.5 text-zinc-600">—</td>
+                <td className="bg-emerald-500/[0.06] px-3 py-2.5 text-right text-zinc-600">
+                  —
+                </td>
                 {symbols.map((s) => {
                   const b = cumulativeReturnPct(series[s], monthKeys);
                   const diff =
@@ -232,7 +238,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
                     <td
                       key={s}
                       dir="ltr"
-                      className={`px-3 py-2.5 text-start font-mono font-bold tabular-nums ${tone(diff)}`}
+                      className={`px-3 py-2.5 text-right font-mono font-bold tabular-nums ${tone(diff)}`}
                     >
                       {diff === null
                         ? "—"
@@ -246,14 +252,14 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
         </table>
       </div>
 
-      <p className="mt-4 text-[10px] leading-relaxed text-zinc-500">
+      <p className="mt-5 max-w-3xl text-[11px] leading-6 text-zinc-500">
         عائد الصندوق = ربح الشهر ÷ رأس المال في ذلك الشهر، والتراكمي مركّب
         (مضروب لا مجموع) ليكون قابلاً للمقارنة مع مؤشر. أرقام المؤشرات
         بأسعار الإغلاق <span className="text-zinc-400">المعدّلة</span> فتشمل
         التوزيعات — مهم لصناديق الدخل الشهري مثل JEPQ التي يُدفع عائدها
         نقداً.
       </p>
-      <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">
+      <p className="mt-2 max-w-3xl text-[11px] leading-6 text-zinc-600">
         ملاحظة للإنصاف: ربح الصندوق هنا <span className="text-zinc-400">محقق
         فقط</span>، أما المؤشر فبسعر السوق — فأي شهر انخفضت فيه أسهمك
         المفتوحة يظهر عمود صندوقك أفضل من الواقع. (الأسعار التاريخية لم
