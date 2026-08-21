@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { LineChart, Pencil, Check, X } from "lucide-react";
 import {
   useBenchmarks,
@@ -45,11 +45,16 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
   );
   const monthKeys = useMemo(() => rows.map((r) => r.key), [rows]);
 
-  const fundMonthPct = (m: FundMonth): number | null => {
-    if (m.capital <= 0) return null;
-    const profit = netOfFees ? m.profit - m.fees : m.profit;
-    return (profit / m.capital) * 100;
-  };
+  // useCallback so the cumulative memo can depend on it honestly instead of
+  // closing over a function that changes identity every render.
+  const fundMonthPct = useCallback(
+    (m: FundMonth): number | null => {
+      if (m.capital <= 0) return null;
+      const profit = netOfFees ? m.profit - m.fees : m.profit;
+      return (profit / m.capital) * 100;
+    },
+    [netOfFees]
+  );
 
   const fundCumulative = useMemo(() => {
     let factor = 1;
@@ -61,7 +66,7 @@ export function BenchmarkComparison({ months }: { months: FundMonth[] }) {
       any = true;
     }
     return any ? (factor - 1) * 100 : null;
-  }, [rows, netOfFees]);
+  }, [rows, fundMonthPct]);
 
   function startEdit() {
     setDraft(symbols.join(", "));
