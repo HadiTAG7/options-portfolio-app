@@ -117,4 +117,44 @@ if (rows.length < 2) {
   warn("fewer than 2 snapshots — no day-over-day move can exist yet");
 }
 
+// ── 4. trades: which months actually exist, and their profit ────────
+const tSnap = await db.collection("trades").get();
+console.log(`\ntrades: ${tSnap.size} doc(s)`);
+const byMonth = {};
+let earliest = null, latest = null;
+for (const d of tSnap.docs) {
+  const r = d.data();
+  const isShort = r.type === "Sell Put" || r.type === "Sell Call";
+  const date = String(r.date || "").slice(0, 10);
+  if (!date) continue;
+  if (!earliest || date < earliest) earliest = date;
+  if (!latest || date > latest) latest = date;
+  const profit = isShort && (r.status ?? "open") === "open"
+    ? Number(r.premium || 0) * Number(r.quantity || 0)
+    : Number(r.result || 0);
+  const k = date.slice(0, 7);
+  byMonth[k] = byMonth[k] || { n: 0, profit: 0 };
+  byMonth[k].n++;
+  byMonth[k].profit += profit;
+}
+console.log(`  date range: ${earliest} → ${latest}`);
+for (const k of Object.keys(byMonth).sort()) {
+  const v = byMonth[k];
+  console.log(`  ${k}  trades=${String(v.n).padStart(3)}  profit=$${v.profit.toFixed(2)}`);
+}
+
+// ── 5. partner capital per month (the % denominator) ────────────────
+const pSnap2 = await db.collection("partners").get();
+let capTotal = 0;
+const hist = [];
+for (const d of pSnap2.docs) {
+  const r = d.data();
+  if (r.archived_at) continue;
+  capTotal += Number(r.totalDeposits ?? r.currentBalance ?? 0);
+  const bh = Array.isArray(r.balanceHistory) ? r.balanceHistory : [];
+  hist.push(`${r.name}: ${bh.length} balanceHistory entries`);
+}
+console.log(`\ncurrent total capital (totalDeposits): $${capTotal.toFixed(2)}`);
+hist.forEach((h) => console.log("  " + h));
+
 ok("diagnostic complete");
