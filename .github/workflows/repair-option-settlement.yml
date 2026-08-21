@@ -1,11 +1,15 @@
 # Undo the premature/marked option closes written by the old expiration
-# sweep. This edits money-bearing records, so it never runs on a schedule
-# and the write is gated behind an explicit flag, separate from the dry run.
+# sweep. This edits money-bearing records, so it never runs on a schedule.
 #
-#   commit message contains [repair-options-dry]    → report only, no writes
-#   commit message contains [repair-options-apply]  → write the repair
+# A push can only ever produce a REPORT. Writing requires a manual
+# workflow_dispatch with apply=true — a deliberate button press, not
+# something a commit can ask for.
 #
-# workflow_dispatch is offered too, for running it from the Actions tab.
+# It used to accept an apply flag in the commit message, and that misfired
+# immediately: the commit which introduced the flag described it in its own
+# body, `contains()` matched the description, and the intended dry run
+# wrote 12 rows. A trigger that can be tripped by prose about the trigger
+# is not a safeguard, so the push path no longer has a write mode at all.
 
 name: Repair Option Settlement
 
@@ -28,8 +32,7 @@ jobs:
   repair:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.head_commit.message || '', '[repair-options-dry]') ||
-      contains(github.event.head_commit.message || '', '[repair-options-apply]')
+      contains(github.event.head_commit.message || '', '[repair-options-dry]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,12 +48,12 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # Only the explicit apply flag (or a dispatch with apply=true)
           # authorises a write. Everything else is a report.
-          # Parenthesised so the boolean is resolved BEFORE the '1'/'0'
-          # mapping — && binds tighter than || in GitHub expressions, and
-          # without the parens a dispatch would export "true" instead of "1".
+          # Only a dispatch can authorise a write. Parenthesised so the
+          # boolean resolves BEFORE the '1'/'0' mapping — && binds tighter
+          # than || in GitHub expressions, and without the parens this
+          # would export "true" rather than the flag digit.
           APPLY: >-
-            ${{ ((github.event_name == 'workflow_dispatch' && inputs.apply)
-                 || contains(github.event.head_commit.message || '', '[repair-options-apply]'))
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.apply)
                 && '1' || '0' }}
           TODAY: ${{ github.event_name == 'workflow_dispatch' && inputs.today || '' }}
         run: node scripts/repair-option-settlement.mjs
