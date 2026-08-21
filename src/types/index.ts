@@ -112,6 +112,12 @@ export interface Trade {
   // Covered-call linkage: id of the active stock lot this Sell Call is
   // written against. Null/absent for everything else.
   linkedStockId?: string | null;
+  // Set by the expiration sweep when the last known price was through
+  // the strike, i.e. the contract probably finished in the money and
+  // shares moved. The sweep books the premium and raises this flag
+  // instead of inventing a settlement price; the GP clears it by
+  // recording what actually happened.
+  needsReview?: boolean;
 }
 
 // Journal row from the transactions table — the partner statement's

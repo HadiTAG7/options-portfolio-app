@@ -98,6 +98,9 @@ export interface Database {
           // Covered-call linkage (migration 012): the active stock lot
           // this Sell Call is written against.
           linked_stock_id?: string | null;
+          // Raised by the expiration sweep when an expiry looks assigned
+          // and a human has to settle it. Absent on older rows.
+          needsReview?: boolean | null;
         };
         Insert: {
           id?: string;
@@ -113,6 +116,7 @@ export interface Database {
           autoClosed?: boolean;
           created_at?: string | null;
           linked_stock_id?: string | null;
+          needsReview?: boolean | null;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];

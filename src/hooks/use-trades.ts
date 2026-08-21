@@ -24,12 +24,20 @@ function rowToTrade(row: TradeRow): Trade {
     autoClosed: row.autoClosed ?? false,
     createdAt: row.created_at ?? null,
     linkedStockId: row.linked_stock_id ?? null,
+    needsReview: row.needsReview === true,
   };
 }
 
 // A trade is expired when it's still open, has a valid expiration date,
-// the expiration is on or before today, and it's a short option position
-// (Sell Put / Sell Call). Stock Sell rows never expire.
+// the expiration is STRICTLY IN THE PAST, and it's a short option
+// position (Sell Put / Sell Call). Stock Sell rows never expire.
+//
+// The strictness matters. This used to fire on `today >= expiration`,
+// which settled contracts on their own expiration day — while they were
+// still trading, often before the US open. A contract that has not
+// expired has no settlement value, so anything booked for it is a guess
+// about the rest of the session. On 2026-08-21 that guess wiped $6,115
+// off July's total for a MSFT covered call that was still live.
 function isExpiredOption(trade: Trade, now: Date = new Date()): boolean {
   if (trade.status !== "open") return false;
   if (trade.type !== "Sell Put" && trade.type !== "Sell Call") return false;
@@ -38,14 +46,15 @@ function isExpiredOption(trade: Trade, now: Date = new Date()): boolean {
   const expDate = new Date(trade.expiration);
   if (Number.isNaN(expDate.getTime())) return false;
 
-  // Compare at day granularity (midnight) — if today >= expiration day, it's expired.
+  // Compare at day granularity (midnight): only once the expiration day
+  // is fully behind us is the outcome a fact rather than a forecast.
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const exp = new Date(
     expDate.getFullYear(),
     expDate.getMonth(),
     expDate.getDate()
   );
-  return today.getTime() >= exp.getTime();
+  return today.getTime() > exp.getTime();
 }
 
 function rowToActiveStock(row: ActiveStockRow): ActiveStock {
@@ -227,7 +236,12 @@ export function useTrades() {
   const checkAndCloseExpiredTrades = useCallback(
     async (trades: Trade[], stocks: ActiveStock[]) => {
       const expired = trades.filter((t) => isExpiredOption(t));
-      if (expired.length === 0) return { closed: 0, unverified: [] as string[] };
+      if (expired.length === 0)
+        return {
+          closed: 0,
+          unverified: [] as string[],
+          needsSettlement: [] as string[],
+        };
 
       console.log(
         "[useTrades] expiring",
@@ -246,31 +260,52 @@ export function useTrades() {
         }
       }
 
-      // Result of an expired short option.
+      // Result of an expired short option: the premium, full stop.
       // `quantity` already stores total shares (100, 200, ...), not # of
       // contracts, so we must NOT multiply by 100 again.
-      //  - OTM (or no spot available): full premium is kept.
-      //  - ITM (spot known): intrinsic value is surrendered against the
-      //    premium — (premium − intrinsic) × qty, which can go negative.
-      //    Booking full premium on an ITM expiry fabricated profit on
-      //    losing positions.
-      const computeResult = (t: Trade) => {
-        const premium = Number(t.premium) || 0;
-        const qty = Number(t.quantity) || 0;
+      //
+      // This used to subtract an intrinsic value derived from the LIVE
+      // quote at sweep time, and that was the bug behind every drifting
+      // month in this book. Three things were wrong with it:
+      //
+      //   1. The price was whenever-the-app-happened-to-open, not the
+      //      price at expiration. The same expiry booked a different
+      //      number depending on when a browser loaded the page — the
+      //      definition of a figure you cannot report to partners.
+      //   2. An option's month bucket is its TRADE date, so a mark
+      //      computed in August silently rewrote July, a month already
+      //      reported. Closing a position must never move a past total.
+      //   3. On a covered call, surrendering intrinsic is only half the
+      //      event: the shares are delivered at the strike, which is a
+      //      gain the sweep never booked. It recorded the loss leg and
+      //      left the offsetting leg out, so every ITM covered expiry
+      //      understated the month.
+      //
+      // Booking the premium is not a simplification — it is the only
+      // figure that is a fact (the cash was received on the trade date)
+      // and it is exactly what the month already showed while the
+      // position was open, so open → closed is profit-neutral by
+      // construction. Anything beyond that is a settlement decision:
+      // assignment, or a buy-back at a real price. Those are recorded
+      // deliberately — the shares sold via sellStock, the option result
+      // edited via updateTrade — never guessed from a quote.
+      const settledResult = (t: Trade) =>
+        (Number(t.premium) || 0) * (Number(t.quantity) || 0);
+
+      // A live quote is good enough to ASK, never good enough to BOOK.
+      // If the last known price is through the strike, the expiry was
+      // probably assigned, so the row is flagged for the GP to settle
+      // explicitly rather than being marked behind their back.
+      const maybeAssigned = (t: Trade) => {
         const spot = spotByTicker[t.ticker.toUpperCase()];
-        if (typeof spot === "number") {
-          const strike = Number(t.strike) || 0;
-          const intrinsic =
-            t.type === "Sell Put"
-              ? Math.max(0, strike - spot)
-              : Math.max(0, spot - strike);
-          return (premium - intrinsic) * qty;
-        }
-        return premium * qty;
+        if (typeof spot !== "number") return false;
+        const strike = Number(t.strike) || 0;
+        if (strike <= 0) return false;
+        return t.type === "Sell Call" ? spot > strike : spot < strike;
       };
 
       // Tickers auto-closed blind (no live quote) — surfaced to the user
-      // so they can correct the result manually if the expiry was ITM.
+      // so they can settle manually if the expiry was in the money.
       const unverified = [
         ...new Set(
           expired
@@ -281,6 +316,10 @@ export function useTrades() {
         ),
       ];
 
+      // Rows whose expiry looks assigned — the GP has to decide, and the
+      // toast names them so the decision isn't left implicit.
+      const needsSettlement = expired.filter(maybeAssigned);
+
       if (!usingSeedData) {
         // Per-row updates because each expired trade has a different result.
         await Promise.all(
@@ -290,7 +329,8 @@ export function useTrades() {
               .update({
                 status: "closed",
                 autoClosed: true,
-                result: computeResult(t),
+                result: settledResult(t),
+                needsReview: maybeAssigned(t),
               })
               .eq("id", t.id);
             if (upErr) {
@@ -312,13 +352,20 @@ export function useTrades() {
                 ...t,
                 status: "closed",
                 autoClosed: true,
-                result: computeResult(t),
+                result: settledResult(t),
+                needsReview: maybeAssigned(t),
               }
             : t
         )
       );
 
-      return { closed: expired.length, unverified };
+      return {
+        closed: expired.length,
+        unverified,
+        needsSettlement: needsSettlement.map(
+          (t) => `${t.ticker} ${t.strike}`
+        ),
+      };
     },
     [usingSeedData]
   );
@@ -343,16 +390,24 @@ export function useTrades() {
     setExpirationRan(key);
 
     void (async () => {
-      const { closed, unverified } = await checkAndCloseExpiredTrades(
-        tradesList,
-        activeStocksList
-      );
+      const { closed, unverified, needsSettlement } =
+        await checkAndCloseExpiredTrades(tradesList, activeStocksList);
       if (closed > 0) {
-        setToast(
-          unverified.length > 0
-            ? `تم إغلاق ${closed} صفقة منتهية — لا يوجد سعر مرجعي لـ ${unverified.join("، ")}: راجع النتيجة يدوياً إذا انتهى العقد ITM`
-            : `تم إغلاق ${closed} صفقة منتهية وفق آخر سعر معروف`
-        );
+        // The close itself never changes a month's profit — the premium
+        // was already counted. What the GP has to act on is settlement:
+        // a contract that finished in the money means shares moved, and
+        // only they can record that. Say so instead of implying the
+        // number was worked out from a price.
+        const parts = [`تم إغلاق ${closed} عقد منتهي — العلاوة المحصّلة كما هي`];
+        if (needsSettlement.length > 0) {
+          parts.push(
+            `يحتاج تسوية (انتهى داخل السعر): ${needsSettlement.join("، ")} — سجّل بيع الأسهم أو كلفة الإغلاق الفعلية`
+          );
+        }
+        if (unverified.length > 0) {
+          parts.push(`لا يوجد سعر مرجعي لـ ${unverified.join("، ")}`);
+        }
+        setToast(parts.join(" · "));
       }
     })();
   }, [

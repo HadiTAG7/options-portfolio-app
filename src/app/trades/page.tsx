@@ -1440,7 +1440,20 @@ function TradeSection({
         className={`border-t border-zinc-800/50 transition-colors hover:bg-emerald-500/[0.04] ${zebra}`}
       >
         <td className="px-4 py-3 font-mono font-bold tracking-wider text-white">
-          {trade.ticker}
+          <span className="inline-flex items-center gap-2">
+            {trade.ticker}
+            {/* The expiry finished through the strike, so shares almost
+                certainly moved. The sweep deliberately did NOT guess a
+                number for it — this badge is the ask. */}
+            {trade.needsReview && (
+              <span
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-sans text-[9px] font-semibold tracking-normal text-amber-300"
+                title="انتهى العقد داخل السعر — سجّل التسوية الفعلية (بيع الأسهم أو كلفة الإغلاق). العلاوة محفوظة كما هي حتى تسجّلها."
+              >
+                يحتاج تسوية
+              </span>
+            )}
+          </span>
         </td>
         <td className="px-4 py-3">
           <span

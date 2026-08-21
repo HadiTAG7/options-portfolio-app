@@ -1,0 +1,56 @@
+# Undo the premature/marked option closes written by the old expiration
+# sweep. This edits money-bearing records, so it never runs on a schedule
+# and the write is gated behind an explicit flag, separate from the dry run.
+#
+#   commit message contains [repair-options-dry]    → report only, no writes
+#   commit message contains [repair-options-apply]  → write the repair
+#
+# workflow_dispatch is offered too, for running it from the Actions tab.
+
+name: Repair Option Settlement
+
+on:
+  push:
+    branches:
+      - claude/write-app-prompt-8V4uK
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write the changes (false = dry run)"
+        type: boolean
+        default: false
+      today:
+        description: "Override today's date (YYYY-MM-DD), optional"
+        type: string
+        default: ""
+
+jobs:
+  repair:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message || '', '[repair-options-dry]') ||
+      contains(github.event.head_commit.message || '', '[repair-options-apply]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Repair
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Only the explicit apply flag (or a dispatch with apply=true)
+          # authorises a write. Everything else is a report.
+          # Parenthesised so the boolean is resolved BEFORE the '1'/'0'
+          # mapping — && binds tighter than || in GitHub expressions, and
+          # without the parens a dispatch would export "true" instead of "1".
+          APPLY: >-
+            ${{ ((github.event_name == 'workflow_dispatch' && inputs.apply)
+                 || contains(github.event.head_commit.message || '', '[repair-options-apply]'))
+                && '1' || '0' }}
+          TODAY: ${{ github.event_name == 'workflow_dispatch' && inputs.today || '' }}
+        run: node scripts/repair-option-settlement.mjs
