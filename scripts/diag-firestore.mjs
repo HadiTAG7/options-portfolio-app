@@ -157,4 +157,62 @@ for (const d of pSnap2.docs) {
 console.log(`\ncurrent total capital (totalDeposits): $${capTotal.toFixed(2)}`);
 hist.forEach((h) => console.log("  " + h));
 
+
+// ── 6. reconstruct ownership % at past month-ends from balanceHistory ─
+// The GP can't recall his ownership share in Jan-Mar, and that share is the
+// only thing standing between his personal records and a fund-wide figure.
+// balanceHistory holds dated balance snapshots, so the split is recoverable
+// rather than guessed.
+const capAsOf = (bh, cutoff) => {
+  let best = null, bestDate = "";
+  for (const h of bh) {
+    const d = String(h?.date ?? "").slice(0, 10);
+    if (!d || d > cutoff) continue;
+    if (d >= bestDate) { bestDate = d; best = Number(h.balance) || 0; }
+  }
+  return best;
+};
+const people = pSnap2.docs.map((d) => d.data()).filter((r) => !r.archived_at);
+console.log("\nbalanceHistory coverage (earliest → latest per partner):");
+for (const r of people) {
+  const bh = Array.isArray(r.balanceHistory) ? r.balanceHistory : [];
+  const ds = bh.map((h) => String(h?.date ?? "").slice(0, 10)).filter(Boolean).sort();
+  console.log(`  ${r.name}: ${ds.length ? ds[0] + " → " + ds[ds.length - 1] : "EMPTY"}`);
+}
+console.log("\nreconstructed ownership at month-end:");
+for (const cutoff of ["2026-01-31","2026-02-28","2026-03-31","2026-04-30","2026-07-31"]) {
+  const caps = people.map((r) => ({
+    name: r.name,
+    cap: capAsOf(Array.isArray(r.balanceHistory) ? r.balanceHistory : [], cutoff),
+  }));
+  const known = caps.filter((c) => c.cap !== null);
+  const total = known.reduce((s, c) => s + c.cap, 0);
+  const gp = caps.find((c) => /هادي/.test(c.name));
+  const missing = caps.length - known.length;
+  console.log(
+    `  ${cutoff}: total=$${total.toFixed(0)}  GP=$${gp && gp.cap !== null ? gp.cap.toFixed(0) : "n/a"}` +
+    `  GP share=${total > 0 && gp && gp.cap !== null ? ((gp.cap / total) * 100).toFixed(1) + "%" : "n/a"}` +
+    `  (partners w/o data: ${missing})`
+  );
+}
+
+// ── 7. July trades in detail — what actually changed ─────────────────
+console.log("\nJuly 2026 trades (why the month total moved):");
+let openPrem = 0, closedRes = 0;
+for (const d of tSnap.docs) {
+  const r = d.data();
+  const date = String(r.date || "").slice(0, 10);
+  if (!date.startsWith("2026-07")) continue;
+  const isShort = r.type === "Sell Put" || r.type === "Sell Call";
+  const status = r.status ?? "open";
+  const prem = Number(r.premium || 0) * Number(r.quantity || 0);
+  const res = Number(r.result || 0);
+  if (isShort && status === "open") openPrem += prem; else closedRes += res;
+  console.log(
+    `  ${date} ${String(r.ticker).padEnd(6)} ${String(r.type).padEnd(10)} ${status.padEnd(7)}` +
+    ` qty=${String(r.quantity).padStart(4)} premium*qty=$${prem.toFixed(0).padStart(7)} result=$${res.toFixed(0).padStart(7)}`
+  );
+}
+console.log(`  → open premium total=$${openPrem.toFixed(2)}, closed results total=$${closedRes.toFixed(2)}, sum=$${(openPrem+closedRes).toFixed(2)}`);
+
 ok("diagnostic complete");
