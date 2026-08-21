@@ -215,4 +215,128 @@ for (const d of tSnap.docs) {
 }
 console.log(`  → open premium total=$${openPrem.toFixed(2)}, closed results total=$${closedRes.toFixed(2)}, sum=$${(openPrem+closedRes).toFixed(2)}`);
 
+// ── 8. MSFT deep dive + book-wide consistency of closed short options ─
+// The July total hinges on ONE row: a MSFT covered call carrying a large
+// negative `result` while the underlying shares are still in the book.
+// Two readings are possible and they differ by ~$6k:
+//   (a) the call was really bought back → the loss is realized and the
+//       offsetting share gain is still unrealized;
+//   (b) the row was marked closed with a MARK-TO-MARKET number, which is
+//       not how any other open short option in this book is valued.
+// This section prints the evidence that separates them: the MSFT rows in
+// full, and every closed short option's result next to the premium it
+// collected, so an outlier is visible instead of assumed.
+console.log("\n=== MSFT rows (trades) ===");
+for (const d of tSnap.docs) {
+  const r = d.data();
+  if (String(r.ticker).toUpperCase() !== "MSFT") continue;
+  console.log(
+    `  id=${d.id} ${r.date} ${r.type} status=${r.status ?? "open"} qty=${r.quantity}` +
+      ` premium=${r.premium} strike=${r.strike} result=${r.result}` +
+      ` exp=${r.expiration ?? "-"} autoClosed=${r.autoClosed ?? false}` +
+      ` linkedStockId=${r.linked_stock_id ?? r.linkedStockId ?? "-"}`
+  );
+}
+
+const stSnap = await db.collection("active_stocks").get();
+console.log(`\n=== active_stocks (${stSnap.size}) ===`);
+for (const d of stSnap.docs) {
+  const r = d.data();
+  console.log(
+    `  id=${d.id} ${String(r.ticker).padEnd(6)} qty=${String(r.quantity).padStart(4)}` +
+      ` buy=$${Number(r.purchasePrice || 0).toFixed(2)} target=$${Number(r.targetSellPrice || 0).toFixed(2)}` +
+      ` cached=$${r.currentPrice ?? "-"} bought=${r.purchaseDate ?? "-"}`
+  );
+}
+
+console.log("\n=== closed short options: result vs premium collected ===");
+console.log("  (expired-worthless rows should show result ≈ premium*qty)");
+const closedShorts = [];
+for (const d of tSnap.docs) {
+  const r = d.data();
+  const isShort = r.type === "Sell Put" || r.type === "Sell Call";
+  if (!isShort) continue;
+  if ((r.status ?? "open") === "open") continue;
+  const prem = Number(r.premium || 0) * Number(r.quantity || 0);
+  const res = Number(r.result || 0);
+  closedShorts.push({ ticker: r.ticker, date: String(r.date || "").slice(0, 10), prem, res, gap: res - prem, status: r.status });
+}
+closedShorts.sort((a, b) => a.gap - b.gap);
+for (const c of closedShorts) {
+  console.log(
+    `  ${c.date} ${String(c.ticker).padEnd(6)} ${String(c.status).padEnd(8)}` +
+      ` premium=$${c.prem.toFixed(0).padStart(7)} result=$${c.res.toFixed(0).padStart(7)}` +
+      ` result-premium=$${c.gap.toFixed(0).padStart(8)}`
+  );
+}
+
+// Does the recorded loss equal TODAY's intrinsic value of the short call?
+// If it matches to the cent, the row is a live mark, not a settled trade.
+console.log("\n=== is the MSFT result a mark-to-market? ===");
+const msftCall = tSnap.docs
+  .map((d) => ({ id: d.id, ...d.data() }))
+  .find(
+    (r) =>
+      String(r.ticker).toUpperCase() === "MSFT" &&
+      r.type === "Sell Call" &&
+      (r.status ?? "open") !== "open"
+  );
+const msftLot = stSnap.docs
+  .map((d) => d.data())
+  .find((r) => String(r.ticker).toUpperCase() === "MSFT");
+if (!msftCall) {
+  console.log("  no closed MSFT short call found");
+} else {
+  const qty = Number(msftCall.quantity || 0);
+  const prem = Number(msftCall.premium || 0) * qty;
+  const res = Number(msftCall.result || 0);
+  const buyback = prem - res; // what closing the short cost
+  const perShare = qty > 0 ? buyback / qty : 0;
+  const strike = Number(msftCall.strike || 0);
+  console.log(`  premium collected  = $${prem.toFixed(2)}`);
+  console.log(`  recorded result    = $${res.toFixed(2)}`);
+  console.log(`  implied buyback    = $${buyback.toFixed(2)}  ($${perShare.toFixed(2)}/share)`);
+  console.log(`  strike             = $${strike.toFixed(2)}`);
+  console.log(`  implied spot       = strike + per-share = $${(strike + perShare).toFixed(2)}`);
+  let spot = null;
+  try {
+    const y = await fetch(
+      "https://query1.finance.yahoo.com/v8/finance/chart/MSFT?range=5d&interval=1d"
+    );
+    const j = await y.json();
+    const q = j?.chart?.result?.[0];
+    const closes = (q?.indicators?.quote?.[0]?.close ?? []).filter((v) => typeof v === "number");
+    spot = q?.meta?.regularMarketPrice ?? closes[closes.length - 1] ?? null;
+  } catch (e) {
+    warn(`  spot fetch failed: ${e.message}`);
+  }
+  if (spot !== null) {
+    console.log(`  MSFT spot now      = $${Number(spot).toFixed(2)}`);
+    const diff = Math.abs(strike + perShare - Number(spot));
+    console.log(
+      `  |implied spot - spot| = $${diff.toFixed(2)}  → ${diff < 1 ? "MATCHES today's intrinsic ⇒ MARK-TO-MARKET, not a settled buyback" : "does NOT match today ⇒ consistent with a real buyback at an earlier price"}`
+    );
+  }
+  if (msftLot) {
+    const lotQty = Number(msftLot.quantity || 0);
+    const buy = Number(msftLot.purchasePrice || 0);
+    console.log(
+      `  shares still held  = ${lotQty} @ $${buy.toFixed(2)}` +
+        (spot !== null
+          ? `  unrealized = $${((Number(spot) - buy) * lotQty).toFixed(2)}`
+          : "")
+    );
+    console.log(
+      `  if assigned at $${strike.toFixed(2)}: share gain $${((strike - buy) * Math.min(lotQty, qty)).toFixed(2)} + premium $${prem.toFixed(2)} = $${((strike - buy) * Math.min(lotQty, qty) + prem).toFixed(2)} capped total`
+    );
+  }
+  console.log("\n=== July under each reading ===");
+  console.log(`  (a) result as recorded, realized only : $${(openPrem + closedRes).toFixed(2)}`);
+  console.log(`  (b) call valued at premium collected  : $${(openPrem + closedRes - res + prem).toFixed(2)}`);
+  if (spot !== null && msftLot) {
+    const unreal = (Number(spot) - Number(msftLot.purchasePrice || 0)) * Number(msftLot.quantity || 0);
+    console.log(`  (c) as recorded + unrealized shares  : $${(openPrem + closedRes + unreal).toFixed(2)}`);
+  }
+}
+
 ok("diagnostic complete");
