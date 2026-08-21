@@ -16,6 +16,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { MonthlyBreakdownDialog } from "@/components/ui/monthly-breakdown-dialog";
+import { BenchmarkComparison } from "@/components/ui/benchmark-comparison";
 import { ExpiryAlert } from "@/components/ui/expiry-alert";
 import {
   formatWholeNumber,
@@ -214,6 +215,22 @@ export default function DashboardPage() {
         };
       });
   }, [monthlyProfitBuckets, partners, trades]);
+
+  // Rows for the benchmark comparison. Derived from monthlyLedger so the
+  // fund's return uses the exact profit and capital the monthly breakdown
+  // shows — one source, no second calculation to drift.
+  const benchmarkMonths = useMemo(
+    () =>
+      monthlyLedger
+        .filter((r) => r.grossProfit !== 0)
+        .map((r) => ({
+          key: r.key,
+          labelAr: r.labelAr,
+          profit: r.grossProfit,
+          capital: r.totalCapital,
+        })),
+    [monthlyLedger]
+  );
 
   // Monthly averages across every month that has activity. Derived from
   // monthlyLedger — the same rows the two breakdown dialogs list — so the
@@ -599,6 +616,8 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      <BenchmarkComparison months={benchmarkMonths} />
 
       {/* ═══════ Chart Section ═══════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
