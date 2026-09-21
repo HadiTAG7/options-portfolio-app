@@ -39,6 +39,7 @@ function formatExpiry(expiry: string): string {
 function partnerFriendlyType(type: string): { ar: string; en: string } {
   if (type === "Sell Put") return { ar: "تأمين نقدي", en: "Cash Secured Put" };
   if (type === "Sell Call") return { ar: "بيع مغطى", en: "Covered Call" };
+  if (type === "Buy Close") return { ar: "شراء إغلاق", en: "Buy to Close" };
   return { ar: type, en: "" };
 }
 

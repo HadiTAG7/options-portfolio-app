@@ -18,6 +18,8 @@ function typeLabel(type: string): { ar: string; en: string } {
       return { ar: "بيع سهم", en: "Stock Sale" };
     case "Dividend":
       return { ar: "توزيعات أرباح", en: "Dividend" };
+    case "Buy Close":
+      return { ar: "شراء إغلاق", en: "Buy to Close" };
     default:
       return { ar: type, en: "" };
   }

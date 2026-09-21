@@ -25,6 +25,7 @@ function rowToTrade(row: TradeRow): Trade {
     createdAt: row.created_at ?? null,
     linkedStockId: row.linked_stock_id ?? null,
     needsReview: row.needsReview === true,
+    linkedTradeId: row.linked_trade_id ?? null,
   };
 }
 
@@ -809,6 +810,87 @@ export function useTrades() {
     [usingSeedData, enrichWithLivePrices]
   );
 
+  // Record an early buy-back of a short option as TWO dated cash flows:
+  //   1. the original sell row closes at its FULL premium — that cash was
+  //      collected in the month it was sold and stays there;
+  //   2. a "Buy Close" row books −(price × qty) dated the day the
+  //      buy-back actually happened.
+  // So a contract sold in August and bought back in September leaves
+  // August's total untouched and charges September — the month a
+  // statement was already sent for can never move again. Netting both
+  // into the sell row (the old habit) is exactly the retroactivity this
+  // schema exists to prevent.
+  //
+  // Also the migration path for rows already netted the old way: it
+  // works on a CLOSED row too, restoring the premium to the sale month
+  // and moving the embedded cost to its real date.
+  const recordBuyback = useCallback(
+    async (trade: Trade, opts: { price: number; date: string }) => {
+      setError(null);
+
+      const qty = Number(trade.quantity) || 0;
+      const premiumTotal = (Number(trade.premium) || 0) * qty;
+      const cost = opts.price * qty;
+
+      const buyRow = {
+        id: crypto.randomUUID(),
+        ticker: trade.ticker.toUpperCase(),
+        type: "Buy Close",
+        quantity: qty,
+        premium: opts.price, // buy-back price per share
+        strike: trade.strike, // carried for display only (no ROC/collateral)
+        result: -cost,
+        expiration: "",
+        date: opts.date,
+        status: "closed" as const,
+        autoClosed: false,
+        linked_trade_id: trade.id,
+      };
+
+      const { data, error: insertError } = await supabase
+        .from("trades")
+        .insert(buyRow)
+        .select()
+        .single();
+      if (insertError) {
+        console.error("[recordBuyback] insert failed:", insertError);
+        setError(`فشل تسجيل إعادة الشراء: ${insertError.message}`);
+        throw insertError;
+      }
+
+      // Close (or re-anchor) the sell row at the premium it collected.
+      // needsReview clears: the settlement is now recorded, not pending.
+      const sellUpdate = {
+        status: "closed" as const,
+        autoClosed: false,
+        result: premiumTotal,
+        needsReview: false,
+      };
+      if (!usingSeedData) {
+        const { error: upErr } = await supabase
+          .from("trades")
+          .update(sellUpdate)
+          .eq("id", trade.id);
+        if (upErr) {
+          console.error("[recordBuyback] sell-row update failed:", upErr);
+          setError(`سُجّل الشراء لكن تعذّر تحديث صف البيع: ${upErr.message}`);
+        }
+      }
+
+      setTradesList((prev) => [
+        ...prev.map((t) => (t.id === trade.id ? { ...t, ...sellUpdate } : t)),
+        rowToTrade(data as TradeRow),
+      ]);
+
+      const buyMonth = opts.date.slice(0, 7);
+      const sellMonth = (trade.date || "").slice(0, 10).slice(0, 7);
+      setToast(
+        `تم تسجيل إعادة شراء ${trade.ticker.toUpperCase()}: العلاوة ${formatCurrency(premiumTotal)} باقية في ${sellMonth}، والتكلفة ${formatCurrency(cost)} على ${buyMonth}`
+      );
+    },
+    [usingSeedData]
+  );
+
   // Sell an active stock lot — fully or partially. Books the realized
   // P&L as a "Stock Sell" trade row dated at the SELL date: the
   // distribution engine buckets profit by tradeProfitDate (= t.date for
@@ -972,6 +1054,13 @@ export function useTrades() {
       ),
     [tradesList]
   );
+  // Buy-back legs. Each one is the −cost half of an early close, dated
+  // the day the cash actually left — the sell row it points at keeps its
+  // full premium in ITS month.
+  const buyCloses = useMemo(
+    () => tradesList.filter((t) => t.type === "Buy Close"),
+    [tradesList]
+  );
 
   // Total premium = sum of tradeProfit() for EVERY Sell Put / Sell Call
   // row, open or closed. tradeProfit returns premium * quantity for
@@ -987,16 +1076,19 @@ export function useTrades() {
     [tradesList]
   );
   // Realized result = locked-in P&L from Stock Sell rows + cash
-  // dividends. Closed option results are already counted in
-  // totalPremium above (via tradeProfit), so including closedOptions
-  // here would double-count every expired Sell Put / Sell Call.
+  // dividends + option buy-back costs (Buy Close rows, always ≤ 0).
+  // Closed option results are already counted in totalPremium above
+  // (via tradeProfit), so including closedOptions here would
+  // double-count every expired Sell Put / Sell Call — but the buy-back
+  // leg lives on its own row precisely so it is NOT inside the option's
+  // result, which is why it must be summed here.
   const totalResult = useMemo(
     () =>
-      [...stockSells, ...dividends].reduce(
+      [...stockSells, ...dividends, ...buyCloses].reduce(
         (sum, t) => sum + Number(t.result || 0),
         0
       ),
-    [stockSells, dividends]
+    [stockSells, dividends, buyCloses]
   );
   // Unrealized mark-to-market P&L on the active stock book.
   //   (currentPrice − purchasePrice) × quantity
@@ -1100,6 +1192,7 @@ export function useTrades() {
     stockSells,
     dividends,
     closedOptions,
+    buyCloses,
     activeStocks: activeStocksList,
     loading,
     error,
@@ -1117,6 +1210,7 @@ export function useTrades() {
     addTrade,
     deleteTrade,
     recordAssignment,
+    recordBuyback,
     sellStock,
     recordDividend,
     toast,

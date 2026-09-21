@@ -118,6 +118,10 @@ export interface Trade {
   // instead of inventing a settlement price; the GP clears it by
   // recording what actually happened.
   needsReview?: boolean;
+  // On a "Buy Close" row: the id of the short-option row it bought
+  // back. Lets the UI pair the two legs (badge on the original, net
+  // outcome in the win-rate stats) without guessing by ticker.
+  linkedTradeId?: string | null;
 }
 
 // Journal row from the transactions table — the partner statement's

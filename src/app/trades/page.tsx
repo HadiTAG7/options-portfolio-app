@@ -24,10 +24,12 @@ import {
   TrendingDown,
   TrendingUp,
   Trash2,
+  Undo2,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { TableRowSkeleton } from "@/components/ui/skeleton";
 import { EditTradeDialog } from "@/components/ui/edit-trade-dialog";
+import { BuybackDialog } from "@/components/ui/buyback-dialog";
 import type { TradeEditPayload } from "@/components/ui/edit-trade-dialog";
 import { EditStockDialog } from "@/components/ui/edit-stock-dialog";
 import type { StockEditPayload } from "@/components/ui/edit-stock-dialog";
@@ -67,6 +69,8 @@ function typeBadgeClass(type: string): string {
       return "border-emerald-500/30 text-emerald-300 bg-emerald-500/5";
     case "Dividend":
       return "border-amber-400/30 text-amber-300 bg-amber-400/5";
+    case "Buy Close":
+      return "border-orange-400/30 text-orange-300 bg-orange-400/5";
     default:
       return "border-zinc-700/50 text-zinc-400 bg-zinc-900/40";
   }
@@ -99,6 +103,7 @@ export default function TradesPage() {
     sellPuts,
     stockSells,
     closedOptions,
+    buyCloses,
     activeStocks,
     loading,
     error,
@@ -113,6 +118,7 @@ export default function TradesPage() {
     addTrade,
     deleteTrade,
     recordAssignment,
+    recordBuyback,
     sellStock,
     recordDividend,
     toast,
@@ -294,15 +300,59 @@ export default function TradesPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [assigningTrade, setAssigningTrade] = useState<Trade | null>(null);
+  const [buyingBackTrade, setBuyingBackTrade] = useState<Trade | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [dailyOpen, setDailyOpen] = useState(false);
   const pricesRefreshing = activeStocks.some((s) => s.priceLoading);
 
   // Wheel-strategy stats: annualized return on locked collateral,
   // win rate over closed options, collateral currently committed.
+  // Sell rows that have a recorded buy-back leg, keyed by the original
+  // trade id. Drives the "أُعيد شراؤه" badge and hides the buy-back
+  // action once a row is already split.
+  const buybackLinkedIds = useMemo(
+    () =>
+      new Set(
+        buyCloses
+          .map((b) => b.linkedTradeId)
+          .filter((id): id is string => Boolean(id))
+      ),
+    [buyCloses]
+  );
+
+  // The closed-positions table shows both legs: the sells (full premium,
+  // in their sale month) and the Buy Close rows (−cost, in their buy
+  // month). tradeMonthKey buckets each by its own date, so the month
+  // groups tell the split story without any extra logic.
+  const closedLedger = useMemo(
+    () => [...closedOptions, ...buyCloses],
+    [closedOptions, buyCloses]
+  );
+
+  // Win-rate honesty: a bought-back sell row carries the FULL premium as
+  // its result (the cost lives on the linked row), so judging wins from
+  // the raw rows would count every buy-back as a win regardless of what
+  // it actually netted. Fold each linked cost back into its sell row for
+  // the stats only — the ledger rows themselves stay split.
+  const closedForStats = useMemo(() => {
+    const costByLinked = new Map<string, number>();
+    for (const b of buyCloses) {
+      if (b.linkedTradeId) {
+        costByLinked.set(
+          b.linkedTradeId,
+          (costByLinked.get(b.linkedTradeId) ?? 0) + (Number(b.result) || 0)
+        );
+      }
+    }
+    return closedOptions.map((t) => {
+      const cost = costByLinked.get(t.id);
+      return cost ? { ...t, result: (Number(t.result) || 0) + cost } : t;
+    });
+  }, [closedOptions, buyCloses]);
+
   const wheelSummary = useMemo(
-    () => computeWheelSummary([...sellPuts, ...sellCalls], closedOptions),
-    [sellPuts, sellCalls, closedOptions]
+    () => computeWheelSummary([...sellPuts, ...sellCalls], closedForStats),
+    [sellPuts, sellCalls, closedForStats]
   );
 
   // Stock lots covered by an open Sell Call (linked via linked_stock_id).
@@ -1162,6 +1212,8 @@ export default function TradesPage() {
         onEdit={setEditingTrade}
         onDelete={setDeletingTrade}
         onAssign={setAssigningTrade}
+        onBuyback={setBuyingBackTrade}
+        buybackLinked={buybackLinkedIds}
         showRoc
       />
 
@@ -1175,19 +1227,23 @@ export default function TradesPage() {
         valueColumn="premium"
         onEdit={setEditingTrade}
         onDelete={setDeletingTrade}
+        onBuyback={setBuyingBackTrade}
+        buybackLinked={buybackLinkedIds}
         showRoc
       />
 
       <TradeSection
-        title="Expired Options · Auto-Closed"
-        subtitle="الخيارات المنتهية"
+        title="Closed Options"
+        subtitle="الخيارات المنتهية والمغلقة"
         icon={<CheckCircle2 size={14} />}
         accent="emerald"
-        trades={closedOptions}
+        trades={closedLedger}
         loading={loading}
         valueColumn="result"
         onDelete={setDeletingTrade}
         onAssign={setAssigningTrade}
+        onBuyback={setBuyingBackTrade}
+        buybackLinked={buybackLinkedIds}
         groupByMonth
       />
 
@@ -1225,6 +1281,13 @@ export default function TradesPage() {
         trade={assigningTrade}
         onClose={() => setAssigningTrade(null)}
         onSubmit={recordAssignment}
+      />
+
+      <BuybackDialog
+        open={buyingBackTrade !== null}
+        trade={buyingBackTrade}
+        onClose={() => setBuyingBackTrade(null)}
+        onSubmit={recordBuyback}
       />
 
       <EditTradeDialog
@@ -1356,6 +1419,8 @@ function TradeSection({
   onEdit,
   onDelete,
   onAssign,
+  onBuyback,
+  buybackLinked,
   groupByMonth = false,
   showRoc = false,
 }: {
@@ -1370,6 +1435,13 @@ function TradeSection({
   onDelete?: (trade: Trade) => void;
   // Record a put assignment — button rendered on Sell Put rows only.
   onAssign?: (trade: Trade) => void;
+  // Record an early buy-back. Rendered on OPEN short options (the normal
+  // flow), and on CLOSED ones still carrying an old-style netted result —
+  // where it acts as the repair that splits the two months.
+  onBuyback?: (trade: Trade) => void;
+  // Sell-row ids that already have a Buy Close leg: they get a badge
+  // instead of the button, so a position can't be split twice.
+  buybackLinked?: Set<string>;
   // When true, rows are split into month buckets (newest first) with a
   // sub-header per month showing the count + the month's total PnL.
   groupByMonth?: boolean;
@@ -1378,7 +1450,7 @@ function TradeSection({
 }) {
   const isResult = valueColumn === "result";
   const valueLabelEn = isResult ? "Result" : "Premium";
-  const hasActions = Boolean(onEdit || onDelete || onAssign);
+  const hasActions = Boolean(onEdit || onDelete || onAssign || onBuyback);
   const colCount = (hasActions ? 9 : 8) + (showRoc ? 1 : 0);
 
   // Bucket trades by entry-month (tradeMonthKey) when grouping is on.
@@ -1453,6 +1525,17 @@ function TradeSection({
                 يحتاج تسوية
               </span>
             )}
+            {/* This sell was bought back early: its premium stays here in
+                the sale month, and the cost sits on a linked Buy Close
+                row dated when it happened. */}
+            {buybackLinked?.has(trade.id) && (
+              <span
+                className="rounded-full border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 font-sans text-[9px] font-semibold tracking-normal text-orange-300"
+                title="أُعيد شراء هذا العقد — العلاوة هنا في شهر البيع، والتكلفة مسجّلة كسطر «شراء إغلاق» بتاريخها"
+              >
+                أُعيد شراؤه
+              </span>
+            )}
           </span>
         </td>
         <td className="px-4 py-3">
@@ -1521,6 +1604,27 @@ function TradeSection({
         {hasActions && (
           <td className="px-4 py-3">
             <div className="flex items-center gap-1">
+              {onBuyback &&
+                (trade.type === "Sell Put" || trade.type === "Sell Call") &&
+                !buybackLinked?.has(trade.id) &&
+                (trade.status === "open" ||
+                  // Closed the old way: the whole net was stuffed into
+                  // the sale month. Offer the split-repair.
+                  Math.abs(
+                    (Number(trade.result) || 0) -
+                      (Number(trade.premium) || 0) * (Number(trade.quantity) || 0)
+                  ) > 0.005) && (
+                  <button
+                    onClick={() => onBuyback(trade)}
+                    className="rounded-md border border-orange-400/25 bg-orange-400/5 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-orange-300 transition-all duration-200 hover:scale-[1.03] hover:border-orange-400/50 hover:bg-orange-400/10"
+                    title="تسجيل إعادة شراء — العلاوة تبقى في شهر البيع والتكلفة تُسجّل بتاريخ الشراء"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <Undo2 size={10} />
+                      شراء
+                    </span>
+                  </button>
+                )}
               {onAssign && trade.type === "Sell Put" && (
                 <button
                   onClick={() => onAssign(trade)}

@@ -33,6 +33,10 @@ export function optionDays(t: Trade): number {
 // Annualized return on collateral, in percent. Null when the trade has
 // no strike/quantity to compute against (e.g. legacy rows).
 export function annualizedRoc(t: Trade): number | null {
+  // Only a short option locks collateral. A "Buy Close" row copies the
+  // strike for display, so without this guard it would print a bogus
+  // ROC computed from its buy-back price.
+  if (t.type !== "Sell Put" && t.type !== "Sell Call") return null;
   const collateral = optionCollateral(t);
   if (collateral <= 0) return null;
   const premium = (Number(t.premium) || 0) * (Number(t.quantity) || 0);

@@ -49,6 +49,8 @@ function typeBadgeClass(type: string): string {
       return "border-emerald-500/30 text-emerald-300 bg-emerald-500/5";
     case "Dividend":
       return "border-amber-400/30 text-amber-300 bg-amber-400/5";
+    case "Buy Close":
+      return "border-orange-400/30 text-orange-300 bg-orange-400/5";
     default:
       return "border-zinc-700/50 text-zinc-400 bg-zinc-900/40";
   }

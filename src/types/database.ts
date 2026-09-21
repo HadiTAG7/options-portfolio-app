@@ -101,6 +101,8 @@ export interface Database {
           // Raised by the expiration sweep when an expiry looks assigned
           // and a human has to settle it. Absent on older rows.
           needsReview?: boolean | null;
+          // "Buy Close" rows only: the short-option row they closed.
+          linked_trade_id?: string | null;
         };
         Insert: {
           id?: string;
@@ -117,6 +119,7 @@ export interface Database {
           created_at?: string | null;
           linked_stock_id?: string | null;
           needsReview?: boolean | null;
+          linked_trade_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["trades"]["Insert"]>;
         Relationships: [];
