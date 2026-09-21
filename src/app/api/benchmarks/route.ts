@@ -1,3 +1,4 @@
+import { corsPreflight, withCors } from "@/lib/cors";
 // Benchmark price history, fetched server-side.
 //
 // WHY server-side: Yahoo's chart endpoint sends no CORS headers, so a
@@ -22,7 +23,7 @@ const CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 
 type Series = Record<string, Record<string, number>>;
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   let requested: string[] = [];
   let months = 12;
   try {
@@ -120,4 +121,16 @@ export async function POST(request: Request) {
     { series, errors },
     { headers: { "Cache-Control": "no-store" } }
   );
+}
+
+// The static deployments (Firebase Hosting, the APK) call this route
+// cross-origin on the Vercel host, so it answers the browser's preflight
+// and stamps the allowlisted origin onto the real response. Same-origin
+// callers see no change.
+export function OPTIONS(request: Request) {
+  return corsPreflight(request);
+}
+
+export async function POST(request: Request) {
+  return withCors(request, await handlePost(request));
 }

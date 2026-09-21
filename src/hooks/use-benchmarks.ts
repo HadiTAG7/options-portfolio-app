@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 
 // Benchmarks the fund is measured against. Defaults chosen for THIS book:
 //   SPY  — S&P 500, the default "did we beat the market" yardstick.
@@ -83,7 +84,7 @@ export function useBenchmarks(months: number = 12) {
     async function load() {
       setState((s) => ({ ...s, loading: true }));
       try {
-        const res = await fetch("/api/benchmarks", {
+        const res = await fetch(apiUrl("/api/benchmarks"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbols, months }),

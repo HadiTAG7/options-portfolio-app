@@ -20,6 +20,7 @@
 // entirely — the same reason the reports route is POST. The APK falls back
 // to calling Finnhub directly, so it loses nothing.
 import { sanitizeApiKey } from "@/lib/finnhub";
+import { corsPreflight, withCors } from "@/lib/cors";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 // Server-side key. Prefers a real env var (rotate without a deploy) and
@@ -32,7 +33,7 @@ const KEY =
   sanitizeApiKey(process.env.NEXT_PUBLIC_FINNHUB_API_KEY) ??
   "d7j294pr01qp3g1rhmigd7j294pr01qp3g1rhmj0";
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   let requested: string[] = [];
   try {
     const body = (await request.json()) as { symbols?: unknown };
@@ -122,4 +123,16 @@ export async function POST(request: Request) {
     { quotes, prevCloses, errors, ...(errors.length ? { keyInfo } : {}) },
     { headers: { "Cache-Control": "no-store" } }
   );
+}
+
+// The static deployments (Firebase Hosting, the APK) call this route
+// cross-origin on the Vercel host, so it answers the browser's preflight
+// and stamps the allowlisted origin onto the real response. Same-origin
+// callers see no change.
+export function OPTIONS(request: Request) {
+  return corsPreflight(request);
+}
+
+export async function POST(request: Request) {
+  return withCors(request, await handlePost(request));
 }

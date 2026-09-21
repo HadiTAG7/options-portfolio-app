@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server";
+import { corsPreflight, withCors } from "@/lib/cors";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -91,7 +92,7 @@ function rowToPartner(row: PartnerRow): Partner {
   };
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     // Auth: this endpoint can email every partner, so require the caller
     // to be the GP. The app sends the signed-in user's Firebase ID token
@@ -409,4 +410,16 @@ export async function POST(request: NextRequest) {
         : "Internal server error";
     return Response.json({ success: false, error: msg }, { status: 500 });
   }
+}
+
+// The static deployments (Firebase Hosting, the APK) call this route
+// cross-origin on the Vercel host, so it answers the browser's preflight
+// and stamps the allowlisted origin onto the real response. Same-origin
+// callers see no change.
+export function OPTIONS(request: NextRequest) {
+  return corsPreflight(request);
+}
+
+export async function POST(request: NextRequest) {
+  return withCors(request, await handlePost(request));
 }

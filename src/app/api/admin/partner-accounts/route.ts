@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server";
+import { corsPreflight, withCors } from "@/lib/cors";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { BACKEND } from "@/lib/backend";
@@ -183,7 +184,7 @@ async function postFirebase(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   if (BACKEND === "firebase") return postFirebase(request);
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -358,4 +359,16 @@ export async function POST(request: NextRequest) {
         : "Internal server error";
     return jsonError(500, msg);
   }
+}
+
+// The static deployments (Firebase Hosting, the APK) call this route
+// cross-origin on the Vercel host, so it answers the browser's preflight
+// and stamps the allowlisted origin onto the real response. Same-origin
+// callers see no change.
+export function OPTIONS(request: NextRequest) {
+  return corsPreflight(request);
+}
+
+export async function POST(request: NextRequest) {
+  return withCors(request, await handlePost(request));
 }

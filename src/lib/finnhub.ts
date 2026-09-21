@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-base";
 // Finnhub quote fetcher.
 //
 // Setup:
@@ -110,7 +111,7 @@ export async function fetchLiveQuotes(
   if (unique.length === 0) return {};
 
   try {
-    const res = await fetch("/api/quotes", {
+    const res = await fetch(apiUrl("/api/quotes"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols: unique }),

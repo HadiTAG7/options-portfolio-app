@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/api-base";
 import {
   AlertTriangle,
   Check,
@@ -626,7 +627,7 @@ function MonthlyReportSender() {
         return;
       }
 
-      const res = await fetch("/api/reports/send-monthly", {
+      const res = await fetch(apiUrl("/api/reports/send-monthly"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -646,7 +647,7 @@ function MonthlyReportSender() {
       setResult(data);
     } catch {
       setError(
-        "تعذّر الاتصال بخدمة الإرسال — تأكد أن الموقع منشور على Vercel وأن المتغيرات (Gmail وحساب الخدمة) مضبوطة."
+        `تعذّر الاتصال بخدمة الإرسال على ${apiUrl("/api/reports/send-monthly")} — تحقق من اتصال الإنترنت، وأن نشر Vercel أخضر في GitHub Actions.`
       );
     } finally {
       setSending(false);
@@ -1208,7 +1209,7 @@ function PartnerAccountsPanel() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const res = await fetch("/api/admin/partner-accounts", {
+      const res = await fetch(apiUrl("/api/admin/partner-accounts"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
