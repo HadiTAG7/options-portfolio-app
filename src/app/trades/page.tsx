@@ -1604,16 +1604,16 @@ function TradeSection({
         {hasActions && (
           <td className="px-4 py-3">
             <div className="flex items-center gap-1">
+              {/* Every short option without a recorded buy-back leg gets
+                  the button — open (the normal flow), closed the old way
+                  (the split-repair), and auto-expired rows too: a buy-back
+                  the GP forgot to record leaves the contract to expire at
+                  full premium, and the correction must still be possible
+                  afterwards. The dialog bounds the date to the contract's
+                  real lifetime. */}
               {onBuyback &&
                 (trade.type === "Sell Put" || trade.type === "Sell Call") &&
-                !buybackLinked?.has(trade.id) &&
-                (trade.status === "open" ||
-                  // Closed the old way: the whole net was stuffed into
-                  // the sale month. Offer the split-repair.
-                  Math.abs(
-                    (Number(trade.result) || 0) -
-                      (Number(trade.premium) || 0) * (Number(trade.quantity) || 0)
-                  ) > 0.005) && (
+                !buybackLinked?.has(trade.id) && (
                   <button
                     onClick={() => onBuyback(trade)}
                     className="rounded-md border border-orange-400/25 bg-orange-400/5 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-orange-300 transition-all duration-200 hover:scale-[1.03] hover:border-orange-400/50 hover:bg-orange-400/10"

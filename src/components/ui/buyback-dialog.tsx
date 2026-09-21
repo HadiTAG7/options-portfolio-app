@@ -81,14 +81,34 @@ export function BuybackDialog({
   const qty = Number(trade.quantity) || 0;
   const premiumTotal = (Number(trade.premium) || 0) * qty;
   const px = parseFloat(price);
-  const valid = Number.isFinite(px) && px > 0 && !!date && qty > 0;
+  // A buy-back can only have happened while the contract was alive:
+  // on/after the sale date, on/before the expiration (buying back on
+  // expiration morning is real; after expiry there is nothing to buy).
+  // This matters most for the forgot-to-record case, where the row
+  // already auto-expired and today's date would be a lie.
+  const saleDate = (trade.date || "").slice(0, 10);
+  const expDate = (trade.expiration || "").trim().slice(0, 10);
+  const dateInLifetime =
+    !!date &&
+    (!saleDate || date >= saleDate) &&
+    (!expDate || date <= expDate);
+  const valid =
+    Number.isFinite(px) && px > 0 && dateInLifetime && qty > 0;
   const cost = valid ? px * qty : 0;
   const net = premiumTotal - cost;
+  // Which closed case is this? Netted-the-old-way rows carry the cost
+  // inside their result; auto-expired (or premium-settled) rows sit at
+  // the full premium because the buy-back was never recorded at all.
+  const isNettedClose =
+    trade.status === "closed" &&
+    Math.abs((Number(trade.result) || 0) - premiumTotal) > 0.005;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!trade || !valid) {
-      setError("يرجى تعبئة سعر إعادة الشراء والتاريخ بقيم صحيحة");
+      setError(
+        "يرجى تعبئة سعر إعادة الشراء وتاريخ يقع خلال عمر العقد (من البيع إلى الانتهاء)"
+      );
       return;
     }
     setSubmitting(true);
@@ -150,11 +170,18 @@ export function BuybackDialog({
             تبقى في شهر البيع ({monthLabel(trade.date)})، وتكلفة إعادة
             الشراء تُسجَّل كسطر مستقل بتاريخ الشراء — فلا يتغيّر أي شهر
             سابق.
-            {trade.status === "closed" && (
+            {trade.status === "closed" && isNettedClose && (
               <span className="mt-1 block text-amber-300/90">
                 هذا العقد مقفل بنتيجة صافية بالطريقة القديمة — التسجيل
                 سيُعيد علاوته كاملة لشهر البيع وينقل التكلفة للتاريخ الذي
                 تختاره. السعر مقترح من النتيجة المخزّنة، عدّله إن لزم.
+              </span>
+            )}
+            {trade.status === "closed" && !isNettedClose && (
+              <span className="mt-1 block text-amber-300/90">
+                هذا العقد مقفل بكامل العلاوة (انتهى دون تسجيل شراء) —
+                سجّل سعر إعادة الشراء الفعلي وتاريخه الحقيقي يوم
+                الشراء، وستُضاف التكلفة على شهرها الصحيح.
               </span>
             )}
           </p>
@@ -181,6 +208,14 @@ export function BuybackDialog({
               <DatePicker value={date} onChange={setDate} disabled={submitting} />
             </div>
           </div>
+
+          {!!date && !dateInLifetime && (
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-300">
+              تاريخ الشراء لازم يكون خلال عمر العقد: من {saleDate || "تاريخ البيع"}
+              {expDate ? ` إلى ${expDate} (يوم الانتهاء)` : ""} — العقد
+              المنتهي ما يُشترى بعد انتهائه.
+            </p>
+          )}
 
           {valid && (
             <div className="space-y-2 rounded-md border border-zinc-800/60 bg-zinc-950/40 px-4 py-3 text-xs">
