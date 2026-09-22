@@ -833,6 +833,7 @@ function PartnerDetailInner() {
                 <th className="px-3 py-3 font-bold">الرمز</th>
                 <th className="px-3 py-3 font-bold">الاستراتيجية</th>
                 <th className="px-3 py-3 font-bold">التنفيذ · الانتهاء</th>
+                <th className="px-3 py-3 font-bold">بريميوم الوحدة</th>
                 <th className="px-3 py-3 font-bold">الأسهم المعرضة</th>
                 <th className="px-3 py-3 font-bold">النقد المؤمّن</th>
                 <th className="px-3 py-3 font-bold">صافي البريميوم</th>
@@ -842,7 +843,7 @@ function PartnerDetailInner() {
             <tbody className="divide-y divide-outline-variant/30">
               {optionPositions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <Icon
                       name="layers_clear"
                       className="!text-4xl text-on-surface-variant/30 mb-2 block mx-auto"
@@ -878,6 +879,15 @@ function PartnerDetailInner() {
                       ${opt.strike.toLocaleString()}{" "}
                       <span className="text-on-surface-variant/70">
                         / {formatExpiry(opt.expiration)}
+                      </span>
+                    </td>
+                    <td
+                      className="px-3 py-3 font-mono text-sm tabular-nums text-on-surface"
+                      title={`إجمالي بريميوم العقد: ${formatCurrency(opt.totalPremium)}`}
+                    >
+                      {formatCurrency(opt.premium)}
+                      <span className="ms-1 text-[10px] text-on-surface-variant/60">
+                        /سهم
                       </span>
                     </td>
                     <td className="px-3 py-3 font-mono text-sm tabular-nums text-on-surface">
