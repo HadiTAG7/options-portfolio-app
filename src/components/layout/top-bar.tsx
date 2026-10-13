@@ -57,7 +57,7 @@ export function TopBar() {
   return (
     <header
       className={cn(
-        "fixed top-0 left-0 z-40 h-16 flex items-center justify-between px-4 md:px-6 bg-[#061727]/95 backdrop-blur-xl border-b border-[#1C3650] font-headline text-xs uppercase tracking-widest transition-[right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        "fixed top-0 left-0 z-40 h-16 flex items-center justify-between px-4 md:px-6 bg-[#080C16]/95 backdrop-blur-xl border-b border-[#1B2235] font-headline text-xs uppercase tracking-widest transition-[right] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
         collapsed ? "right-0 md:right-16" : "right-0 md:right-64"
       )}
     >
@@ -77,7 +77,7 @@ export function TopBar() {
             type="text"
             aria-label="البحث في المحفظة"
             placeholder="البحث في المحفظة..."
-            className="bg-black/50 border border-[#1C3650] rounded-md pr-9 pl-4 py-2 w-56 text-[11px] normal-case tracking-normal text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 focus:shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]"
+            className="bg-black/50 border border-[#1B2235] rounded-md pr-9 pl-4 py-2 w-56 text-[11px] normal-case tracking-normal text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 focus:shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]"
           />
         </div>
 
@@ -96,7 +96,7 @@ export function TopBar() {
 
       <div className="flex shrink-0 items-center gap-2 xl:gap-4">
         {/* Balance Widget */}
-        <div className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-md border border-[#1C3650] bg-black/40">
+        <div className="hidden lg:flex items-center gap-2.5 px-4 py-2 rounded-md border border-[#1B2235] bg-black/40">
           <span className="text-[9px] font-semibold text-zinc-500 normal-case tracking-[0.12em]">
             الرصيد المتاح
           </span>
@@ -123,15 +123,15 @@ export function TopBar() {
           <IconButton icon={<Bell size={15} />} label="الإشعارات" />
         </div>
 
-        <div className="hidden 2xl:block h-5 w-px bg-[#1C3650] mx-1" />
+        <div className="hidden 2xl:block h-5 w-px bg-[#1B2235] mx-1" />
 
         {/* Date Range */}
-        <button className="hidden 2xl:inline-flex items-center gap-2 rounded-md border border-[#1C3650] bg-zinc-950/60 px-3 py-1.5 text-[9px] font-bold tracking-[0.18em] text-zinc-400 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900/80 hover:text-zinc-200">
+        <button className="hidden 2xl:inline-flex items-center gap-2 rounded-md border border-[#1B2235] bg-zinc-950/60 px-3 py-1.5 text-[9px] font-bold tracking-[0.18em] text-zinc-400 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900/80 hover:text-zinc-200">
           <Calendar size={11} className="text-zinc-500" />
           نطاق التاريخ
         </button>
 
-        <div className="hidden 2xl:block h-5 w-px bg-[#1C3650] mx-1" />
+        <div className="hidden 2xl:block h-5 w-px bg-[#1B2235] mx-1" />
 
         {/* Avatar */}
         <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-black/60 text-[10px] font-black text-emerald-300 tracking-wide transition-all duration-200 hover:border-emerald-500/50 hover:shadow-[0_0_12px_-4px_rgba(16,185,129,0.5)]">

@@ -77,12 +77,12 @@ export function Sidebar() {
       role={mobileOpen ? "dialog" : undefined}
       aria-modal={mobileOpen || undefined}
       className={cn(
-        "flex flex-col h-dvh fixed right-0 top-0 z-50 bg-[#061727]/95 backdrop-blur-xl antialiased text-sm font-medium",
+        "flex flex-col h-dvh fixed right-0 top-0 z-50 bg-[#080C16]/95 backdrop-blur-xl antialiased text-sm font-medium",
         "transition-[width,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
         collapsed ? "w-64 md:w-16" : "w-64",
         mobileOpen ? "visible translate-x-0" : "invisible translate-x-full md:visible md:translate-x-0"
       )}
-      style={{ borderLeft: "1px solid #1C3650" }}
+      style={{ borderLeft: "1px solid #1B2235" }}
     >
       {/* Subtle radial glow behind the logo */}
       <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-emerald-500/[0.06] blur-3xl" />
@@ -93,8 +93,8 @@ export function Sidebar() {
         aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}
         title={collapsed ? "Expand" : "Collapse"}
         className={cn(
-          "group/toggle absolute top-7 z-20 hidden md:flex h-6 w-6 items-center justify-center rounded-full border border-[#1C3650] bg-[#091C30] text-zinc-500 shadow-[0_0_0_4px_#061727]",
-          "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#061727]",
+          "group/toggle absolute top-7 z-20 hidden md:flex h-6 w-6 items-center justify-center rounded-full border border-[#1B2235] bg-[#0A101C] text-zinc-500 shadow-[0_0_0_4px_#080C16]",
+          "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#080C16]",
           "active:scale-95",
           // Park it on the left edge of the sidebar. Because the aside is
           // anchored to right:0 and the LTR chrome flips, using -left-3
@@ -142,7 +142,7 @@ export function Sidebar() {
       {/* ═════ Footer ═════ */}
       <div
         className={cn(
-          "relative space-y-1 border-t border-[#1C3650] transition-[padding] duration-300",
+          "relative space-y-1 border-t border-[#1B2235] transition-[padding] duration-300",
           collapsed ? "p-2" : "p-3"
         )}
       >
@@ -152,7 +152,7 @@ export function Sidebar() {
             <div className="group relative mb-2 flex items-center justify-center rounded-md border border-blue-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-blue-400/50 hover:shadow-[0_0_22px_-6px_rgba(6,101,199,0.45)]">
               <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-[10px] font-black text-blue-300 shadow-[0_0_12px_-4px_rgba(6,101,199,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-[#061727] bg-blue-400 shadow-[0_0_6px_rgba(6,101,199,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-[#080C16] bg-blue-400 shadow-[0_0_6px_rgba(6,101,199,0.9)]">
                   <Crown
                     size={7}
                     className="text-zinc-900"
@@ -168,7 +168,7 @@ export function Sidebar() {
             <div className="relative flex items-center gap-3">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-xs font-black text-blue-300 shadow-[0_0_14px_-4px_rgba(6,101,199,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#061727] bg-blue-400 shadow-[0_0_8px_rgba(6,101,199,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#080C16] bg-blue-400 shadow-[0_0_8px_rgba(6,101,199,0.9)]">
                   <Crown
                     size={8}
                     className="text-zinc-900"
@@ -389,10 +389,10 @@ function SidebarTooltip({
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute top-1/2 right-full mr-3 -translate-y-1/2 z-[60] whitespace-nowrap rounded-md border border-[#1C3650] bg-[#091C30] px-2.5 py-1.5 text-[11px] font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_8px_24px_-6px_rgba(0,0,0,0.8),0_0_18px_-6px_rgba(16,185,129,0.3)] opacity-0 translate-x-1 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:translate-x-0 group-focus-within/tip:opacity-100 group-focus-within/tip:translate-x-0"
+        className="pointer-events-none absolute top-1/2 right-full mr-3 -translate-y-1/2 z-[60] whitespace-nowrap rounded-md border border-[#1B2235] bg-[#0A101C] px-2.5 py-1.5 text-[11px] font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_8px_24px_-6px_rgba(0,0,0,0.8),0_0_18px_-6px_rgba(16,185,129,0.3)] opacity-0 translate-x-1 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:translate-x-0 group-focus-within/tip:opacity-100 group-focus-within/tip:translate-x-0"
       >
         {label}
-        <span className="absolute top-1/2 -right-[4px] -translate-y-1/2 h-2 w-2 rotate-45 border-t border-r border-[#1C3650] bg-[#091C30]" />
+        <span className="absolute top-1/2 -right-[4px] -translate-y-1/2 h-2 w-2 rotate-45 border-t border-r border-[#1B2235] bg-[#0A101C]" />
       </span>
     </div>
   );

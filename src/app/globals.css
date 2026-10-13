@@ -58,34 +58,34 @@
   --color-on-error-container: #FFD2C8;
   --color-error-dim: #D85159;
 
-  --color-surface: #061727;
+  --color-surface: #080C16;
   --color-on-surface: #F4F7FA;
-  --color-surface-variant: #1C3650;
+  --color-surface-variant: #1B2235;
   --color-on-surface-variant: #AFC2D3;
   --color-surface-tint: #0665C7;
-  --color-surface-dim: #061727;
-  --color-surface-bright: #15334E;
-  --color-surface-container-lowest: #04111F;
-  --color-surface-container-low: #091C30;
-  --color-surface-container: #0B2036;
-  --color-surface-container-high: #15334E;
-  --color-surface-container-highest: #1C3D59;
+  --color-surface-dim: #080C16;
+  --color-surface-bright: #101827;
+  --color-surface-container-lowest: #060911;
+  --color-surface-container-low: #0A101C;
+  --color-surface-container: #0B111E;
+  --color-surface-container-high: #101827;
+  --color-surface-container-highest: #172034;
   --color-inverse-surface: #F4F7FA;
   --color-inverse-on-surface: #062E58;
-  --color-background: #061727;
+  --color-background: #080C16;
   --color-on-background: #F4F7FA;
   --color-outline: #536B84;
-  --color-outline-variant: #1C3650;
+  --color-outline-variant: #1B2235;
 
   /* Existing neutral/positive utilities inherit the brand across all routes. */
   --color-blue-700: #064992;
   --color-blue-600: #075BB7;
   --color-blue-500: #0665C7;
   --color-blue-400: #5297D8;
-  --color-zinc-950: #071727;
-  --color-zinc-900: #0B2036;
-  --color-zinc-800: #1C3650;
-  --color-zinc-700: #294962;
+  --color-zinc-950: #080C16;
+  --color-zinc-900: #0B111E;
+  --color-zinc-800: #1B2235;
+  --color-zinc-700: #293449;
   --color-zinc-600: #8197AA;
   --color-zinc-500: #8FA8BC;
   --color-zinc-400: #AFC2D3;
@@ -129,7 +129,7 @@
 
 /* Quiet geometric texture derived from the brand system. */
 .terminal-grid {
-  background-image: radial-gradient(circle, #1C3650 1px, transparent 1px);
+  background-image: radial-gradient(circle, #1B2235 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -143,10 +143,10 @@
   width: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #061727;
+  background: #080C16;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1C3650;
+  background: #1B2235;
   border-radius: 10px;
 }
 
@@ -161,7 +161,7 @@
   body {
     font-family: var(--font-body);
     background-color: var(--color-background);
-    background-image: radial-gradient(ellipse at 0% 0%, rgb(6 46 88 / 45%), transparent 55%);
+    background-image: none;
     color: var(--color-on-surface);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

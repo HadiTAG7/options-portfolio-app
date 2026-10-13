@@ -213,8 +213,8 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* ── Total AUM ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
-              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.025] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Wallet size={72} strokeWidth={1} />
               </div>
@@ -251,8 +251,8 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Total Yield ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
-              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.025] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <TrendingUp size={72} strokeWidth={1} />
               </div>
@@ -303,8 +303,8 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Management Fees Total ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
-              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.14]" />
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.025] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Receipt size={72} strokeWidth={1} />
               </div>
@@ -345,8 +345,8 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Active Positions ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
-              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.12]" />
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
+              <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.02] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.12]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Activity size={72} strokeWidth={1} />
               </div>
@@ -436,7 +436,7 @@ function MonthlySummaryTable({
   loading: boolean;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] backdrop-blur-sm mb-8">
+    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] backdrop-blur-sm mb-8">
       <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -611,7 +611,7 @@ function ProfitDistribution({
       : monthOptions.find((m) => m.key === selectedMonth)?.label ?? selectedMonth;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] backdrop-blur-sm">
+    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] backdrop-blur-sm">
       <div className="px-6 py-4 border-b border-zinc-800/60 flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -640,7 +640,7 @@ function ProfitDistribution({
               />
             </button>
             {dropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 w-52 max-h-56 overflow-y-auto rounded-md border border-[#1C3650] bg-[#091C30] shadow-[0_0_30px_-8px_rgba(0,0,0,0.9)] backdrop-blur-xl">
+              <div className="absolute top-full left-0 mt-1 z-50 w-52 max-h-56 overflow-y-auto rounded-md border border-[#1B2235] bg-[#0A101C] shadow-[0_0_30px_-8px_rgba(0,0,0,0.9)] backdrop-blur-xl">
                 <button
                   onClick={() => {
                     onMonthChange("all");
@@ -864,7 +864,7 @@ function CumulativePnLChart({
   }, [data, plotW, plotH]);
 
   return (
-    <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm min-h-[400px] flex flex-col">
+    <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] p-6 backdrop-blur-sm min-h-[400px] flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
@@ -970,7 +970,7 @@ function CumulativePnLChart({
                   cx={p.x}
                   cy={p.y}
                   r={hovered === i ? 5 : 3}
-                  fill={hovered === i ? "#009D8A" : "#0B2036"}
+                  fill={hovered === i ? "#009D8A" : "#0B111E"}
                   stroke="#009D8A"
                   strokeWidth={2}
                   className="transition-all duration-150"
@@ -1004,7 +1004,7 @@ function CumulativePnLChart({
           {/* Tooltip */}
           {hovered !== null && points[hovered] && (
             <div
-              className="pointer-events-none absolute z-10 rounded-md border border-[#1C3650] bg-[#091C30] px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(16,185,129,0.3)]"
+              className="pointer-events-none absolute z-10 rounded-md border border-[#1B2235] bg-[#0A101C] px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(16,185,129,0.3)]"
               style={{
                 left: `${(points[hovered].x / W) * 100}%`,
                 top: `${(points[hovered].y / H) * 100 - 14}%`,
@@ -1090,7 +1090,7 @@ function PortfolioComposition({
   }, [slices, CIRCUMFERENCE]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm flex flex-col">
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B111E] p-6 backdrop-blur-sm flex flex-col">
       <div className="mb-4">
         <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
           توزيع المحفظة

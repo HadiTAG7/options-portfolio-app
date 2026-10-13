@@ -10,8 +10,8 @@ Activity descriptor: **إدارة الاستثمار** (investment management).
 | Brand blue | `#0665C7` |
 | Brand teal | `#009D8A` |
 | Brand paper | `#F4F7FA` |
-| Dark app background | `#061727` |
-| Card surface | `#0B2036` |
+| Dark app background | `#080C16` |
+| Card surface | `#0B111E` |
 | Filled button blue | `#075BB7` |
 
 The button blue is darker than the brand accent so small white labels remain legible. Gains and positive status indicators use teal; losses and destructive actions retain red. Allocation charts keep distinct series colors.
@@ -20,7 +20,7 @@ The interface uses the existing bundled **Thmanyah Sans** for Arabic and Latin h
 
 `public/brand/hadi-capital-mark.svg` is a vector interpretation of the supplied small raster emblem, with four ascending rounded columns and its open lower arc. `public/brand/hadi-capital-icon.svg` adds a light tile for browser-tab legibility. The shared `BrandLockup` component presents the Arabic name, English name and activity descriptor. The SVG interpretation can be replaced with an original vector master if one becomes available.
 
-The dark interface extends the concept palette through navy surfaces, blue navigation/actions and teal financial indicators. On mobile, navigation opens in a drawer; on desktop it retains the persistent collapsible sidebar. Existing report templates use the new name and palette.
+The dark interface uses near-black navy surfaces sampled from the provided dashboard reference: background `#080C16` and cards `#0B111E`. Blue navigation/actions and teal financial indicators carry the Hadi Capital identity. On mobile, navigation opens in a drawer; on desktop it retains the persistent collapsible sidebar. Existing report templates use the new name and palette.
 
 ## Validation
 
