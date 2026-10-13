@@ -52,7 +52,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
 
   doc.setFontSize(22);
   doc.setTextColor(255, 255, 255);
-  doc.text("AlGhanim Options Desk", pageWidth / 2, 18, { align: "center" });
+  doc.text("Hadi Capital", pageWidth / 2, 18, { align: "center" });
 
   doc.setFontSize(12);
   doc.setTextColor(52, 211, 153);

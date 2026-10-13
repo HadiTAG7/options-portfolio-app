@@ -2,8 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Alghanim Options Desk | Proprietary Trading",
-  description: "Alghanim Options Desk - Proprietary Trading & Portfolio Management",
+  title: "هادي كابيتال | Hadi Capital",
+  description: "هادي كابيتال — إدارة الاستثمار والمحافظ | Hadi Capital — Investment & Portfolio Management",
+  applicationName: "Hadi Capital",
+  icons: { icon: "/brand/hadi-capital-icon.svg" },
 };
 
 // Drives the Android status-bar tint when the app launches from the
@@ -11,7 +13,7 @@ export const metadata: Metadata = {
 // the manifest's theme_color so the system chrome blends with the
 // dashboard's emerald accent.
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  themeColor: "#080C16",
   width: "device-width",
   initialScale: 1,
   // Use the area behind the notch / status bar so the standalone app

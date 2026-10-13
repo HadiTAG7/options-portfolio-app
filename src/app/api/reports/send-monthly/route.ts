@@ -366,7 +366,7 @@ async function handlePost(request: NextRequest) {
       try {
         const { subject, html } = buildPartnerEmailHtml(reportData);
         await transporter.sendMail({
-          from: `"AlGhanim Options Desk" <${gmailUser}>`,
+          from: `"Hadi Capital" <${gmailUser}>`,
           to: partner.email,
           subject,
           html,
