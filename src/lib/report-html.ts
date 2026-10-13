@@ -205,7 +205,7 @@ ${fontFaceCss}
   :root{
     --ink:#101318; --muted:#6b7280; --faint:#9aa3ae;
     --line:#e6e8ec; --stripe:#f6f7f9;
-    --emerald:#047857; --emerald-bright:#10b981;
+    --emerald:#168568; --emerald-bright:#22B88A;
     --rose:#be123c; --amber:#b45309;
     --band:#0b0d10; --band2:#161a1f;
   }
@@ -223,7 +223,7 @@ ${fontFaceCss}
     background:linear-gradient(120deg,var(--band2),var(--band) 55%);color:#fff;
     padding:12mm 14mm 10mm;overflow:hidden;border-bottom:1mm solid var(--emerald-bright)}
   .band-glow{position:absolute;top:-30mm;left:-10mm;width:80mm;height:80mm;border-radius:50%;
-    background:radial-gradient(circle,rgba(16,185,129,.25),transparent 70%)}
+    background:radial-gradient(circle,rgba(34,184,138,.25),transparent 70%)}
   .report-title{font-size:24pt;font-weight:700;letter-spacing:.5px}
   .period{margin-top:2mm;font-size:11pt;color:#9ee8c9}
   .band-left{text-align:left;position:relative;z-index:1}

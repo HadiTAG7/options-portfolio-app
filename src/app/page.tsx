@@ -1158,8 +1158,8 @@ function CumulativePnLChart({
           >
             <defs>
               <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.30" />
-                <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                <stop offset="0%" stopColor="var(--color-brand-emerald)" stopOpacity="0.30" />
+                <stop offset="100%" stopColor="var(--color-brand-emerald)" stopOpacity="0.02" />
               </linearGradient>
             </defs>
 
@@ -1202,7 +1202,7 @@ function CumulativePnLChart({
             <path
               d={linePath}
               fill="none"
-              stroke="#10b981"
+              stroke="var(--color-brand-emerald)"
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -1226,8 +1226,8 @@ function CumulativePnLChart({
                   cx={p.x}
                   cy={p.y}
                   r={hovered === i ? 5 : 3}
-                  fill={hovered === i ? "#009D8A" : "#0B111E"}
-                  stroke="#10b981"
+                  fill={hovered === i ? "var(--color-brand-emerald)" : "#0B111E"}
+                  stroke="var(--color-brand-emerald)"
                   strokeWidth={2}
                   className="transition-all duration-150"
                 />
@@ -1238,7 +1238,7 @@ function CumulativePnLChart({
                     y1={PAD_T}
                     x2={p.x}
                     y2={PAD_T + plotH}
-                    stroke="#10b981"
+                    stroke="var(--color-brand-emerald)"
                     strokeWidth={0.5}
                     strokeDasharray="3,3"
                     opacity={0.4}
@@ -1298,7 +1298,7 @@ function niceStep(range: number, targetTicks: number): number {
 // ── Dynamic Portfolio Composition Donut ──
 
 const ALLOC_COLORS = [
-  "#10b981", // emerald
+  "var(--color-brand-emerald)", // emerald
   "#22d3ee", // cyan
   "#f59e0b", // amber
   "#8b5cf6", // violet
