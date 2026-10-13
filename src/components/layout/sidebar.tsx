@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
+import { BrandLockup } from "./brand";
 import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
@@ -11,7 +13,7 @@ import {
   LineChart,
   LogOut,
   Settings,
-  Terminal,
+  X,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -34,7 +36,32 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { collapsed, toggle } = useSidebar();
+  const { collapsed: desktopCollapsed, toggle, mobileOpen, closeMobile } = useSidebar();
+  const collapsed = desktopCollapsed && !mobileOpen;
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])") ?? []).filter((el) => el.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { closeMobile(); return; }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [mobileOpen, closeMobile]);
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -42,13 +69,21 @@ export function Sidebar() {
   };
 
   return (
+    <>
+    {mobileOpen && <button tabIndex={-1} aria-label="إغلاق قائمة التنقل" onClick={closeMobile} className="fixed inset-0 z-[45] bg-black/60 backdrop-blur-sm md:hidden" />}
     <aside
+      id="primary-sidebar"
+      ref={sidebarRef}
+      aria-label="التنقل الرئيسي — هادي كابيتال"
+      role={mobileOpen ? "dialog" : undefined}
+      aria-modal={mobileOpen || undefined}
       className={cn(
-        "flex flex-col h-screen fixed right-0 top-0 z-50 bg-surface/95 backdrop-blur-xl antialiased text-sm font-medium",
-        "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-        collapsed ? "w-16" : "w-64"
+        "flex flex-col h-dvh fixed right-0 top-0 z-50 bg-surface/95 backdrop-blur-xl antialiased text-sm font-medium",
+        "transition-[width,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        collapsed ? "w-64 md:w-16" : "w-64",
+        mobileOpen ? "visible translate-x-0" : "invisible translate-x-full md:visible md:translate-x-0"
       )}
-      style={{ borderLeft: "1px solid #1f1f1f" }}
+      style={{ borderLeft: "1px solid #1B2235" }}
     >
       {/* Subtle radial glow behind the logo */}
       <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-emerald-500/[0.06] blur-3xl" />
@@ -56,11 +91,11 @@ export function Sidebar() {
       {/* ═════ Floating Collapse Toggle ═════ */}
       <button
         onClick={toggle}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}
         title={collapsed ? "Expand" : "Collapse"}
         className={cn(
-          "group/toggle absolute top-7 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-500 shadow-[0_0_0_4px_#050505]",
-          "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#050505]",
+          "group/toggle absolute top-7 z-20 hidden md:flex h-6 w-6 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-500 shadow-[0_0_0_4px_#080C16]",
+          "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#080C16]",
           "active:scale-95",
           // Park it on the left edge of the sidebar. Because the aside is
           // anchored to right:0 and the LTR chrome flips, using -left-3
@@ -75,44 +110,12 @@ export function Sidebar() {
         )}
       </button>
 
-      {/* ═════ Brand ═════ */}
-      <div
-        className={cn(
-          "relative border-b border-zinc-800 transition-[padding] duration-300",
-          collapsed ? "px-0 pt-7 pb-5" : "px-5 pt-7 pb-6"
-        )}
-      >
-        <div
-          className={cn(
-            "flex items-center",
-            collapsed ? "justify-center" : "gap-2.5"
-          )}
-        >
-          <div
-            className={cn(
-              "flex items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_16px_-4px_rgba(16,185,129,0.45)] transition-all duration-300",
-              collapsed ? "h-9 w-9" : "h-8 w-8"
-            )}
-          >
-            {collapsed ? (
-              <span className="font-headline text-[13px] font-black text-emerald-300">
-                A
-              </span>
-            ) : (
-              <Terminal size={14} className="text-emerald-400" />
-            )}
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col leading-tight min-w-0">
-              <span className="font-headline text-[11px] font-black tracking-[0.06em] text-white uppercase whitespace-nowrap">
-                Alghanim Options Desk
-              </span>
-              <span className="mt-0.5 font-mono text-[8px] tracking-[0.24em] text-emerald-400/70 uppercase whitespace-nowrap">
-                Proprietary Trading Desk
-              </span>
-            </div>
-          )}
-        </div>
+      {/* Brand */}
+      <div className={cn("relative border-b border-outline-variant", collapsed ? "px-2 py-7" : "px-5 py-7")}>
+        <button onClick={closeMobile} aria-label="إغلاق القائمة" className="absolute left-3 top-3 rounded-lg p-2 text-zinc-400 hover:text-white md:hidden"><X size={18} /></button>
+        <Link href="/" onClick={closeMobile} aria-label="هادي كابيتال — الرئيسية" className={cn("flex rounded-lg", collapsed && "justify-center")}>
+          <BrandLockup compact={collapsed} />
+        </Link>
       </div>
 
       {/* ═════ Navigation ═════ */}
@@ -124,7 +127,7 @@ export function Sidebar() {
       >
         {!collapsed && (
           <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.28em] text-zinc-600">
-            Terminal
+            إدارة المحافظ
           </p>
         )}
         {navItems.map((item) => (
@@ -147,10 +150,10 @@ export function Sidebar() {
         {/* Fund Manager / GP Card */}
         {collapsed ? (
           <SidebarTooltip label="هادي الغانم · Fund Manager">
-            <div className="group relative mb-2 flex items-center justify-center rounded-md border border-amber-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-amber-400/50 hover:shadow-[0_0_22px_-6px_rgba(251,191,36,0.45)]">
-              <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/5 text-[10px] font-black text-amber-300 shadow-[0_0_12px_-4px_rgba(251,191,36,0.55)]">
+            <div className="group relative mb-2 flex items-center justify-center rounded-md border border-blue-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-blue-400/50 hover:shadow-[0_0_22px_-6px_rgba(6,101,199,0.45)]">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-[10px] font-black text-blue-300 shadow-[0_0_12px_-4px_rgba(6,101,199,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-zinc-950 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-zinc-950 bg-blue-400 shadow-[0_0_6px_rgba(6,101,199,0.9)]">
                   <Crown
                     size={7}
                     className="text-zinc-900"
@@ -161,12 +164,12 @@ export function Sidebar() {
             </div>
           </SidebarTooltip>
         ) : (
-          <div className="group relative mb-3 overflow-hidden rounded-lg border border-amber-400/20 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 p-3.5 transition-all duration-300 hover:border-amber-400/40 hover:shadow-[0_0_28px_-8px_rgba(251,191,36,0.35)]">
-            <div className="pointer-events-none absolute -top-10 -right-10 h-24 w-24 rounded-full bg-amber-400/[0.06] blur-2xl" />
+          <div className="group relative mb-3 overflow-hidden rounded-lg border border-blue-400/20 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 p-3.5 transition-all duration-300 hover:border-blue-400/40 hover:shadow-[0_0_28px_-8px_rgba(6,101,199,0.35)]">
+            <div className="pointer-events-none absolute -top-10 -right-10 h-24 w-24 rounded-full bg-blue-400/[0.06] blur-2xl" />
             <div className="relative flex items-center gap-3">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/5 text-xs font-black text-amber-300 shadow-[0_0_14px_-4px_rgba(251,191,36,0.55)]">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-xs font-black text-blue-300 shadow-[0_0_14px_-4px_rgba(6,101,199,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-950 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-zinc-950 bg-blue-400 shadow-[0_0_8px_rgba(6,101,199,0.9)]">
                   <Crown
                     size={8}
                     className="text-zinc-900"
@@ -178,7 +181,7 @@ export function Sidebar() {
                 <p className="truncate text-[13px] font-bold text-white">
                   هادي الغانم
                 </p>
-                <p className="mt-0.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-amber-300/80">
+                <p className="mt-0.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-blue-300/80">
                   <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.9)]" />
                   Fund Manager · GP
                 </p>
@@ -232,6 +235,7 @@ export function Sidebar() {
         )}
       </div>
     </aside>
+    </>
   );
 }
 
@@ -244,15 +248,18 @@ function NavLink({
   active: boolean;
   collapsed: boolean;
 }) {
+  const { closeMobile } = useSidebar();
   const Icon = item.icon;
   const content = (
     <Link
       href={item.href}
+      onClick={closeMobile}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "group relative flex items-center rounded-md transition-all duration-200 cursor-pointer active:scale-[0.98]",
         collapsed ? "justify-center h-10 w-full" : "gap-3 px-3 py-2.5",
         active
-          ? "bg-emerald-500/[0.08] text-emerald-300 shadow-[0_0_22px_-8px_rgba(16,185,129,0.65)]"
+          ? "bg-brand-blue/[0.12] text-blue-200 shadow-[0_0_22px_-8px_rgba(16,185,129,0.65)]"
           : "text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200"
       )}
     >
@@ -304,9 +311,11 @@ function FooterLink({
   tooltip: string;
   collapsed: boolean;
 }) {
+  const { closeMobile } = useSidebar();
   const content = (
     <Link
       href={href}
+      onClick={closeMobile}
       className={cn(
         "group flex items-center rounded-md text-zinc-500 transition-all duration-200 hover:bg-white/[0.03] hover:text-zinc-200 cursor-pointer",
         collapsed ? "justify-center h-9 w-full" : "gap-3 px-3 py-2"

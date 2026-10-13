@@ -146,7 +146,7 @@ function AppShellInner({ children }: AppShellProps) {
       <Sidebar />
       <main
         className={`min-h-screen transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          collapsed ? "mr-16" : "mr-64"
+          collapsed ? "md:mr-16" : "md:mr-64"
         }`}
       >
         <TopBar />

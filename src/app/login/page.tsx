@@ -60,7 +60,7 @@ export default function LoginPage() {
             محفظة الخيارات
           </h1>
           <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">
-            Alghanim Options Desk
+            هادي كابيتال · HADI CAPITAL
           </p>
         </div>
 

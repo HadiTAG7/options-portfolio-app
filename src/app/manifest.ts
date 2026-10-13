@@ -15,17 +15,17 @@ export const dynamic = "force-static";
 // splash screen blends into the first paint instead of flashing white.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "محفظة الخيارات · Alghanim Options Desk",
-    short_name: "محفظة الخيارات",
+    name: "هادي كابيتال · Hadi Capital",
+    short_name: "هادي كابيتال",
     description:
-      "Proprietary options & portfolio management for Alghanim Options Desk",
+      "Proprietary options & portfolio management for Hadi Capital",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",
     lang: "ar",
     dir: "rtl",
-    theme_color: "#10b981",
-    background_color: "#09090b",
+    theme_color: "#080C16",
+    background_color: "#080C16",
     icons: [
       {
         src: "/icons/icon-192.png",

@@ -1226,7 +1226,7 @@ function CumulativePnLChart({
                   cx={p.x}
                   cy={p.y}
                   r={hovered === i ? 5 : 3}
-                  fill={hovered === i ? "#10b981" : "#09090b"}
+                  fill={hovered === i ? "#009D8A" : "#0B111E"}
                   stroke="#10b981"
                   strokeWidth={2}
                   className="transition-all duration-150"
