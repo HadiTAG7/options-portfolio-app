@@ -17,6 +17,9 @@ interface SidebarContextValue {
   // Becomes true once localStorage has been read. Components that want to
   // avoid an SSR/first-paint width flicker can gate expensive UI on this.
   hydrated: boolean;
+  mobileOpen: boolean;
+  toggleMobile: () => void;
+  closeMobile: () => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
@@ -27,6 +30,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // SSR because window isn't available.
   const [collapsed, setCollapsedState] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const toggleMobile = useCallback(() => setMobileOpen((open) => !open), []);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => { if (desktop.matches) closeMobile(); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, [closeMobile]);
 
   useEffect(() => {
     try {
@@ -62,7 +75,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarContext.Provider
-      value={{ collapsed, toggle, setCollapsed, hydrated }}
+      value={{ collapsed, toggle, setCollapsed, hydrated, mobileOpen, toggleMobile, closeMobile }}
     >
       {children}
     </SidebarContext.Provider>

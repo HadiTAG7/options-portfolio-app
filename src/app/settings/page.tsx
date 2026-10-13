@@ -70,12 +70,12 @@ export default function SettingsPage() {
     <AppShell>
       {/* Page Header */}
       <div className="mb-8">
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] uppercase tracking-[0.28em] text-emerald-400/80 font-bold">
-              Sovereign Terminal
+              HADI CAPITAL
             </p>
-            <h1 className="mt-1 font-headline text-3xl font-light tracking-tight text-white">
+            <h1 className="mt-1 font-headline text-2xl md:text-3xl font-light tracking-tight text-white">
               Fund Control Room{" "}
               <span className="font-mono text-zinc-500">·</span>{" "}
               <span className="text-zinc-400 font-light">الإعدادات</span>

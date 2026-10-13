@@ -23,11 +23,11 @@ function AppShellInner({ children }: AppShellProps) {
       <Sidebar />
       <main
         className={`min-h-screen transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          collapsed ? "mr-16" : "mr-64"
+          collapsed ? "md:mr-16" : "md:mr-64"
         }`}
       >
         <TopBar />
-        <div className="pt-24 px-4 pb-12 max-w-[1800px] mx-auto">
+        <div className="pt-24 px-4 md:px-7 pb-12 max-w-[1800px] mx-auto">
           {children}
         </div>
       </main>

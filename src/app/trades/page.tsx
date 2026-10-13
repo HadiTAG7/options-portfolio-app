@@ -170,12 +170,12 @@ export default function TradesPage() {
     <AppShell>
       {/* Page Header */}
       <div className="mb-8">
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] uppercase tracking-[0.28em] text-emerald-400/80 font-bold">
-              Sovereign Terminal
+              HADI CAPITAL
             </p>
-            <h1 className="mt-1 font-headline text-3xl font-light tracking-tight text-white">
+            <h1 className="mt-1 font-headline text-2xl md:text-3xl font-light tracking-tight text-white">
               Active Positions{" "}
               <span className="font-mono text-zinc-500">·</span>{" "}
               <span className="text-zinc-400 font-light">سجل الصفقات</span>
@@ -188,7 +188,7 @@ export default function TradesPage() {
             </button>
             <button
               onClick={() => setAddDialogOpen(true)}
-              className="group inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:shadow-[0_0_28px_-4px_rgba(16,185,129,0.9)] active:scale-95"
+              className="group inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-on-primary shadow-[0_0_20px_-6px_rgba(6,101,199,0.7)] transition-all duration-200 hover:bg-primary-dim hover:shadow-[0_0_28px_-4px_rgba(6,101,199,0.9)] active:scale-95"
             >
               <Plus size={12} className="transition-transform group-hover:rotate-90" />
               صفقة جديدة
@@ -244,7 +244,7 @@ export default function TradesPage() {
 
       {/* Active Stocks - Trading Pit */}
       <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.15)]">
-        <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10">
               <PackageOpen size={14} className="text-emerald-400" />
@@ -943,7 +943,7 @@ function TradeSection({
 
   return (
     <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 to-zinc-950/80 backdrop-blur-sm">
-      <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
         <div className="flex items-center gap-3">
           <div
             className={`flex h-8 w-8 items-center justify-center rounded-md border ${accentRing}`}

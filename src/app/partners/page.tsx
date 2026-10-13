@@ -313,7 +313,7 @@ export default function PartnersPage() {
       {/* Partners Table */}
       <section className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 to-zinc-950/90 backdrop-blur-sm">
         {/* Table Header */}
-        <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center bg-zinc-900/60">
+        <div className="px-4 sm:px-6 py-4 border-b border-zinc-800/60 flex flex-wrap justify-between items-center gap-3 bg-zinc-900/60">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/10 border border-emerald-500/20">
               <Icon name="group" className="text-emerald-400 !text-base" />
@@ -335,7 +335,7 @@ export default function PartnersPage() {
             </button>
             <button
               onClick={() => setShowAddDialog(true)}
-              className="group relative flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(52,211,153,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
+              className="group relative flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary shadow-[0_0_20px_-6px_rgba(6,101,199,0.7)] transition-all duration-200 hover:bg-primary-dim hover:scale-[1.03] active:scale-95"
             >
               <Icon name="add" className="!text-sm" />
               إضافة شريك جديد

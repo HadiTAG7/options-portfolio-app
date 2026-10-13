@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Alghanim Options Desk | Proprietary Trading",
-  description: "Alghanim Options Desk - Proprietary Trading & Portfolio Management",
+  title: "هادي كابيتال | Hadi Capital",
+  description: "هادي كابيتال — إدارة الاستثمار والمحافظ | Hadi Capital — Investment & Portfolio Management",
+  applicationName: "Hadi Capital",
+  icons: { icon: "/brand/hadi-capital-icon.svg" },
 };
 
 export default function RootLayout({

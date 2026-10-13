@@ -249,7 +249,7 @@ export function EditStockDialog({
             <button
               type="submit"
               disabled={submitting}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-500 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-zinc-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:shadow-[0_0_28px_-4px_rgba(16,185,129,0.9)] active:scale-[0.98] disabled:opacity-70"
+              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-on-primary shadow-[0_0_20px_-6px_rgba(6,101,199,0.7)] transition-all duration-200 hover:bg-primary-dim hover:shadow-[0_0_28px_-4px_rgba(6,101,199,0.9)] active:scale-[0.98] disabled:opacity-70"
             >
               {submitting ? (
                 <>
