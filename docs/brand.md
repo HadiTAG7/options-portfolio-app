@@ -7,12 +7,12 @@ Activity descriptor: **إدارة الاستثمار** (investment management).
 | Role | Color |
 | --- | --- |
 | Brand navy | `#062E58` |
-| Brand blue | `#087BF5` |
+| Brand blue | `#0665C7` |
 | Brand teal | `#009D8A` |
 | Brand paper | `#F4F7FA` |
 | Dark app background | `#061727` |
 | Card surface | `#0B2036` |
-| Filled button blue | `#076BD9` |
+| Filled button blue | `#075BB7` |
 
 The button blue is darker than the brand accent so small white labels remain legible. Gains and positive status indicators use teal; losses and destructive actions retain red. Allocation charts keep distinct series colors.
 

@@ -149,10 +149,10 @@ export function Sidebar() {
         {/* Fund Manager / GP Card */}
         {collapsed ? (
           <SidebarTooltip label="هادي الغانم · Fund Manager">
-            <div className="group relative mb-2 flex items-center justify-center rounded-md border border-blue-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-blue-400/50 hover:shadow-[0_0_22px_-6px_rgba(8,123,245,0.45)]">
-              <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-[10px] font-black text-blue-300 shadow-[0_0_12px_-4px_rgba(8,123,245,0.55)]">
+            <div className="group relative mb-2 flex items-center justify-center rounded-md border border-blue-400/25 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 py-2 transition-all duration-300 hover:border-blue-400/50 hover:shadow-[0_0_22px_-6px_rgba(6,101,199,0.45)]">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-[10px] font-black text-blue-300 shadow-[0_0_12px_-4px_rgba(6,101,199,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-[#061727] bg-blue-400 shadow-[0_0_6px_rgba(8,123,245,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border border-[#061727] bg-blue-400 shadow-[0_0_6px_rgba(6,101,199,0.9)]">
                   <Crown
                     size={7}
                     className="text-zinc-900"
@@ -163,12 +163,12 @@ export function Sidebar() {
             </div>
           </SidebarTooltip>
         ) : (
-          <div className="group relative mb-3 overflow-hidden rounded-lg border border-blue-400/20 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 p-3.5 transition-all duration-300 hover:border-blue-400/40 hover:shadow-[0_0_28px_-8px_rgba(8,123,245,0.35)]">
+          <div className="group relative mb-3 overflow-hidden rounded-lg border border-blue-400/20 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 p-3.5 transition-all duration-300 hover:border-blue-400/40 hover:shadow-[0_0_28px_-8px_rgba(6,101,199,0.35)]">
             <div className="pointer-events-none absolute -top-10 -right-10 h-24 w-24 rounded-full bg-blue-400/[0.06] blur-2xl" />
             <div className="relative flex items-center gap-3">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-xs font-black text-blue-300 shadow-[0_0_14px_-4px_rgba(8,123,245,0.55)]">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-blue-400/40 bg-gradient-to-br from-blue-500/20 to-blue-600/5 text-xs font-black text-blue-300 shadow-[0_0_14px_-4px_rgba(6,101,199,0.55)]">
                 HA
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#061727] bg-blue-400 shadow-[0_0_8px_rgba(8,123,245,0.9)]">
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#061727] bg-blue-400 shadow-[0_0_8px_rgba(6,101,199,0.9)]">
                   <Crown
                     size={8}
                     className="text-zinc-900"

@@ -19,19 +19,19 @@
 @theme inline {
   /* Core Hadi Capital identity. Primary buttons use a darker blue for contrast. */
   --color-brand-navy: #062E58;
-  --color-brand-blue: #087BF5;
+  --color-brand-blue: #0665C7;
   --color-brand-teal: #009D8A;
   --color-brand-paper: #F4F7FA;
-  --color-primary: #076BD9;
+  --color-primary: #075BB7;
   --color-on-primary: #ffffff;
   --color-primary-container: #123E6A;
   --color-on-primary-container: #DBEAFF;
-  --color-primary-dim: #065AB6;
+  --color-primary-dim: #064992;
   --color-primary-fixed: #B8D7FF;
   --color-primary-fixed-dim: #8CBFFF;
   --color-on-primary-fixed: #062E58;
   --color-on-primary-fixed-variant: #123E6A;
-  --color-inverse-primary: #076BD9;
+  --color-inverse-primary: #075BB7;
 
   /* Positive values stay teal; losses and destructive actions stay red. */
   --color-secondary: #BB3341;
@@ -62,7 +62,7 @@
   --color-on-surface: #F4F7FA;
   --color-surface-variant: #1C3650;
   --color-on-surface-variant: #AFC2D3;
-  --color-surface-tint: #087BF5;
+  --color-surface-tint: #0665C7;
   --color-surface-dim: #061727;
   --color-surface-bright: #15334E;
   --color-surface-container-lowest: #04111F;
@@ -78,6 +78,10 @@
   --color-outline-variant: #1C3650;
 
   /* Existing neutral/positive utilities inherit the brand across all routes. */
+  --color-blue-700: #064992;
+  --color-blue-600: #075BB7;
+  --color-blue-500: #0665C7;
+  --color-blue-400: #5297D8;
   --color-zinc-950: #071727;
   --color-zinc-900: #0B2036;
   --color-zinc-800: #1C3650;
@@ -131,7 +135,7 @@
 
 /* Glow effect */
 .glow-primary {
-  filter: drop-shadow(0 0 8px rgba(8, 123, 245, 0.22));
+  filter: drop-shadow(0 0 8px rgba(6, 101, 199, 0.22));
 }
 
 /* Custom scrollbar */

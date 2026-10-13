@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex shrink-0 items-center justify-center rounded-xl bg-brand-paper p-1.5", className)}>
-      <Image src="/brand/hadi-capital-mark.svg" alt="" aria-hidden="true" width={40} height={40} />
+      <Image src="/brand/hadi-capital-mark.svg" alt="" aria-hidden="true" loading="eager" width={40} height={40} />
     </span>
   );
 }

@@ -335,7 +335,7 @@ export default function PartnersPage() {
             </button>
             <button
               onClick={() => setShowAddDialog(true)}
-              className="group relative flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary shadow-[0_0_20px_-6px_rgba(8,123,245,0.7)] transition-all duration-200 hover:bg-primary-dim hover:scale-[1.03] active:scale-95"
+              className="group relative flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-on-primary shadow-[0_0_20px_-6px_rgba(6,101,199,0.7)] transition-all duration-200 hover:bg-primary-dim hover:scale-[1.03] active:scale-95"
             >
               <Icon name="add" className="!text-sm" />
               إضافة شريك جديد

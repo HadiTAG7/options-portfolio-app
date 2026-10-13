@@ -192,7 +192,7 @@ export default function DashboardPage() {
         ticker: "CASH",
         value: cash,
         pct: (cash / grandTotal) * 100,
-        color: "#3b82f6",
+        color: "#2B75C5",
       });
     }
 
@@ -1043,7 +1043,7 @@ function niceStep(range: number, targetTicks: number): number {
 
 const ALLOC_COLORS = [
   "#009D8A", // brand teal
-  "#087BF5", // brand blue
+  "#0665C7", // brand blue
   "#f59e0b", // amber
   "#8b5cf6", // violet
   "#ef4444", // rose
@@ -1221,8 +1221,7 @@ function PortfolioComposition({
                     {formatCompactCurrency(s.value)}
                   </span>
                   <span
-                    className="font-mono text-[11px] font-bold tabular-nums"
-                    style={{ color: s.color }}
+                    className="font-mono text-[11px] font-bold tabular-nums text-zinc-300"
                   >
                     {s.pct.toFixed(1)}%
                   </span>

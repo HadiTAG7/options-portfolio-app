@@ -188,7 +188,7 @@ export default function TradesPage() {
             </button>
             <button
               onClick={() => setAddDialogOpen(true)}
-              className="group inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-on-primary shadow-[0_0_20px_-6px_rgba(8,123,245,0.7)] transition-all duration-200 hover:bg-primary-dim hover:shadow-[0_0_28px_-4px_rgba(8,123,245,0.9)] active:scale-95"
+              className="group inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-on-primary shadow-[0_0_20px_-6px_rgba(6,101,199,0.7)] transition-all duration-200 hover:bg-primary-dim hover:shadow-[0_0_28px_-4px_rgba(6,101,199,0.9)] active:scale-95"
             >
               <Plus size={12} className="transition-transform group-hover:rotate-90" />
               صفقة جديدة
