@@ -40,6 +40,7 @@ function rowToPartner(row: PartnerRow): Partner {
       : [],
     archivedAt: row.archived_at ?? null,
     email: row.email ?? null,
+    phone: row.phone ?? null,
     gpFeesAccrued: safeNumber(row.gpFeesAccrued),
     profitTakenGross: safeNumber(row.profitTakenGross),
   };
@@ -217,6 +218,7 @@ export function usePartners() {
       payload: {
         name: string;
         email: string;
+        phone: string;
         managementFeePercent: number;
         entryDate: string; // YYYY-MM-DD
       }
@@ -226,6 +228,7 @@ export function usePartners() {
       const updatePayload = {
         name: payload.name,
         email: payload.email || null,
+        phone: payload.phone || null,
         managementFeePercent: Number(payload.managementFeePercent),
         entry_date: payload.entryDate,
       };
@@ -250,6 +253,7 @@ export function usePartners() {
                 ...p,
                 name: updatePayload.name,
                 email: updatePayload.email,
+                phone: updatePayload.phone,
                 managementFeeRate: updatePayload.managementFeePercent,
                 entryDate: updatePayload.entry_date,
               }
@@ -269,6 +273,28 @@ export function usePartners() {
     0
   );
 
+  // Writes ONLY the phone. The WhatsApp dialog saves a missing number
+  // in place; going through updatePartner would rewrite name, fee and
+  // entry date from client state too — values it has no reason to touch.
+  const updatePartnerPhone = useCallback(
+    async (id: string, phone: string) => {
+      setError(null);
+      const value = phone.trim() || null;
+      const { error: updateError } = await supabase
+        .from("partners")
+        .update({ phone: value })
+        .eq("id", id);
+      if (updateError) {
+        setError(updateError.message);
+        throw updateError;
+      }
+      setPartners((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, phone: value } : p))
+      );
+    },
+    []
+  );
+
   return {
     partners,
     loading,
@@ -277,6 +303,7 @@ export function usePartners() {
     deletePartner,
     addPartner,
     updatePartner,
+    updatePartnerPhone,
     refetch: fetchPartners,
   };
 }

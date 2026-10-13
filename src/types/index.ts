@@ -12,6 +12,9 @@ export interface Partner {
   name: string;
   code: string; // e.g. "K-89204"
   email: string | null;
+  // WhatsApp number as the GP typed it; normalised only when a link is
+  // built (lib/whatsapp). Absent on partners saved before this existed.
+  phone?: string | null;
   avatarUrl?: string;
   initials: string;
   totalBalance: number;

@@ -11,6 +11,7 @@ import {
   Download,
   Gauge,
   Mail,
+  MessageCircle,
   RefreshCw,
   Send,
   Server,
@@ -28,6 +29,7 @@ import { useTrades } from "@/hooks/use-trades";
 import { supabase } from "@/lib/supabase";
 import { formatNumber } from "@/lib/utils";
 import { useCurrency, useCurrencyStore } from "@/hooks/use-currency";
+import { WhatsAppReportsDialog } from "@/components/ui/whatsapp-reports-dialog";
 import {
   tradeMonthKey,
   tradeProfit,
@@ -580,7 +582,7 @@ function SettingsCard({
 }
 
 function MonthlyReportSender() {
-  const { partners } = usePartners();
+  const { partners, updatePartnerPhone } = usePartners();
   const { trades } = useTrades();
   const { entries: storedMonthly } = useMonthlyProfits(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -589,6 +591,22 @@ function MonthlyReportSender() {
   });
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
   const [downloadMsg, setDownloadMsg] = useState<string | null>(null);
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  // Built only while the dialog is open, and rebuilt when partners change
+  // — so a phone number saved inside the dialog shows up immediately.
+  const whatsAppReports = React.useMemo(() => {
+    if (!whatsAppOpen) return [];
+    const targets = selectedPartnerId
+      ? partners.filter((p) => p.id === selectedPartnerId)
+      : partners;
+    return buildMonthlyReports(
+      partners,
+      trades,
+      storedMonthly,
+      selectedMonth,
+      targets
+    );
+  }, [whatsAppOpen, partners, trades, storedMonthly, selectedMonth, selectedPartnerId]);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{
     sentCount: number;
@@ -792,6 +810,22 @@ function MonthlyReportSender() {
           معاينة وحفظ التقارير PDF
         </button>
 
+        {/* Same report, as a ready WhatsApp message per partner — the GP
+            opens each chat prefilled and presses send. */}
+        <button
+          onClick={() => {
+            setError(null);
+            setResult(null);
+            setDownloadMsg(null);
+            setWhatsAppOpen(true);
+          }}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300 transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-200 active:scale-[0.99]"
+          title="رسالة جاهزة لكل شريك — تفتح واتساب والنص مكتوب، وأنت تضغط إرسال"
+        >
+          <MessageCircle size={12} />
+          رسائل واتساب جاهزة
+        </button>
+
         {/* On-demand email blast via the GitHub workflow — works no
             matter what the web hosting supports. Opens the Run
             workflow page; one green click there emails everyone. */}
@@ -806,6 +840,14 @@ function MonthlyReportSender() {
           إرسال بالإيميل للجميع (عبر GitHub)
         </a>
       </div>
+
+      <WhatsAppReportsDialog
+        open={whatsAppOpen}
+        month={selectedMonth}
+        reports={whatsAppReports}
+        onClose={() => setWhatsAppOpen(false)}
+        onSavePhone={updatePartnerPhone}
+      />
 
       {downloadMsg && (
         <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">

@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Pencil, Save, X, Percent } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { normalizeWhatsAppPhone } from "@/lib/whatsapp";
 import type { Partner } from "@/types";
 
 export interface PartnerEditPayload {
   name: string;
   email: string;
+  phone: string;
   managementFeePercent: number;
   entryDate: string; // YYYY-MM-DD
 }
@@ -27,6 +29,7 @@ export function EditPartnerDialog({
 }: EditPartnerDialogProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [feePercent, setFeePercent] = useState("");
   const [entryDate, setEntryDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -37,6 +40,7 @@ export function EditPartnerDialog({
     if (!open || !partner) return;
     setName(partner.name ?? "");
     setEmail(partner.email ?? "");
+    setPhone(partner.phone ?? "");
     setFeePercent(
       Number.isFinite(partner.managementFeeRate)
         ? String(partner.managementFeeRate)
@@ -79,11 +83,17 @@ export function EditPartnerDialog({
       return;
     }
 
+    if (phone.trim() && !normalizeWhatsAppPhone(phone)) {
+      setError("رقم الجوال غير صحيح — مثال: 0551234567 أو ‎+966551234567");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await onSubmit(partner.id, {
         name: trimmedName,
         email: email.trim(),
+        phone: phone.trim(),
         managementFeePercent: fee,
         entryDate,
       });
@@ -169,6 +179,26 @@ export function EditPartnerDialog({
               dir="ltr"
               className={inputBase}
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              رقم الجوال — واتساب{" "}
+              <span className="text-zinc-600">(اختياري)</span>
+            </label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={submitting}
+              placeholder="05XXXXXXXX"
+              dir="ltr"
+              className={inputBase}
+            />
+            <p className="text-[10px] text-zinc-600">
+              لفتح محادثة الشريك مباشرة عند إرسال التقرير الشهري بالواتساب.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
