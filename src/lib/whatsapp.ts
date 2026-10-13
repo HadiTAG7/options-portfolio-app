@@ -105,7 +105,7 @@ export function buildWhatsAppMessage(
   // line by template accident.
   const intro =
     s.netProfit > 0.005
-      ? `نحمد الله ونشكره على ما تحقق من أرباح في شهر ${month}، وهذا ملخص التقرير:`
+      ? `نحمد الله ونشكره، وببركة محمد وآل محمد تم تحقيق أرباح في شهر ${month}، وهذا ملخص التقرير:`
       : `تقرير شهر ${month}:`;
   const deadline = requestDeadline ? arabicDayLabel(requestDeadline) : null;
 
