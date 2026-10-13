@@ -137,7 +137,7 @@ export function BuybackDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-full max-w-md mx-4 overflow-hidden rounded-xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/95 via-zinc-950/95 to-black shadow-[0_0_60px_-12px_rgba(16,185,129,0.3)]"
+        className="relative w-full max-w-md mx-4 overflow-hidden rounded-xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/95 via-zinc-950/95 to-black shadow-[0_0_60px_-12px_rgba(34,184,138,0.3)]"
       >
         <div className="flex items-center justify-between border-b border-zinc-800/70 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">

@@ -31,4 +31,4 @@ The dark interface uses near-black navy surfaces sampled from the provided dashb
 
 Email delivery is not exercised by visual verification.
 
-The approved emerald is `#22B88A`. Dark surfaces use this exact accent; light-theme text uses the darker companion `#168568` for readability. The logo pairs both shades with the approved blue and navy.
+The approved emerald is `#22B88A` everywhere in the app, including light mode, gradients, glows, report styling, logo columns and installed-app icons. Opacity may vary; no separate lighter or darker green hue is used. Neutral navy labels provide contrast on emerald fills.

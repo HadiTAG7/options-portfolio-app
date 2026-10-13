@@ -103,14 +103,14 @@
   --color-on-secondary-fixed: #700003;
   --color-on-secondary-fixed-variant: #A60007;
   --color-tertiary: #22B88A;
-  --color-on-tertiary: #0C3528;
-  --color-tertiary-container: #123E32;
-  --color-on-tertiary-container: #B7EDDB;
+  --color-on-tertiary: #062E58;
+  --color-tertiary-container: #22B88A;
+  --color-on-tertiary-container: #062E58;
   --color-tertiary-dim: #22B88A;
-  --color-tertiary-fixed: #B7EDDB;
-  --color-tertiary-fixed-dim: #7DDBBA;
-  --color-on-tertiary-fixed: #0C3528;
-  --color-on-tertiary-fixed-variant: #123E32;
+  --color-tertiary-fixed: #22B88A;
+  --color-tertiary-fixed-dim: #22B88A;
+  --color-on-tertiary-fixed: #062E58;
+  --color-on-tertiary-fixed-variant: #062E58;
   --color-error: #FF8F86;
   --color-on-error: #450900;
   --color-error-container: #8F2833;
@@ -151,12 +151,51 @@
   --color-zinc-300: #CFDEEA;
   --color-zinc-200: #E1EAF2;
   --color-zinc-100: #F4F7FA;
-  --color-emerald-700: #0D634B;
-  --color-emerald-600: #168568;
-  --color-emerald-500: #22B88A;
-  --color-emerald-400: #22B88A;
-  --color-emerald-300: #7DDBBA;
-  --color-emerald-200: #B7EDDB;
+  /* Every green accent uses one approved RGB hue. Opacity may vary. */
+  --color-emerald-50: var(--color-brand-emerald);
+  --color-emerald-100: var(--color-brand-emerald);
+  --color-emerald-200: var(--color-brand-emerald);
+  --color-emerald-300: var(--color-brand-emerald);
+  --color-emerald-400: var(--color-brand-emerald);
+  --color-emerald-500: var(--color-brand-emerald);
+  --color-emerald-600: var(--color-brand-emerald);
+  --color-emerald-700: var(--color-brand-emerald);
+  --color-emerald-800: var(--color-brand-emerald);
+  --color-emerald-900: var(--color-brand-emerald);
+  --color-emerald-950: var(--color-brand-emerald);
+  --color-green-50: var(--color-brand-emerald);
+  --color-green-100: var(--color-brand-emerald);
+  --color-green-200: var(--color-brand-emerald);
+  --color-green-300: var(--color-brand-emerald);
+  --color-green-400: var(--color-brand-emerald);
+  --color-green-500: var(--color-brand-emerald);
+  --color-green-600: var(--color-brand-emerald);
+  --color-green-700: var(--color-brand-emerald);
+  --color-green-800: var(--color-brand-emerald);
+  --color-green-900: var(--color-brand-emerald);
+  --color-green-950: var(--color-brand-emerald);
+  --color-teal-50: var(--color-brand-emerald);
+  --color-teal-100: var(--color-brand-emerald);
+  --color-teal-200: var(--color-brand-emerald);
+  --color-teal-300: var(--color-brand-emerald);
+  --color-teal-400: var(--color-brand-emerald);
+  --color-teal-500: var(--color-brand-emerald);
+  --color-teal-600: var(--color-brand-emerald);
+  --color-teal-700: var(--color-brand-emerald);
+  --color-teal-800: var(--color-brand-emerald);
+  --color-teal-900: var(--color-brand-emerald);
+  --color-teal-950: var(--color-brand-emerald);
+  --color-lime-50: var(--color-brand-emerald);
+  --color-lime-100: var(--color-brand-emerald);
+  --color-lime-200: var(--color-brand-emerald);
+  --color-lime-300: var(--color-brand-emerald);
+  --color-lime-400: var(--color-brand-emerald);
+  --color-lime-500: var(--color-brand-emerald);
+  --color-lime-600: var(--color-brand-emerald);
+  --color-lime-700: var(--color-brand-emerald);
+  --color-lime-800: var(--color-brand-emerald);
+  --color-lime-900: var(--color-brand-emerald);
+  --color-lime-950: var(--color-brand-emerald);
 
   --font-headline: "Thmanyah Sans", system-ui, sans-serif;
   --font-body: "Thmanyah Sans", system-ui, sans-serif;
@@ -194,7 +233,7 @@
 
 /* Glow effect — emerald, matching the retuned primary */
 .glow-primary {
-  filter: drop-shadow(0 0 8px rgba(34, 184, 138, 0.35));
+  filter: drop-shadow(0 0 8px rgba(34,184,138, 0.35));
 }
 
 /* Glass card — translucent surface + blur + hover lift. Themeable via
@@ -243,7 +282,7 @@
 
 /* Text selection — emerald wash instead of the browser default blue */
 ::selection {
-  background: rgba(34, 184, 138, 0.28);
+  background: rgba(34,184,138, 0.28);
   color: #ffffff;
 }
 
@@ -291,8 +330,7 @@ input[type="number"] {
 
    Neutrals are ROLE-REVERSED (deep bg ⇄ white, borders ⇄ light gray,
    white text ⇄ near-black) so every shade keeps its meaning. Accent
-   TEXT shades are darkened for readable contrast on white; fills stay
-   vibrant. Default (:root, no class / .dark) remains the dark theme.
+   shades use the approved emerald in both appearances. Default (:root, no class / .dark) remains the dark theme.
    ═══════════════════════════════════════════════════════════════════ */
 html.light {
   /* ── Neutrals: reversed zinc scale + white/black ── */
@@ -330,20 +368,17 @@ html.light {
   --color-outline: #a1a1aa;
   --color-outline-variant: #e4e4e7;
 
-  /* ── Accents: deep shades so BOTH white-on-fill buttons
-     (e.g. bg-emerald-500 with text-zinc-950 → white) AND accent text on
-     white read with proper contrast. Fills look deep/premium on light;
-     dark theme is untouched (these apply only under html.light). ── */
-  /* Primary (emerald) */
-  --color-primary: #047857;
+  /* Accent hue stays identical in dark and light appearances. */
+  /* Uniform emerald in light mode too; neutral labels stay readable. */
+  --color-primary: #22B88A;
   --color-on-primary: #ffffff;
-  --color-primary-container: #059669;
+  --color-primary-container: #22B88A;
   --color-on-primary-container: #ffffff;
-  --color-emerald-200: #065f46;
-  --color-emerald-300: #047857;
-  --color-emerald-400: #168568;
-  --color-emerald-500: #047857;
-  --color-emerald-600: #065f46;
+  --color-emerald-200: #22B88A;
+  --color-emerald-300: #22B88A;
+  --color-emerald-400: #22B88A;
+  --color-emerald-500: #22B88A;
+  --color-emerald-600: #22B88A;
   /* Secondary (rose) */
   --color-secondary: #be123c;
   --color-rose-200: #9f1239;
@@ -375,3 +410,8 @@ body {
 }
 
 html.light { --color-primary: #075BB7; --color-primary-container: #0665C7; --color-on-primary: #ffffff; --color-primary-dim: #064992; }
+
+/* Navy labels keep solid emerald controls legible in either appearance. */
+:is(.bg-emerald-500, .bg-emerald-600, .bg-emerald-700) {
+  color: var(--color-brand-navy);
+}

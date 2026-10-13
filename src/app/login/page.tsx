@@ -53,7 +53,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_40px_-8px_rgba(16,185,129,0.5)]">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_40px_-8px_rgba(34,184,138,0.5)]">
             <LockKeyhole size={24} className="text-emerald-400" />
           </div>
           <h1 className="font-headline text-xl font-bold tracking-tight text-white">
@@ -110,7 +110,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-emerald-500 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.7)] transition-all hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-emerald-500 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(34,184,138,0.7)] transition-all hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-60"
           >
             {submitting ? (
               <>

@@ -193,7 +193,7 @@ export default function HistoryPage() {
           </button>
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.9)]" />
           <p className="text-xs text-zinc-500">
             Closed &amp; expired positions · إجمالي الصفقات المغلقة
           </p>
@@ -245,7 +245,7 @@ export default function HistoryPage() {
       </div>
 
       {/* Ledger Table */}
-      <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.15)]">
+      <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(34,184,138,0.15)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10">
@@ -260,7 +260,7 @@ export default function HistoryPage() {
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.8)]" />
               {visible.length} records
             </span>
           </div>
@@ -424,7 +424,7 @@ function FilterTabs({
             onClick={() => onChange(t.key)}
             className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] transition-all duration-200 ${
               active
-                ? "bg-emerald-500/15 text-emerald-300 shadow-[0_0_18px_-6px_rgba(16,185,129,0.65)]"
+                ? "bg-emerald-500/15 text-emerald-300 shadow-[0_0_18px_-6px_rgba(34,184,138,0.65)]"
                 : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
             }`}
           >
@@ -456,7 +456,7 @@ function SummaryCard({
     tone === "emerald"
       ? {
           text: "text-emerald-400",
-          ring: "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_28px_-8px_rgba(16,185,129,0.45)]",
+          ring: "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_28px_-8px_rgba(34,184,138,0.45)]",
           glow: "bg-emerald-500/10",
         }
       : tone === "rose"

@@ -55,7 +55,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
   doc.text("Hadi Capital", pageWidth / 2, 18, { align: "center" });
 
   doc.setFontSize(12);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(34,184,138);
   doc.text(`Monthly Report - ${data.periodKey}`, pageWidth / 2, 28, {
     align: "center",
   });
@@ -69,7 +69,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
   // Partner Info Section
   let y = 55;
   doc.setFontSize(14);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(34,184,138);
   doc.text("Partner Information", margin, y);
 
   y += 10;
@@ -92,7 +92,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
   // Performance Table
   y += 8;
   doc.setFontSize(14);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(34,184,138);
   doc.text("Monthly Performance", margin, y);
   y += 4;
 
@@ -113,7 +113,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
     theme: "grid",
     headStyles: {
       fillColor: [9, 9, 11],
-      textColor: [52, 211, 153],
+      textColor: [34,184,138],
       fontStyle: "bold",
       fontSize: 11,
     },
@@ -135,7 +135,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
   y = (autoTableInfo?.finalY ?? y + 60) + 15;
 
   doc.setFontSize(14);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(34,184,138);
   doc.text("Your Positions", margin, y);
   y += 4;
 
@@ -164,7 +164,7 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
     theme: "grid",
     headStyles: {
       fillColor: [9, 9, 11],
-      textColor: [52, 211, 153],
+      textColor: [34,184,138],
       fontStyle: "bold",
       fontSize: 11,
     },
@@ -173,8 +173,8 @@ export function buildPartnerReportDoc(data: MonthlyReportData): jsPDF {
       textColor: [30, 30, 30],
     },
     footStyles: {
-      fillColor: [240, 253, 244],
-      textColor: [22, 101, 52],
+      fillColor: [34,184,138],
+      textColor: [6, 46, 88],
       fontStyle: "bold",
       fontSize: 11,
     },
