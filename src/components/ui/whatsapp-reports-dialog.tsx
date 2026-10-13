@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, MessageCircle, X } from "lucide-react";
-import { useCurrency } from "@/hooks/use-currency";
+import { useCurrencyStore } from "@/hooks/use-currency";
 import { DatePicker } from "@/components/ui/date-picker";
 import { isManagerPartner } from "@/lib/partner-profit";
 import {
@@ -49,9 +49,8 @@ export function WhatsAppReportsDialog({
   onClose,
   onSavePhone,
 }: Props) {
-  // Re-render on the currency toggle: the message follows the currency
-  // the app is showing.
-  const currency = useCurrency();
+  // The SAR rate set in Settings, for the net-profit-in-riyals line.
+  const sarPerUsd = useCurrencyStore((s) => s.rate);
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
   const [phoneDraft, setPhoneDraft] = useState<Record<string, string>>({});
@@ -102,14 +101,12 @@ export function WhatsAppReportsDialog({
           const text = buildWhatsAppMessage(data, {
             isManager: isManagerPartner(partner),
             requestDeadline: deadline || null,
+            sarPerUsd,
           });
           const phone = normalizeWhatsAppPhone(partner.phone);
           return { partner, text, phone, link: whatsAppLink(phone, text) };
         }),
-    // currency is a real dependency: buildWhatsAppMessage formats money
-    // in the display currency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reports, currency, deadline]
+    [reports, deadline, sarPerUsd]
   );
 
   if (!open) return null;
@@ -328,9 +325,9 @@ export function WhatsAppReportsDialog({
         </div>
 
         <p className="border-t border-zinc-800/70 px-6 py-3 text-[10px] leading-relaxed text-zinc-500">
-          النص بين النجمتين *هكذا* يظهر بخط عريض في واتساب. الأرقام بنفس
-          عملة العرض الحالية في التطبيق، ومن نفس بيانات التقرير المرسل
-          بالإيميل.
+          النص بين النجمتين *هكذا* يظهر بخط عريض في واتساب. المبالغ
+          بالدولار من نفس بيانات التقرير المرسل بالإيميل، وصافي الربح
+          بالريال أيضاً بسعر الصرف المحدد في الإعدادات ({sarPerUsd}).
         </p>
       </div>
     </div>

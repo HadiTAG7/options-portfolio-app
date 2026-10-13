@@ -1,5 +1,4 @@
 import type { MonthlyReportData } from "@/lib/report-pdf";
-import { getDisplayCurrency, toDisplayAmount } from "@/lib/currency";
 
 // The monthly report as a WhatsApp message. Built from the SAME
 // MonthlyReportData the email and the PDF use, so the three can never
@@ -56,21 +55,30 @@ export function arabicDayLabel(iso: string): string | null {
 const LRM = "‎";
 const ltr = (s: string) => `${LRM}${s}${LRM}`;
 
-// Money as plain text in the app's current display currency. Plain
-// symbols only: the new riyal sign (U+20C0) renders through a font the
-// app ships, which a recipient's phone does not have. The riyal suffix
-// stays OUTSIDE the LTR run so it reads after the number in Arabic.
-function money(usd: number, signed = false): string {
-  const v = toDisplayAmount(usd);
+function amountParts(v: number, signed: boolean): { sign: string; abs: string } {
   const zero = Math.abs(v) < 0.005;
   const abs = Math.abs(v).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const sign = zero ? "" : v < 0 ? "-" : signed ? "+" : "";
-  return getDisplayCurrency() === "SAR"
-    ? `${ltr(`${sign}${abs}`)} ر.س`
-    : ltr(`${sign}$${abs}`);
+  return { sign: zero ? "" : v < 0 ? "-" : signed ? "+" : "", abs };
+}
+
+// Dollars, always — the fund's books and the emailed report are in USD,
+// so the message reads the same whatever currency the app happens to be
+// displaying when the GP opens it.
+function money(usd: number, signed = false): string {
+  const { sign, abs } = amountParts(usd, signed);
+  return ltr(`${sign}$${abs}`);
+}
+
+// Riyals at the GP's configured rate. Plain "ر.س", not the new riyal
+// sign: U+20C0 renders through a font the app ships, which a recipient's
+// phone does not have. The suffix sits OUTSIDE the LTR run so it reads
+// after the number in Arabic.
+function riyal(usd: number, sarPerUsd: number, signed = false): string {
+  const { sign, abs } = amountParts(usd * sarPerUsd, signed);
+  return `${ltr(`${sign}${abs}`)} ر.س`;
 }
 
 function pct(amount: number, base: number): string {
@@ -87,11 +95,18 @@ export interface WhatsAppMessageOptions {
   // YYYY-MM-DD chosen by the GP. When set, the message asks for any
   // deposit or withdrawal request before that day; empty leaves it out.
   requestDeadline?: string | null;
+  // SAR per USD (the rate set in Settings). When set, net profit is also
+  // given in riyals — the number partners think in.
+  sarPerUsd?: number | null;
 }
 
 export function buildWhatsAppMessage(
   data: MonthlyReportData,
-  { isManager = false, requestDeadline = null }: WhatsAppMessageOptions = {}
+  {
+    isManager = false,
+    requestDeadline = null,
+    sarPerUsd = null,
+  }: WhatsAppMessageOptions = {}
 ): string {
   const s = data.partnerSummary;
   const month = `*${arabicMonthLabel(data.periodKey)}*`;
@@ -118,9 +133,14 @@ export function buildWhatsAppMessage(
     `الربح قبل الرسوم: ${money(s.grossProfit, true)}${pct(s.grossProfit, s.investment)}`,
     feeLine,
     `*صافي الربح:* ${money(s.netProfit, true)}${pct(s.netProfit, s.investment)}`,
-    `إجمالي الأرباح حتى الآن: ${money(s.cumulativeNetProfit, true)}`,
-    ``,
   ];
+  if (sarPerUsd && Number.isFinite(sarPerUsd) && sarPerUsd > 0) {
+    lines.push(`*صافي الربح بالريال:* ${riyal(s.netProfit, sarPerUsd, true)}`);
+  }
+  lines.push(
+    `إجمالي الأرباح حتى الآن: ${money(s.cumulativeNetProfit, true)}`,
+    ``
+  );
   if (deadline) {
     lines.push(
       `في حال الرغبة في الإيداع أو السحب، نأمل إبلاغنا قبل يوم ${deadline}.`,
