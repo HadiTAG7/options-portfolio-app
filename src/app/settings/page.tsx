@@ -192,7 +192,7 @@ export default function SettingsPage() {
           )}
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.9)]" />
           <p className="text-xs text-zinc-500">
             GP-only configuration · إعدادات المدير العام
           </p>
@@ -231,7 +231,7 @@ export default function SettingsPage() {
               step={1}
               value={settings.managementFeePct}
               onChange={(e) => handleFeeChange(Number(e.target.value))}
-              className="w-full h-1.5 appearance-none rounded-full bg-zinc-800 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-400 [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(16,185,129,0.7)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-600 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-emerald-400 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-600"
+              className="w-full h-1.5 appearance-none rounded-full bg-zinc-800 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-400 [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(34,184,138,0.7)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-600 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-emerald-400 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-emerald-600"
             />
             <div className="flex justify-between text-[9px] uppercase tracking-widest text-zinc-600">
               <span>0%</span>
@@ -562,7 +562,7 @@ function SettingsCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.08)]">
+    <div className="relative overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(34,184,138,0.08)]">
       <div className="flex items-center gap-3 border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
         <div className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700/40 bg-zinc-900/60">
           {icon}
@@ -1148,14 +1148,14 @@ function ToggleSwitch({
       aria-checked={enabled}
       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-all duration-200 ${
         enabled
-          ? "border-emerald-500/40 bg-emerald-500/20 shadow-[0_0_12px_-2px_rgba(16,185,129,0.5)]"
+          ? "border-emerald-500/40 bg-emerald-500/20 shadow-[0_0_12px_-2px_rgba(34,184,138,0.5)]"
           : "border-zinc-700/60 bg-zinc-900/60"
       }`}
     >
       <span
         className={`inline-block h-4 w-4 rounded-full transition-all duration-200 ${
           enabled
-            ? "translate-x-[22px] bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.9)]"
+            ? "translate-x-[22px] bg-emerald-400 shadow-[0_0_8px_rgba(34,184,138,0.9)]"
             : "translate-x-[3px] bg-zinc-500"
         }`}
       />

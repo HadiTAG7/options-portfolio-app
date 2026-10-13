@@ -26,7 +26,7 @@ export function Toast({
 
   const toneClass =
     tone === "success"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-[0_0_30px_-12px_rgba(16,185,129,0.4)]"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-[0_0_30px_-12px_rgba(34,184,138,0.4)]"
       : tone === "warning"
         ? "border-amber-400/30 bg-amber-400/10 text-amber-300 shadow-[0_0_30px_-12px_rgba(251,191,36,0.4)]"
         : "border-cyan-400/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_30px_-12px_rgba(34,211,238,0.4)]";

@@ -13,7 +13,7 @@ export function buildPartnerEmailHtml(data: MonthlyReportData): {
   html: string;
 } {
   const s = data.partnerSummary;
-  const GREEN = "#059669";
+  const GREEN = "#22B88A";
   const RED = "#dc2626";
   const money = (n: number) => formatCurrency(n);
   const sign = (n: number) => (n >= 0 ? "+" : "");

@@ -125,7 +125,7 @@ export function EditPartnerDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-full max-w-lg mx-4 overflow-hidden rounded-xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/95 via-zinc-950/95 to-black shadow-[0_0_60px_-12px_rgba(16,185,129,0.3)] backdrop-blur-xl"
+        className="relative w-full max-w-lg mx-4 overflow-hidden rounded-xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/95 via-zinc-950/95 to-black shadow-[0_0_60px_-12px_rgba(34,184,138,0.3)] backdrop-blur-xl"
       >
         <div className="flex items-center justify-between border-b border-zinc-800/70 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
@@ -258,7 +258,7 @@ export function EditPartnerDialog({
             <button
               type="submit"
               disabled={submitting}
-              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-white shadow-[0_0_20px_-6px_rgba(16,185,129,0.5)] transition-all duration-200 hover:bg-emerald-500 hover:shadow-[0_0_28px_-4px_rgba(16,185,129,0.7)] active:scale-[0.98] disabled:opacity-70"
+              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-white shadow-[0_0_20px_-6px_rgba(34,184,138,0.5)] transition-all duration-200 hover:bg-emerald-500 hover:shadow-[0_0_28px_-4px_rgba(34,184,138,0.7)] active:scale-[0.98] disabled:opacity-70"
             >
               {submitting ? (
                 <>

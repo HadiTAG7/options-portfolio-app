@@ -444,7 +444,7 @@ export default function PartnersPage() {
 
       {/* Success Notification */}
       {notification?.type === "success" && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300 backdrop-blur-sm shadow-[0_0_30px_-12px_rgba(52,211,153,0.4)]">
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300 backdrop-blur-sm shadow-[0_0_30px_-12px_rgba(34,184,138,0.4)]">
           <Icon name="check_circle" className="!text-xl text-emerald-400" />
           <span className="flex-1">{notification.message}</span>
           <button
@@ -476,7 +476,7 @@ export default function PartnersPage() {
         ) : (
           <>
             {/* Total Partner Assets */}
-            <div className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]">
+            <div className="group relative md:col-span-2 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_40px_-12px_rgba(34,184,138,0.35)]">
               <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl transition-opacity duration-300 group-hover:bg-emerald-500/20" />
               <div className="pointer-events-none absolute -right-4 -top-4 text-zinc-800/40">
                 <Icon name="account_balance_wallet" className="!text-8xl" />
@@ -497,7 +497,7 @@ export default function PartnersPage() {
             </div>
 
             {/* Total Partners Count */}
-            <div className="group relative overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-400/50 hover:shadow-[0_0_40px_-12px_rgba(52,211,153,0.5)]">
+            <div className="group relative overflow-hidden rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-zinc-950/90 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-400/50 hover:shadow-[0_0_40px_-12px_rgba(34,184,138,0.5)]">
               <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl transition-opacity duration-300 group-hover:bg-emerald-500/30" />
               <div className="pointer-events-none absolute -right-4 -top-4 text-emerald-500/15">
                 <Icon name="group" className="!text-8xl" />
@@ -512,7 +512,7 @@ export default function PartnersPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-emerald-300/70 uppercase tracking-widest font-semibold">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.9)]" />
                   <span>نشطين</span>
                 </div>
               </div>
@@ -569,7 +569,7 @@ export default function PartnersPage() {
           </button>
           <button
             onClick={() => setShowAddDialog(true)}
-            className="group relative flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(52,211,153,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
+            className="group relative flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(34,184,138,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
           >
             <Icon name="add" className="!text-sm" />
             إضافة شريك جديد
@@ -600,7 +600,7 @@ export default function PartnersPage() {
           </p>
           <button
             onClick={() => setShowAddDialog(true)}
-            className="mt-5 flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(52,211,153,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
+            className="mt-5 flex items-center gap-1.5 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(34,184,138,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:scale-[1.03] active:scale-95"
           >
             <Icon name="add" className="!text-sm" />
             إضافة شريك جديد
@@ -664,7 +664,7 @@ export default function PartnersPage() {
                 className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-gradient-to-br from-zinc-900/80 via-zinc-900/50 to-zinc-950/90 p-5 backdrop-blur-sm transition-all duration-300 ${
                   isGP
                     ? "border-amber-400/30 hover:border-amber-400/55 hover:shadow-[0_0_44px_-14px_rgba(251,191,36,0.45)]"
-                    : "border-zinc-800/60 hover:border-emerald-500/40 hover:shadow-[0_0_44px_-14px_rgba(52,211,153,0.4)]"
+                    : "border-zinc-800/60 hover:border-emerald-500/40 hover:shadow-[0_0_44px_-14px_rgba(34,184,138,0.4)]"
                 }`}
               >
                 {/* Corner glow */}
@@ -680,7 +680,7 @@ export default function PartnersPage() {
                 <div className="relative flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <div
-                      className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-[0_0_16px_-4px_rgba(52,211,153,0.4)] ${
+                      className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-[0_0_16px_-4px_rgba(34,184,138,0.4)] ${
                         isGP
                           ? "border border-amber-400/40 bg-gradient-to-br from-amber-400/25 to-amber-400/5 text-amber-300"
                           : "border border-emerald-500/30 bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 text-emerald-400"
@@ -761,7 +761,7 @@ export default function PartnersPage() {
                     title={`${dist.ownershipPct.toFixed(2)}%`}
                   >
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.55)] transition-all duration-700 ease-out"
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 shadow-[0_0_10px_rgba(34,184,138,0.55)] transition-all duration-700 ease-out"
                       style={{
                         width: `${Math.max(0, Math.min(100, dist.ownershipPct))}%`,
                       }}

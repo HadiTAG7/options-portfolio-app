@@ -95,7 +95,7 @@ export function Sidebar() {
         title={collapsed ? "Expand" : "Collapse"}
         className={cn(
           "group/toggle absolute top-7 z-20 hidden md:flex h-6 w-6 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-500 shadow-[0_0_0_4px_#080C16]",
-          "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(16,185,129,0.55),0_0_0_4px_#080C16]",
+          "transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-2px_rgba(34,184,138,0.55),0_0_0_4px_#080C16]",
           "active:scale-95",
           // Park it on the left edge of the sidebar. Because the aside is
           // anchored to right:0 and the LTR chrome flips, using -left-3
@@ -182,7 +182,7 @@ export function Sidebar() {
                   هادي الغانم
                 </p>
                 <p className="mt-0.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-blue-300/80">
-                  <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.9)]" />
+                  <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(34,184,138,0.9)]" />
                   Fund Manager · GP
                 </p>
               </div>
@@ -221,7 +221,7 @@ export function Sidebar() {
               v1.0.0
             </span>
             <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-emerald-500/60">
-              <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.9)] animate-pulse" />
+              <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(34,184,138,0.9)] animate-pulse" />
               Online
             </span>
           </div>
@@ -230,7 +230,7 @@ export function Sidebar() {
             className="mt-2 flex items-center justify-center py-1.5"
             title="Online"
           >
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)] animate-pulse" />
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.9)] animate-pulse" />
           </div>
         )}
       </div>
@@ -259,12 +259,12 @@ function NavLink({
         "group relative flex items-center rounded-md transition-all duration-200 cursor-pointer active:scale-[0.98]",
         collapsed ? "justify-center h-10 w-full" : "gap-3 px-3 py-2.5",
         active
-          ? "bg-brand-blue/[0.12] text-blue-200 shadow-[0_0_22px_-8px_rgba(16,185,129,0.65)]"
+          ? "bg-brand-blue/[0.12] text-blue-200 shadow-[0_0_22px_-8px_rgba(34,184,138,0.65)]"
           : "text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200"
       )}
     >
       {active && (
-        <span className="absolute left-0 top-1/2 h-6 w-[2px] -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]" />
+        <span className="absolute left-0 top-1/2 h-6 w-[2px] -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(34,184,138,0.9)]" />
       )}
       <Icon
         size={collapsed ? 17 : 15}
@@ -287,7 +287,7 @@ function NavLink({
             {item.label}
           </span>
           {active && (
-            <span className="ml-auto inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
+            <span className="ml-auto inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(34,184,138,0.9)]" />
           )}
         </>
       )}
@@ -399,7 +399,7 @@ function SidebarTooltip({
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute top-1/2 right-full mr-3 -translate-y-1/2 z-[60] whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_8px_24px_-6px_rgba(0,0,0,0.8),0_0_18px_-6px_rgba(16,185,129,0.3)] opacity-0 translate-x-1 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:translate-x-0"
+        className="pointer-events-none absolute top-1/2 right-full mr-3 -translate-y-1/2 z-[60] whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(0,0,0,0.4),0_8px_24px_-6px_rgba(0,0,0,0.8),0_0_18px_-6px_rgba(34,184,138,0.3)] opacity-0 translate-x-1 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:translate-x-0"
       >
         {label}
         <span className="absolute top-1/2 -right-[4px] -translate-y-1/2 h-2 w-2 rotate-45 border-t border-r border-zinc-800 bg-zinc-950" />

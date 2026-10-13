@@ -80,7 +80,7 @@ export function TopBar() {
             type="text"
             aria-label="البحث في المحفظة"
             placeholder="البحث في المحفظة..."
-            className="bg-black/50 border border-zinc-800 rounded-md pr-9 pl-4 py-2 w-56 text-[11px] normal-case tracking-normal text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 focus:shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]"
+            className="bg-black/50 border border-zinc-800 rounded-md pr-9 pl-4 py-2 w-56 text-[11px] normal-case tracking-normal text-zinc-200 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 focus:shadow-[0_0_12px_-4px_rgba(34,184,138,0.3)]"
           />
         </div>
 
@@ -154,7 +154,7 @@ export function TopBar() {
         <div className="hidden 2xl:block h-5 w-px bg-zinc-800 mx-1" />
 
         {/* Avatar */}
-        <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-black/60 text-[10px] font-black text-emerald-300 tracking-wide transition-all duration-200 hover:border-emerald-500/50 hover:shadow-[0_0_12px_-4px_rgba(16,185,129,0.5)]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-black/60 text-[10px] font-black text-emerald-300 tracking-wide transition-all duration-200 hover:border-emerald-500/50 hover:shadow-[0_0_12px_-4px_rgba(34,184,138,0.5)]">
           HA
         </div>
       </div>
@@ -175,7 +175,7 @@ function NavTab({ href, label, active }: { href: string; label: string; active: 
     >
       {label}
       {active && (
-        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-4/5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-4/5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(34,184,138,0.8)]" />
       )}
     </Link>
   );

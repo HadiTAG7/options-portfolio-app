@@ -451,7 +451,7 @@ export default function TradesPage() {
             </button>
             <button
               onClick={() => setAddDialogOpen(true)}
-              className="group inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:shadow-[0_0_28px_-4px_rgba(16,185,129,0.9)] active:scale-95"
+              className="group inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-950 shadow-[0_0_20px_-6px_rgba(34,184,138,0.7)] transition-all duration-200 hover:bg-emerald-400 hover:shadow-[0_0_28px_-4px_rgba(34,184,138,0.9)] active:scale-95"
             >
               <Plus size={12} className="transition-transform group-hover:rotate-90" />
               صفقة جديدة
@@ -459,7 +459,7 @@ export default function TradesPage() {
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.9)]" />
           <p className="text-xs text-zinc-500">
             Real-time options + equities ledger
           </p>
@@ -599,7 +599,7 @@ export default function TradesPage() {
       )}
 
       {/* Active Stocks - Trading Pit */}
-      <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.15)]">
+      <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(34,184,138,0.15)]">
         <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10">
@@ -614,7 +614,7 @@ export default function TradesPage() {
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.8)]" />
               {activeStocks.length} holdings
             </span>
           </div>
@@ -631,7 +631,7 @@ export default function TradesPage() {
               disabled={pricesRefreshing || activeStocks.length === 0}
               title="Refresh Prices"
               aria-label="Refresh Prices"
-              className="group inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-900/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300 transition-all duration-200 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-4px_rgba(16,185,129,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800/60 disabled:hover:bg-zinc-900/60"
+              className="group inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-900/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300 transition-all duration-200 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-4px_rgba(34,184,138,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800/60 disabled:hover:bg-zinc-900/60"
             >
               <RefreshCw
                 size={12}
@@ -1330,7 +1330,7 @@ export default function TradesPage() {
 
       <Toast message={toast} tone="success" onDismiss={dismissToast} />
 
-      <button className="fixed bottom-8 left-8 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 backdrop-blur-sm shadow-[0_0_24px_-4px_rgba(16,185,129,0.6)] transition hover:scale-105 hover:bg-emerald-500/20">
+      <button className="fixed bottom-8 left-8 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 backdrop-blur-sm shadow-[0_0_24px_-4px_rgba(34,184,138,0.6)] transition hover:scale-105 hover:bg-emerald-500/20">
         <Terminal size={18} />
       </button>
     </AppShell>
@@ -1358,7 +1358,7 @@ function SummaryCard({
     tone === "emerald"
       ? {
           text: "text-emerald-400",
-          ring: "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_28px_-8px_rgba(16,185,129,0.45)]",
+          ring: "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_28px_-8px_rgba(34,184,138,0.45)]",
           glow: "bg-emerald-500/10",
         }
       : tone === "rose"

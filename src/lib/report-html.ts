@@ -205,7 +205,7 @@ ${fontFaceCss}
   :root{
     --ink:#101318; --muted:#6b7280; --faint:#9aa3ae;
     --line:#e6e8ec; --stripe:#f6f7f9;
-    --emerald:#168568; --emerald-bright:#22B88A;
+    --emerald:#22B88A; --emerald-bright:#22B88A;
     --rose:#be123c; --amber:#b45309;
     --band:#0b0d10; --band2:#161a1f;
   }
@@ -225,7 +225,7 @@ ${fontFaceCss}
   .band-glow{position:absolute;top:-30mm;left:-10mm;width:80mm;height:80mm;border-radius:50%;
     background:radial-gradient(circle,rgba(34,184,138,.25),transparent 70%)}
   .report-title{font-size:24pt;font-weight:700;letter-spacing:.5px}
-  .period{margin-top:2mm;font-size:11pt;color:#9ee8c9}
+  .period{margin-top:2mm;font-size:11pt;color:#22B88A}
   .band-left{text-align:left;position:relative;z-index:1}
   .logotype{font-family:"Thmanyah Serif Display",serif;font-weight:700;font-size:13pt;letter-spacing:2px}
   .logosub{margin-top:1mm;font-size:6.5pt;letter-spacing:3.5px;color:#8b949e}
@@ -243,13 +243,13 @@ ${fontFaceCss}
   .tile{border:.35mm solid var(--line);border-radius:2.5mm;padding:4.5mm 4mm 3.5mm;text-align:center}
   .tile .val{font-size:12.5pt;font-weight:700;margin-top:2mm}
   .tile .sub{margin-top:1.5mm;font-size:6pt;letter-spacing:1.2px;color:var(--faint);font-weight:700}
-  .tile.accent{border-color:var(--emerald-bright);background:#f2fbf7;box-shadow:inset 0 0 0 .35mm var(--emerald-bright)}
+  .tile.accent{border-color:var(--emerald-bright);background:#22B88A;box-shadow:inset 0 0 0 .35mm var(--emerald-bright)}
   .tile.accent.neg{border-color:var(--rose);background:#fdf3f5;box-shadow:inset 0 0 0 .35mm var(--rose)}
 
   /* Cumulative profit-to-date strip */
   .cumustrip{display:flex;justify-content:space-between;align-items:center;
     margin:6mm 14mm 0;padding:4.5mm 6mm;border:.4mm solid var(--emerald-bright);
-    border-radius:2.5mm;background:#f2fbf7}
+    border-radius:2.5mm;background:#22B88A}
   .cumustrip.neg{border-color:var(--rose);background:#fdf3f5}
   .cumustrip .ctitle{font-size:11pt;font-weight:700}
   .cumustrip .csub{margin-top:1mm;font-size:6.5pt;letter-spacing:1px;color:var(--faint);font-weight:700}

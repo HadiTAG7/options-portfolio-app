@@ -163,7 +163,7 @@ export default function MarketsPage() {
             <button
               onClick={() => void fetchAll()}
               disabled={refreshing}
-              className="group inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-900/60 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300 transition-all duration-200 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-4px_rgba(16,185,129,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              className="group inline-flex items-center gap-2 rounded-md border border-zinc-800/60 bg-zinc-900/60 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-300 transition-all duration-200 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[0_0_18px_-4px_rgba(34,184,138,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RefreshCw
                 size={12}
@@ -178,7 +178,7 @@ export default function MarketsPage() {
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.9)]" />
           <p className="text-xs text-zinc-500">
             {hasApiKey
               ? "Live market data via Finnhub · بيانات مباشرة"
@@ -215,7 +215,7 @@ export default function MarketsPage() {
       </section>
 
       {/* ═══════ Wheel Strategy Watchlist ═══════ */}
-      <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.15)]">
+      <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(34,184,138,0.15)]">
         <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10">
@@ -230,7 +230,7 @@ export default function MarketsPage() {
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.8)]" />
               {WATCHLIST.length} tickers
             </span>
           </div>
@@ -291,7 +291,7 @@ function BenchmarkCard({
   const tone = positive ? "emerald" : "rose";
   const borderColor =
     tone === "emerald"
-      ? "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_28px_-8px_rgba(16,185,129,0.35)]"
+      ? "border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_28px_-8px_rgba(34,184,138,0.35)]"
       : "border-rose-500/20 hover:border-rose-500/40 hover:shadow-[0_0_28px_-8px_rgba(239,68,68,0.35)]";
   const glowBg =
     tone === "emerald" ? "bg-emerald-500/10" : "bg-rose-500/10";

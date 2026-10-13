@@ -74,7 +74,7 @@ export function MonthlyBreakdownDialog({
         iconColor: "text-emerald-400",
         valuePositive: "text-emerald-400",
         valueNegative: "text-rose-400",
-        shadow: "shadow-[0_0_60px_-12px_rgba(16,185,129,0.3)]",
+        shadow: "shadow-[0_0_60px_-12px_rgba(34,184,138,0.3)]",
       }
     : {
         border: "border-cyan-400/30",

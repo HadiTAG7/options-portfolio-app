@@ -378,7 +378,7 @@ export default function DashboardPage() {
                   <span className="text-sm text-zinc-400">عقد مفتوح</span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px]">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(34,184,138,0.9)] animate-pulse" />
                   <span className="text-emerald-400/80 uppercase tracking-widest font-bold">
                     Live Trading
                   </span>
@@ -386,7 +386,7 @@ export default function DashboardPage() {
               </div>
             </div>
             {/* ── Total AUM ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,184,138,0.25)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Wallet size={72} strokeWidth={1} />
@@ -431,7 +431,7 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setBreakdownMode("profit")}
               title="عرض الأرباح الشهرية"
-              className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 text-right backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 cursor-pointer"
+              className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 text-right backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,184,138,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 cursor-pointer"
             >
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
@@ -531,7 +531,7 @@ export default function DashboardPage() {
             </button>
 
             {/* ── Avg Monthly Yield ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.2)]">
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,184,138,0.2)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.12]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <BarChart3 size={72} strokeWidth={1} />
@@ -771,7 +771,7 @@ function MonthlySummaryTable({
                     <td className="px-6 py-4 text-left">
                       {entry.status === "Active" ? (
                         <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-widest">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.8)] animate-pulse" />
                           Active
                         </span>
                       ) : (
@@ -1021,7 +1021,7 @@ function ProfitDistribution({
                     <td
                       className={`px-6 py-4 text-sm font-mono tabular-nums font-bold ${
                         netPositive
-                          ? "text-emerald-400 [text-shadow:_0_0_12px_rgba(16,185,129,0.4)]"
+                          ? "text-emerald-400 [text-shadow:_0_0_12px_rgba(34,184,138,0.4)]"
                           : "text-rose-400"
                       }`}
                     >
@@ -1031,7 +1031,7 @@ function ProfitDistribution({
                     <td className="px-6 py-4 text-left">
                       {isActive ? (
                         <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-widest">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.8)] animate-pulse" />
                           نشط · Active
                         </span>
                       ) : (
@@ -1131,7 +1131,7 @@ function CumulativePnLChart({
           </p>
         </div>
         <div className="flex gap-2 items-center rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(34,184,138,0.8)]" />
           <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">
             Premium + Realized
           </span>
@@ -1260,7 +1260,7 @@ function CumulativePnLChart({
           {/* Tooltip */}
           {hovered !== null && points[hovered] && (
             <div
-              className="pointer-events-none absolute z-10 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(16,185,129,0.3)]"
+              className="pointer-events-none absolute z-10 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(34,184,138,0.3)]"
               style={{
                 left: `${(points[hovered].x / W) * 100}%`,
                 top: `${(points[hovered].y / H) * 100 - 14}%`,

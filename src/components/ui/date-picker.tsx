@@ -207,7 +207,7 @@ export function DatePicker({
         disabled={disabled}
         className={`w-full flex items-center justify-between bg-zinc-950/80 border rounded-md px-4 py-3 text-sm font-mono outline-none transition-all disabled:opacity-50 ${
           open
-            ? "border-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+            ? "border-emerald-500 shadow-[0_0_0_1px_rgba(34,184,138,0.35)]"
             : "border-zinc-700/60 hover:border-emerald-500/40"
         } ${displayText ? "text-white" : "text-on-surface-variant/40"}`}
       >
@@ -282,7 +282,7 @@ export function DatePicker({
                   onClick={() => selectDay(day)}
                   className={`relative h-8 w-full rounded-md text-xs font-mono transition-all duration-100 ${
                     isSelected
-                      ? "bg-emerald-500 text-black font-bold shadow-[0_0_12px_rgba(52,211,153,0.4)]"
+                      ? "bg-emerald-500 text-black font-bold shadow-[0_0_12px_rgba(34,184,138,0.4)]"
                       : isToday
                         ? "bg-emerald-500/10 text-emerald-400 font-bold ring-1 ring-inset ring-emerald-500/30"
                         : "text-gray-200 hover:bg-zinc-800 hover:text-white"
