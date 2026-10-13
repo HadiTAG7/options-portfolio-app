@@ -202,7 +202,7 @@ export default function DashboardPage() {
   return (
     <AppShell>
       {/* ═══════ Hero Cards ═══════ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 min-[1440px]:grid-cols-4 gap-5 mb-8">
         {loading ? (
           <>
             <CardSkeleton />
@@ -213,7 +213,7 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* ── Total AUM ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Wallet size={72} strokeWidth={1} />
@@ -227,7 +227,7 @@ export default function DashboardPage() {
                     إجمالي الأصول المُدارة · AUM
                   </span>
                 </div>
-                <div className="flex items-baseline gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="text-4xl font-headline font-light tracking-tight text-white font-mono tabular-nums">
                     {formatWholeNumber(totalAssets)}
                   </span>
@@ -251,7 +251,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Total Yield ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_60px_-12px_rgba(52,211,153,0.25)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-emerald-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-emerald-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <TrendingUp size={72} strokeWidth={1} />
@@ -265,7 +265,7 @@ export default function DashboardPage() {
                     إجمالي العائد · Total Yield
                   </span>
                 </div>
-                <div className="flex items-baseline gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span
                     className={`text-4xl font-headline font-bold tracking-tight font-mono tabular-nums ${
                       profitPositive ? "text-emerald-400" : "text-rose-400"
@@ -303,7 +303,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Management Fees Total ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-400/40 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.28)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.07] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.14]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Receipt size={72} strokeWidth={1} />
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                     رسوم الإدارة · Management Fees
                   </span>
                 </div>
-                <div className="flex items-baseline gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="text-4xl font-headline font-light tracking-tight text-cyan-200 font-mono tabular-nums">
                     {formatCurrency(gpFeeTotal)}
                   </span>
@@ -345,7 +345,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Active Positions ── */}
-            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
+            <div className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-[0_0_60px_-12px_rgba(34,211,238,0.2)]">
               <div className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-cyan-500/[0.06] blur-3xl transition-all duration-500 group-hover:bg-cyan-500/[0.12]" />
               <div className="pointer-events-none absolute bottom-4 left-4 text-zinc-800/30">
                 <Activity size={72} strokeWidth={1} />
@@ -359,7 +359,7 @@ export default function DashboardPage() {
                     المراكز النشطة · Active Positions
                   </span>
                 </div>
-                <div className="flex items-baseline gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="text-5xl font-headline font-black tracking-tight text-white tabular-nums">
                     {openCount}
                   </span>
@@ -378,7 +378,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ═══════ Chart Section ═══════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-8">
         {/* Profit Growth Chart */}
         <CumulativePnLChart data={cumulativeData} loading={loading} />
 
@@ -436,7 +436,7 @@ function MonthlySummaryTable({
   loading: boolean;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] backdrop-blur-sm mb-8">
+    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] backdrop-blur-sm mb-8">
       <div className="px-6 py-4 border-b border-zinc-800/60 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -611,7 +611,7 @@ function ProfitDistribution({
       : monthOptions.find((m) => m.key === selectedMonth)?.label ?? selectedMonth;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] backdrop-blur-sm">
+    <section className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] backdrop-blur-sm">
       <div className="px-6 py-4 border-b border-zinc-800/60 flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -640,7 +640,7 @@ function ProfitDistribution({
               />
             </button>
             {dropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 w-52 max-h-56 overflow-y-auto rounded-md border border-[#1f1f1f] bg-[#0a0a0a] shadow-[0_0_30px_-8px_rgba(0,0,0,0.9)] backdrop-blur-xl">
+              <div className="absolute top-full left-0 mt-1 z-50 w-52 max-h-56 overflow-y-auto rounded-md border border-[#1C3650] bg-[#091C30] shadow-[0_0_30px_-8px_rgba(0,0,0,0.9)] backdrop-blur-xl">
                 <button
                   onClick={() => {
                     onMonthChange("all");
@@ -864,7 +864,7 @@ function CumulativePnLChart({
   }, [data, plotW, plotH]);
 
   return (
-    <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm min-h-[400px] flex flex-col">
+    <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm min-h-[400px] flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
@@ -902,8 +902,8 @@ function CumulativePnLChart({
           >
             <defs>
               <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.30" />
-                <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                <stop offset="0%" stopColor="#009D8A" stopOpacity="0.30" />
+                <stop offset="100%" stopColor="#009D8A" stopOpacity="0.02" />
               </linearGradient>
             </defs>
 
@@ -946,7 +946,7 @@ function CumulativePnLChart({
             <path
               d={linePath}
               fill="none"
-              stroke="#10b981"
+              stroke="#009D8A"
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -970,8 +970,8 @@ function CumulativePnLChart({
                   cx={p.x}
                   cy={p.y}
                   r={hovered === i ? 5 : 3}
-                  fill={hovered === i ? "#10b981" : "#09090b"}
-                  stroke="#10b981"
+                  fill={hovered === i ? "#009D8A" : "#0B2036"}
+                  stroke="#009D8A"
                   strokeWidth={2}
                   className="transition-all duration-150"
                 />
@@ -982,7 +982,7 @@ function CumulativePnLChart({
                     y1={PAD_T}
                     x2={p.x}
                     y2={PAD_T + plotH}
-                    stroke="#10b981"
+                    stroke="#009D8A"
                     strokeWidth={0.5}
                     strokeDasharray="3,3"
                     opacity={0.4}
@@ -1004,7 +1004,7 @@ function CumulativePnLChart({
           {/* Tooltip */}
           {hovered !== null && points[hovered] && (
             <div
-              className="pointer-events-none absolute z-10 rounded-md border border-[#1f1f1f] bg-[#0a0a0a] px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(16,185,129,0.3)]"
+              className="pointer-events-none absolute z-10 rounded-md border border-[#1C3650] bg-[#091C30] px-3 py-2 shadow-[0_0_20px_-4px_rgba(0,0,0,0.8),0_0_12px_-4px_rgba(16,185,129,0.3)]"
               style={{
                 left: `${(points[hovered].x / W) * 100}%`,
                 top: `${(points[hovered].y / H) * 100 - 14}%`,
@@ -1042,8 +1042,8 @@ function niceStep(range: number, targetTicks: number): number {
 // ── Dynamic Portfolio Composition Donut ──
 
 const ALLOC_COLORS = [
-  "#10b981", // emerald
-  "#22d3ee", // cyan
+  "#009D8A", // brand teal
+  "#087BF5", // brand blue
   "#f59e0b", // amber
   "#8b5cf6", // violet
   "#ef4444", // rose
@@ -1090,7 +1090,7 @@ function PortfolioComposition({
   }, [slices, CIRCUMFERENCE]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#09090b] p-6 backdrop-blur-sm flex flex-col">
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-[#0B2036] p-6 backdrop-blur-sm flex flex-col">
       <div className="mb-4">
         <h2 className="text-lg font-headline font-bold text-white leading-none tracking-tight">
           توزيع المحفظة

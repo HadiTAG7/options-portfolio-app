@@ -41,15 +41,15 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   const margin = 20;
 
   // Header
-  doc.setFillColor(9, 9, 11);
+  doc.setFillColor(6, 46, 88);
   doc.rect(0, 0, pageWidth, 45, "F");
 
   doc.setFontSize(22);
   doc.setTextColor(255, 255, 255);
-  doc.text("AlGhanim Options Desk", pageWidth / 2, 18, { align: "center" });
+  doc.text("HADI CAPITAL", pageWidth / 2, 18, { align: "center" });
 
   doc.setFontSize(12);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(142, 228, 216);
   doc.text(`Monthly Report - ${data.periodKey}`, pageWidth / 2, 28, {
     align: "center",
   });
@@ -63,7 +63,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   // Partner Info Section
   let y = 55;
   doc.setFontSize(14);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(0, 125, 110);
   doc.text("Partner Information", margin, y);
 
   y += 10;
@@ -86,7 +86,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   // Performance Table
   y += 8;
   doc.setFontSize(14);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(0, 125, 110);
   doc.text("Monthly Performance", margin, y);
   y += 4;
 
@@ -105,8 +105,8 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
     ],
     theme: "grid",
     headStyles: {
-      fillColor: [9, 9, 11],
-      textColor: [52, 211, 153],
+      fillColor: [6, 46, 88],
+      textColor: [244, 247, 250],
       fontStyle: "bold",
       fontSize: 11,
     },
@@ -128,7 +128,7 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
   y = (autoTableInfo?.finalY ?? y + 60) + 15;
 
   doc.setFontSize(14);
-  doc.setTextColor(52, 211, 153);
+  doc.setTextColor(0, 125, 110);
   doc.text("Your Positions", margin, y);
   y += 4;
 
@@ -156,8 +156,8 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
       : undefined,
     theme: "grid",
     headStyles: {
-      fillColor: [9, 9, 11],
-      textColor: [52, 211, 153],
+      fillColor: [6, 46, 88],
+      textColor: [244, 247, 250],
       fontStyle: "bold",
       fontSize: 11,
     },
@@ -166,8 +166,8 @@ export function generatePartnerReportPDF(data: MonthlyReportData): Buffer {
       textColor: [30, 30, 30],
     },
     footStyles: {
-      fillColor: [240, 253, 244],
-      textColor: [22, 101, 52],
+      fillColor: [231, 246, 243],
+      textColor: [6, 46, 88],
       fontStyle: "bold",
       fontSize: 11,
     },

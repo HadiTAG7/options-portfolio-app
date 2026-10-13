@@ -17,83 +17,93 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* Primary */
-  --color-primary: #5bff49;
-  --color-on-primary: #005e00;
-  --color-primary-container: #07ca09;
-  --color-on-primary-container: #003700;
-  --color-primary-dim: #4af03b;
-  --color-primary-fixed: #5bff49;
-  --color-primary-fixed-dim: #4af03b;
-  --color-on-primary-fixed: #004900;
-  --color-on-primary-fixed-variant: #006901;
-  --color-inverse-primary: #006f01;
+  /* Core Hadi Capital identity. Primary buttons use a darker blue for contrast. */
+  --color-brand-navy: #062E58;
+  --color-brand-blue: #087BF5;
+  --color-brand-teal: #009D8A;
+  --color-brand-paper: #F4F7FA;
+  --color-primary: #076BD9;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #123E6A;
+  --color-on-primary-container: #DBEAFF;
+  --color-primary-dim: #065AB6;
+  --color-primary-fixed: #B8D7FF;
+  --color-primary-fixed-dim: #8CBFFF;
+  --color-on-primary-fixed: #062E58;
+  --color-on-primary-fixed-variant: #123E6A;
+  --color-inverse-primary: #076BD9;
 
-  /* Secondary */
-  --color-secondary: #ff7162;
-  --color-on-secondary: #4a0001;
-  --color-secondary-container: #c0000a;
-  --color-on-secondary-container: #fff6f4;
-  --color-secondary-dim: #e2241f;
-  --color-secondary-fixed: #ffc3bb;
-  --color-secondary-fixed-dim: #ffb0a5;
+  /* Positive values stay teal; losses and destructive actions stay red. */
+  --color-secondary: #BB3341;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #9B2028;
+  --color-on-secondary-container: #FFF6F4;
+  --color-secondary-dim: #D85159;
+  --color-secondary-fixed: #FFC3BB;
+  --color-secondary-fixed-dim: #FFB0A5;
   --color-on-secondary-fixed: #700003;
-  --color-on-secondary-fixed-variant: #a60007;
-
-  /* Tertiary */
-  --color-tertiary: #9df7ff;
-  --color-on-tertiary: #005f65;
-  --color-tertiary-container: #21f0ff;
-  --color-on-tertiary-container: #00555b;
-  --color-tertiary-dim: #00e1ef;
-  --color-tertiary-fixed: #21f0ff;
-  --color-tertiary-fixed-dim: #00e1ef;
-  --color-on-tertiary-fixed: #004145;
-  --color-on-tertiary-fixed-variant: #006066;
-
-  /* Error */
-  --color-error: #ff7351;
+  --color-on-secondary-fixed-variant: #A60007;
+  --color-tertiary: #36D1BD;
+  --color-on-tertiary: #063C36;
+  --color-tertiary-container: #0B524B;
+  --color-on-tertiary-container: #B6F1E9;
+  --color-tertiary-dim: #009D8A;
+  --color-tertiary-fixed: #B6F1E9;
+  --color-tertiary-fixed-dim: #8EE4D8;
+  --color-on-tertiary-fixed: #063C36;
+  --color-on-tertiary-fixed-variant: #0B524B;
+  --color-error: #FF8F86;
   --color-on-error: #450900;
-  --color-error-container: #b92902;
-  --color-on-error-container: #ffd2c8;
-  --color-error-dim: #d53d18;
+  --color-error-container: #8F2833;
+  --color-on-error-container: #FFD2C8;
+  --color-error-dim: #D85159;
 
-  /* Surface */
-  --color-surface: #050505;
-  --color-on-surface: #ffffff;
-  --color-surface-variant: #1f1f1f;
-  --color-on-surface-variant: #a1a1aa;
-  --color-surface-tint: #10b981;
-  --color-surface-dim: #050505;
-  --color-surface-bright: #1a1a1a;
-  --color-surface-container-lowest: #000000;
-  --color-surface-container-low: #0a0a0a;
-  --color-surface-container: #0f0f0f;
-  --color-surface-container-high: #161616;
-  --color-surface-container-highest: #1d1d1d;
-  --color-inverse-surface: #fcf9f8;
-  --color-inverse-on-surface: #565555;
+  --color-surface: #061727;
+  --color-on-surface: #F4F7FA;
+  --color-surface-variant: #1C3650;
+  --color-on-surface-variant: #AFC2D3;
+  --color-surface-tint: #087BF5;
+  --color-surface-dim: #061727;
+  --color-surface-bright: #15334E;
+  --color-surface-container-lowest: #04111F;
+  --color-surface-container-low: #091C30;
+  --color-surface-container: #0B2036;
+  --color-surface-container-high: #15334E;
+  --color-surface-container-highest: #1C3D59;
+  --color-inverse-surface: #F4F7FA;
+  --color-inverse-on-surface: #062E58;
+  --color-background: #061727;
+  --color-on-background: #F4F7FA;
+  --color-outline: #536B84;
+  --color-outline-variant: #1C3650;
 
-  /* Background */
-  --color-background: #050505;
-  --color-on-background: #ffffff;
+  /* Existing neutral/positive utilities inherit the brand across all routes. */
+  --color-zinc-950: #071727;
+  --color-zinc-900: #0B2036;
+  --color-zinc-800: #1C3650;
+  --color-zinc-700: #294962;
+  --color-zinc-600: #8197AA;
+  --color-zinc-500: #8FA8BC;
+  --color-zinc-400: #AFC2D3;
+  --color-zinc-300: #CFDEEA;
+  --color-zinc-200: #E1EAF2;
+  --color-zinc-100: #F4F7FA;
+  --color-emerald-700: #086359;
+  --color-emerald-600: #087D70;
+  --color-emerald-500: #009D8A;
+  --color-emerald-400: #36D1BD;
+  --color-emerald-300: #8EE4D8;
+  --color-emerald-200: #B6F1E9;
 
-  /* Outline */
-  --color-outline: #525258;
-  --color-outline-variant: #2a2a2e;
-
-  /* Fonts */
-  --font-headline: "Thmanyah Serif Display", "Be Vietnam Pro", system-ui, sans-serif;
-  --font-body: "Thmanyah Sans", "Inter", system-ui, sans-serif;
-  --font-label: "Thmanyah Sans", "Inter", system-ui, sans-serif;
-  --font-sans: "Thmanyah Sans", "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-
-  /* Border Radius - terminal aesthetic */
-  --radius-sm: 0.125rem;
-  --radius-md: 0.25rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --font-headline: "Thmanyah Sans", system-ui, sans-serif;
+  --font-body: "Thmanyah Sans", system-ui, sans-serif;
+  --font-label: "Thmanyah Sans", system-ui, sans-serif;
+  --font-sans: "Thmanyah Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 /* Material Symbols */
@@ -113,15 +123,15 @@
   vertical-align: middle;
 }
 
-/* Terminal grid background */
+/* Quiet geometric texture derived from the brand system. */
 .terminal-grid {
-  background-image: radial-gradient(circle, #262626 1px, transparent 1px);
+  background-image: radial-gradient(circle, #1C3650 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 /* Glow effect */
 .glow-primary {
-  filter: drop-shadow(0 0 8px rgba(91, 255, 73, 0.3));
+  filter: drop-shadow(0 0 8px rgba(8, 123, 245, 0.22));
 }
 
 /* Custom scrollbar */
@@ -129,16 +139,17 @@
   width: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #0e0e0e;
+  background: #061727;
 }
 ::-webkit-scrollbar-thumb {
-  background: #262626;
+  background: #1C3650;
   border-radius: 10px;
 }
 
 @layer base {
   html {
-    font-size: 20px;
+    font-size: 18px;
+    color-scheme: dark;
   }
   * {
     border-color: var(--color-outline-variant);
@@ -146,8 +157,26 @@
   body {
     font-family: var(--font-body);
     background-color: var(--color-background);
+    background-image: radial-gradient(ellipse at 0% 0%, rgb(6 46 88 / 45%), transparent 55%);
     color: var(--color-on-surface);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid #8CBFFF;
+    outline-offset: 4px;
+  }
+  ::selection { background: #123E6A; color: #F4F7FA; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

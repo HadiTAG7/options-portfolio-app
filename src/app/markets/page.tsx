@@ -136,12 +136,12 @@ export default function MarketsPage() {
     <AppShell>
       {/* Page Header */}
       <div className="mb-8">
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] uppercase tracking-[0.28em] text-emerald-400/80 font-bold">
-              Sovereign Terminal
+              HADI CAPITAL
             </p>
-            <h1 className="mt-1 font-headline text-3xl font-light tracking-tight text-white">
+            <h1 className="mt-1 font-headline text-2xl md:text-3xl font-light tracking-tight text-white">
               Markets Hub{" "}
               <span className="font-mono text-zinc-500">·</span>{" "}
               <span className="text-zinc-400 font-light">الأسواق</span>
@@ -209,7 +209,7 @@ export default function MarketsPage() {
 
       {/* ═══════ Wheel Strategy Watchlist ═══════ */}
       <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(16,185,129,0.15)]">
-        <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10">
               <BarChart3 size={14} className="text-emerald-400" />

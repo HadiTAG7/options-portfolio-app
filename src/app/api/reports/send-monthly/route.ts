@@ -232,11 +232,11 @@ export async function POST(request: NextRequest) {
         const filename = `report-${month}-${partner.code || partner.name}.pdf`;
 
         await transporter.sendMail({
-          from: `"AlGhanim Options Desk" <${gmailUser}>`,
+          from: `"Hadi Capital" <${gmailUser}>`,
           to: partner.email,
           subject: `Monthly Report - ${periodLabel} - ${partner.name}`,
           html: `<div style="font-family: sans-serif; direction: rtl; text-align: right;">
-            <h2 style="color: #34d399;">AlGhanim Options Desk</h2>
+            <h2 style="color: #062E58;">Hadi Capital</h2>
             <p>مرحباً ${partner.name}،</p>
             <p>مرفق تقريرك الشهري عن أداء استثمارك لشهر <strong>${periodLabel}</strong>.</p>
             <br/>
