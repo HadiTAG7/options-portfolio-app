@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, MessageCircle, X } from "lucide-react";
 import { useCurrency } from "@/hooks/use-currency";
+import { DatePicker } from "@/components/ui/date-picker";
 import { isManagerPartner } from "@/lib/partner-profit";
 import {
+  arabicDayLabel,
   arabicMonthLabel,
   buildWhatsAppMessage,
   normalizeWhatsAppPhone,
@@ -21,6 +23,19 @@ interface Props {
   reports: { partner: Partner; data: MonthlyReportData }[];
   onClose: () => void;
   onSavePhone: (partnerId: string, phone: string) => Promise<void>;
+}
+
+// The deposit/withdrawal deadline is chosen per report month and kept in
+// this browser, so sending the round over two sittings keeps the same
+// date. It's a convenience, never the source of a figure.
+const deadlineKey = (month: string) => `waRequestDeadline:${month}`;
+function readDeadline(month: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(deadlineKey(month)) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 // One row per partner: the ready message, a button that opens WhatsApp
@@ -43,11 +58,26 @@ export function WhatsAppReportsDialog({
   const [phoneError, setPhoneError] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // A fresh month is a fresh round — forget which chats were opened.
-  const [roundKey, setRoundKey] = useState(month);
+  const [deadline, setDeadlineState] = useState("");
+
+  // A fresh month is a fresh round — forget which chats were opened and
+  // load that month's deadline. Starts at "" so the first client render
+  // loads too (nothing here renders while closed, so no hydration risk).
+  const [roundKey, setRoundKey] = useState("");
   if (roundKey !== month) {
     setRoundKey(month);
     setOpened(new Set());
+    setDeadlineState(readDeadline(month));
+  }
+
+  function setDeadline(iso: string) {
+    setDeadlineState(iso);
+    try {
+      if (iso) window.localStorage.setItem(deadlineKey(month), iso);
+      else window.localStorage.removeItem(deadlineKey(month));
+    } catch {
+      // private mode — the date just won't survive a reload
+    }
   }
 
   useEffect(() => {
@@ -69,14 +99,17 @@ export function WhatsAppReportsDialog({
             Number(isManagerPartner(b.partner))
         )
         .map(({ partner, data }) => {
-          const text = buildWhatsAppMessage(data, isManagerPartner(partner));
+          const text = buildWhatsAppMessage(data, {
+            isManager: isManagerPartner(partner),
+            requestDeadline: deadline || null,
+          });
           const phone = normalizeWhatsAppPhone(partner.phone);
           return { partner, text, phone, link: whatsAppLink(phone, text) };
         }),
     // currency is a real dependency: buildWhatsAppMessage formats money
     // in the display currency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reports, currency]
+    [reports, currency, deadline]
   );
 
   if (!open) return null;
@@ -153,6 +186,38 @@ export function WhatsAppReportsDialog({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-6">
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-4">
+            <p className="mb-2 text-[11px] font-bold text-amber-200">
+              آخر موعد لطلبات الإيداع والسحب
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-52">
+                <DatePicker
+                  value={deadline}
+                  onChange={setDeadline}
+                  placeholder="اختر اليوم"
+                />
+              </div>
+              {deadline ? (
+                <>
+                  <span className="text-[11px] text-zinc-400">
+                    يظهر في كل رسالة: «قبل يوم {arabicDayLabel(deadline)}»
+                  </span>
+                  <button
+                    onClick={() => setDeadline("")}
+                    className="text-[10px] font-bold text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+                  >
+                    إزالة
+                  </button>
+                </>
+              ) : (
+                <span className="text-[11px] text-zinc-500">
+                  بدون تاريخ لا يُذكر الإيداع والسحب في الرسالة
+                </span>
+              )}
+            </div>
+          </div>
+
           {rows.length === 0 && (
             <p className="py-10 text-center text-sm text-zinc-500">
               لا توجد بيانات لهذا الشهر

@@ -30,6 +30,25 @@ export function arabicMonthLabel(periodKey: string): string {
   return `${AR_MONTHS[m - 1] ?? m} ${y}`;
 }
 
+const AR_WEEKDAYS = [
+  "الأحد",
+  "الاثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+  "السبت",
+];
+
+// "الخميس 23 أكتوبر" for a YYYY-MM-DD date. Computed in UTC so the
+// weekday can't slide by one in a timezone west of the date line.
+export function arabicDayLabel(iso: string): string | null {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const weekday = AR_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${weekday} ${d} ${AR_MONTHS[m - 1] ?? m}`;
+}
+
 // Left-to-right marks around every figure. WhatsApp renders the message
 // right-to-left, and without them the bidi algorithm moves the sign and
 // the closing parenthesis to the wrong end ("(+3.50%" … ")"). LRM is
@@ -61,21 +80,39 @@ function pct(amount: number, base: number): string {
   return ` ${ltr(`(${sign}${p.toFixed(2)}%)`)}`;
 }
 
-// isManager flips the fee line: an LP pays the performance fee, the GP
-// collects it (the GP's net is gross PLUS the LP fees).
+export interface WhatsAppMessageOptions {
+  // Flips the fee line: an LP pays the performance fee, the GP collects
+  // it (the GP's net is gross PLUS the LP fees).
+  isManager?: boolean;
+  // YYYY-MM-DD chosen by the GP. When set, the message asks for any
+  // deposit or withdrawal request before that day; empty leaves it out.
+  requestDeadline?: string | null;
+}
+
 export function buildWhatsAppMessage(
   data: MonthlyReportData,
-  isManager = false
+  { isManager = false, requestDeadline = null }: WhatsAppMessageOptions = {}
 ): string {
   const s = data.partnerSummary;
+  const month = `*${arabicMonthLabel(data.periodKey)}*`;
+  // No rate in the label: the fee rate is the same every month and the
+  // partner already knows it — the amount is what this month changes.
   const feeLine = isManager
     ? `عمولة الإدارة المحصّلة: ${money(s.feeAmount, true)}`
-    : `الرسوم (${ltr(`${s.feeRatePct.toFixed(0)}%`)}): ${money(-s.feeAmount)}`;
+    : `الرسوم: ${money(-s.feeAmount)}`;
+  // A profitable month opens with praise and thanks to God. A flat or
+  // losing month gets the plain header — never praise attached to a loss
+  // line by template accident.
+  const intro =
+    s.netProfit > 0.005
+      ? `نحمد الله ونشكره على ما تحقق من أرباح في شهر ${month}، وهذا ملخص التقرير:`
+      : `تقرير شهر ${month}:`;
+  const deadline = requestDeadline ? arabicDayLabel(requestDeadline) : null;
 
-  return [
+  const lines = [
     `السلام عليكم ${data.partner.name}،`,
     ``,
-    `تقرير شهر *${arabicMonthLabel(data.periodKey)}*:`,
+    intro,
     ``,
     `مبلغ الاستثمار: ${money(s.investment)}`,
     `الربح قبل الرسوم: ${money(s.grossProfit, true)}${pct(s.grossProfit, s.investment)}`,
@@ -83,8 +120,15 @@ export function buildWhatsAppMessage(
     `*صافي الربح:* ${money(s.netProfit, true)}${pct(s.netProfit, s.investment)}`,
     `إجمالي الأرباح حتى الآن: ${money(s.cumulativeNetProfit, true)}`,
     ``,
-    `التقرير التفصيلي مرسل على بريدك الإلكتروني.`,
-  ].join("\n");
+  ];
+  if (deadline) {
+    lines.push(
+      `في حال الرغبة في الإيداع أو السحب، نأمل إبلاغنا قبل يوم ${deadline}.`,
+      ``
+    );
+  }
+  lines.push(`التقرير التفصيلي مرسل على بريدك الإلكتروني.`);
+  return lines.join("\n");
 }
 
 // Normalise whatever the GP typed into the digits wa.me expects
