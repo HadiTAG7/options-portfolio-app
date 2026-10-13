@@ -69,7 +69,7 @@ export function buildPartnerEmailHtml(data: MonthlyReportData): {
   const html = `<div dir="rtl" style="margin:0;padding:24px 0;background:#f3f4f6;font-family:Tahoma,Arial,'Segoe UI',sans-serif;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
       <div style="background:#09090b;padding:20px 24px;text-align:center;">
-        <div style="color:#34d399;font-size:16px;font-weight:bold;">التقرير الشهري · ${data.periodLabel}</div>
+        <div style="color:#22B88A;font-size:16px;font-weight:bold;">التقرير الشهري · ${data.periodLabel}</div>
       </div>
       <div style="padding:24px;">
         <p style="font-size:15px;color:#111827;margin:0 0 ${data.partner.code ? "4px" : "20px"};">مرحباً ${data.partner.name}،</p>

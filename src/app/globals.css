@@ -78,7 +78,8 @@
   /* Core Hadi Capital identity. Primary buttons use a darker blue for contrast. */
   --color-brand-navy: #062E58;
   --color-brand-blue: #0665C7;
-  --color-brand-teal: #009D8A;
+  --color-brand-emerald: #22B88A;
+  --color-brand-teal: var(--color-brand-emerald);
   --color-brand-paper: #F4F7FA;
   --color-primary: #075BB7;
   --color-on-primary: #ffffff;
@@ -91,7 +92,7 @@
   --color-on-primary-fixed-variant: #123E6A;
   --color-inverse-primary: #075BB7;
 
-  /* Positive values stay teal; losses and destructive actions stay red. */
+  /* Positive values use the approved emerald; losses and destructive actions stay red. */
   --color-secondary: #BB3341;
   --color-on-secondary: #ffffff;
   --color-secondary-container: #9B2028;
@@ -101,15 +102,15 @@
   --color-secondary-fixed-dim: #FFB0A5;
   --color-on-secondary-fixed: #700003;
   --color-on-secondary-fixed-variant: #A60007;
-  --color-tertiary: #36D1BD;
-  --color-on-tertiary: #063C36;
-  --color-tertiary-container: #0B524B;
-  --color-on-tertiary-container: #B6F1E9;
-  --color-tertiary-dim: #009D8A;
-  --color-tertiary-fixed: #B6F1E9;
-  --color-tertiary-fixed-dim: #8EE4D8;
-  --color-on-tertiary-fixed: #063C36;
-  --color-on-tertiary-fixed-variant: #0B524B;
+  --color-tertiary: #22B88A;
+  --color-on-tertiary: #0C3528;
+  --color-tertiary-container: #123E32;
+  --color-on-tertiary-container: #B7EDDB;
+  --color-tertiary-dim: #22B88A;
+  --color-tertiary-fixed: #B7EDDB;
+  --color-tertiary-fixed-dim: #7DDBBA;
+  --color-on-tertiary-fixed: #0C3528;
+  --color-on-tertiary-fixed-variant: #123E32;
   --color-error: #FF8F86;
   --color-on-error: #450900;
   --color-error-container: #8F2833;
@@ -150,12 +151,12 @@
   --color-zinc-300: #CFDEEA;
   --color-zinc-200: #E1EAF2;
   --color-zinc-100: #F4F7FA;
-  --color-emerald-700: #086359;
-  --color-emerald-600: #087D70;
-  --color-emerald-500: #009D8A;
-  --color-emerald-400: #36D1BD;
-  --color-emerald-300: #8EE4D8;
-  --color-emerald-200: #B6F1E9;
+  --color-emerald-700: #0D634B;
+  --color-emerald-600: #168568;
+  --color-emerald-500: #22B88A;
+  --color-emerald-400: #22B88A;
+  --color-emerald-300: #7DDBBA;
+  --color-emerald-200: #B7EDDB;
 
   --font-headline: "Thmanyah Sans", system-ui, sans-serif;
   --font-body: "Thmanyah Sans", system-ui, sans-serif;
@@ -193,7 +194,7 @@
 
 /* Glow effect — emerald, matching the retuned primary */
 .glow-primary {
-  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.35));
+  filter: drop-shadow(0 0 8px rgba(34, 184, 138, 0.35));
 }
 
 /* Glass card — translucent surface + blur + hover lift. Themeable via
@@ -234,7 +235,7 @@
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #10b981; /* emerald-500 */
+  background: #22B88A; /* emerald-500 */
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -242,7 +243,7 @@
 
 /* Text selection — emerald wash instead of the browser default blue */
 ::selection {
-  background: rgba(16, 185, 129, 0.28);
+  background: rgba(34, 184, 138, 0.28);
   color: #ffffff;
 }
 
@@ -314,7 +315,7 @@ html.light {
   --color-on-surface: #18181b;
   --color-surface-variant: #f3f3f5;
   --color-on-surface-variant: #52525b;
-  --color-surface-tint: #10b981;
+  --color-surface-tint: #22B88A;
   --color-surface-dim: #e7e7ea;
   --color-surface-bright: #ffffff;
   --color-surface-container-lowest: #ffffff;
@@ -340,7 +341,7 @@ html.light {
   --color-on-primary-container: #ffffff;
   --color-emerald-200: #065f46;
   --color-emerald-300: #047857;
-  --color-emerald-400: #059669;
+  --color-emerald-400: #168568;
   --color-emerald-500: #047857;
   --color-emerald-600: #065f46;
   /* Secondary (rose) */
