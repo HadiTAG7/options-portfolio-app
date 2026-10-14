@@ -4,44 +4,9 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { safeNumber, formatCurrency, getPartnerInvestment } from "@/lib/utils";
 import type { Partner, FundOperation, PartnerSnapshot } from "@/types";
-import type { PartnerRow, BalanceHistoryEntry } from "@/types/database";
+import type { BalanceHistoryEntry } from "@/types/database";
+import { rowToPartner } from "@/lib/fund-rows";
 
-function rowToPartner(row: PartnerRow): Partner {
-  const currentBalance =
-    safeNumber(row.currentBalance) || safeNumber(row.total_balance);
-  const feePercent =
-    safeNumber(row.managementFeePercent) || safeNumber(row.management_fee_rate);
-
-  return {
-    id: row.id,
-    name: row.name,
-    code: row.code ?? "",
-    email: row.email ?? null,
-    initials: row.initials ?? "",
-    avatarUrl: row.avatar_url ?? undefined,
-    totalBalance: safeNumber(row.total_balance),
-    ownershipPercentage: safeNumber(row.ownership_percentage),
-    managementFeeRate: feePercent,
-    performance24h: safeNumber(row.performance_24h),
-    performanceTrend: row.performance_trend ?? "up",
-    joinedAt: row.joined_at,
-    entryDate: row.entry_date ?? null,
-    lastSettlementDate: row.last_settlement_date ?? null,
-    isAdmin: row.isAdmin ?? false,
-    totalDeposits: safeNumber(row.totalDeposits),
-    totalWithdrawals: safeNumber(row.totalWithdrawals),
-    currentBalance,
-    totalNetProfit: safeNumber(row.totalNetProfit),
-    managementFeesPaid: safeNumber(row.managementFeesPaid),
-    baseCapital: safeNumber(row.baseCapital) || currentBalance,
-    balanceHistory: Array.isArray(row.balanceHistory)
-      ? (row.balanceHistory as Partner["balanceHistory"])
-      : [],
-    archivedAt: row.archived_at ?? null,
-    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
-    profitTakenGross: safeNumber(row.profitTakenGross),
-  };
-}
 
 function withDerivedOwnership(partners: Partner[]): Partner[] {
   const totalInvestment = partners.reduce(

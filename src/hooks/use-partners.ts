@@ -2,49 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { safeNumber } from "@/lib/utils";
 import type { Partner } from "@/types";
-import type { PartnerRow } from "@/types/database";
+import { rowToPartner } from "@/lib/fund-rows";
 
-function rowToPartner(row: PartnerRow): Partner {
-  // currentBalance falls back to total_balance if the new column is empty
-  const currentBalance =
-    safeNumber(row.currentBalance) || safeNumber(row.total_balance);
-  // Fee can be stored under either name depending on schema migrations
-  const feePercent =
-    safeNumber(row.managementFeePercent) || safeNumber(row.management_fee_rate);
-
-  return {
-    id: row.id,
-    name: row.name,
-    code: row.code ?? "",
-    initials: row.initials ?? "",
-    avatarUrl: row.avatar_url ?? undefined,
-    totalBalance: safeNumber(row.total_balance),
-    ownershipPercentage: safeNumber(row.ownership_percentage),
-    managementFeeRate: feePercent,
-    performance24h: safeNumber(row.performance_24h),
-    performanceTrend: row.performance_trend ?? "up",
-    joinedAt: row.joined_at,
-    entryDate: row.entry_date ?? null,
-    lastSettlementDate: row.last_settlement_date ?? null,
-    isAdmin: row.isAdmin ?? false,
-    totalDeposits: safeNumber(row.totalDeposits),
-    totalWithdrawals: safeNumber(row.totalWithdrawals),
-    currentBalance,
-    totalNetProfit: safeNumber(row.totalNetProfit),
-    managementFeesPaid: safeNumber(row.managementFeesPaid),
-    baseCapital: safeNumber(row.baseCapital) || currentBalance,
-    balanceHistory: Array.isArray(row.balanceHistory)
-      ? (row.balanceHistory as Partner["balanceHistory"])
-      : [],
-    archivedAt: row.archived_at ?? null,
-    email: row.email ?? null,
-    phone: row.phone ?? null,
-    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
-    profitTakenGross: safeNumber(row.profitTakenGross),
-  };
-}
 
 // Recompute ownership client-side from totalDeposits so same Investment
 // always yields same ownership share, regardless of small balance drift.

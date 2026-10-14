@@ -8,26 +8,8 @@ import { tradeProfit, tradeProfitDate } from "@/lib/partner-profit";
 import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
+import { rowToTrade } from "@/lib/fund-rows";
 
-function rowToTrade(row: TradeRow): Trade {
-  return {
-    id: row.id,
-    ticker: row.ticker,
-    type: row.type,
-    quantity: safeNumber(row.quantity),
-    premium: safeNumber(row.premium),
-    strike: safeNumber(row.strike),
-    result: safeNumber(row.result),
-    expiration: row.expiration ?? "",
-    date: row.date,
-    status: row.status ?? "open",
-    autoClosed: row.autoClosed ?? false,
-    createdAt: row.created_at ?? null,
-    linkedStockId: row.linked_stock_id ?? null,
-    needsReview: row.needsReview === true,
-    linkedTradeId: row.linked_trade_id ?? null,
-  };
-}
 
 // A trade is expired when it's still open, has a valid expiration date,
 // the expiration is STRICTLY IN THE PAST, and it's a short option

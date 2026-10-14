@@ -5,7 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { BACKEND } from "@/lib/backend";
 import { adminDb } from "@/lib/firebase-admin";
-import type { Partner, Trade } from "@/types";
+import type { Trade } from "@/types";
+import { rowToPartner, rowToTrade, isActivePartnerRow } from "@/lib/fund-rows";
+import { verifyGPToken } from "@/lib/server/gp-auth";
 import { safeNumber } from "@/lib/utils";
 import {
   tradeProfit,
@@ -24,73 +26,8 @@ function previousMonthKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// Verify the caller's Firebase ID token WITHOUT firebase-admin/auth. Its
-// jwks-rsa → jose dependency is ESM-only and crashes under Vercel's
-// serverless loader (ERR_REQUIRE_ESM). Google's Identity Toolkit REST
-// endpoint verifies the token's signature + expiry server-side and returns
-// the account's custom claims, so we can gate on gp === true. The web API
-// key is public (it already ships in the client bundle).
-const FIREBASE_WEB_API_KEY = "AIzaSyBRJS4nWcPyVD97gQXm9G9yWFhMfxAK7E0";
-async function callerIsGP(idToken: string): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_WEB_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      }
-    );
-    if (!res.ok) return false;
-    const data = (await res.json()) as {
-      users?: Array<{ customAttributes?: string }>;
-    };
-    const attrs = data.users?.[0]?.customAttributes;
-    if (!attrs) return false;
-    const claims = JSON.parse(attrs) as { gp?: boolean };
-    return claims.gp === true;
-  } catch {
-    return false;
-  }
-}
-
 type PartnerRow = Database["public"]["Tables"]["partners"]["Row"];
 
-function rowToPartner(row: PartnerRow): Partner {
-  const currentBalance =
-    safeNumber(row.currentBalance) || safeNumber(row.total_balance);
-  const feePercent =
-    safeNumber(row.managementFeePercent) || safeNumber(row.management_fee_rate);
-  return {
-    id: row.id,
-    name: row.name,
-    code: row.code ?? "",
-    email: row.email ?? null,
-    initials: row.initials ?? "",
-    avatarUrl: row.avatar_url ?? undefined,
-    totalBalance: safeNumber(row.total_balance),
-    ownershipPercentage: safeNumber(row.ownership_percentage),
-    managementFeeRate: feePercent,
-    performance24h: safeNumber(row.performance_24h),
-    performanceTrend: row.performance_trend ?? "up",
-    joinedAt: row.joined_at,
-    entryDate: row.entry_date ?? null,
-    lastSettlementDate: row.last_settlement_date ?? null,
-    isAdmin: row.isAdmin ?? false,
-    totalDeposits: safeNumber(row.totalDeposits),
-    totalWithdrawals: safeNumber(row.totalWithdrawals),
-    currentBalance,
-    totalNetProfit: safeNumber(row.totalNetProfit),
-    managementFeesPaid: safeNumber(row.managementFeesPaid),
-    baseCapital: safeNumber(row.baseCapital) || currentBalance,
-    balanceHistory: Array.isArray(row.balanceHistory)
-      ? (row.balanceHistory as Partner["balanceHistory"])
-      : [],
-    archivedAt: row.archived_at ?? null,
-    gpFeesAccrued: safeNumber(row.gpFeesAccrued),
-    profitTakenGross: safeNumber(row.profitTakenGross),
-  };
-}
 
 async function handlePost(request: NextRequest) {
   try {
@@ -107,7 +44,7 @@ async function handlePost(request: NextRequest) {
     const authz = request.headers.get("authorization") || "";
     const idToken = authz.startsWith("Bearer ") ? authz.slice(7).trim() : "";
     if (idToken) {
-      gpOk = await callerIsGP(idToken);
+      gpOk = (await verifyGPToken(idToken)) !== null;
     }
 
     if (!secretOk && !gpOk) {
@@ -158,11 +95,14 @@ async function handlePost(request: NextRequest) {
         db.collection("partners").get(),
         db.collection("trades").get(),
       ]);
+      // Same shape the client shim produces: the doc id merged in, and
+      // archived rows excluded by the shared rule.
       partnerRows = pSnap.docs
-        .map((d) => d.data() as PartnerRow)
-        .filter((r) => !r.archived_at);
+        .map((d) => ({ id: d.id, ...d.data() }) as PartnerRow)
+        .filter(isActivePartnerRow);
       tradeRows = tSnap.docs.map(
-        (d) => d.data() as Database["public"]["Tables"]["trades"]["Row"]
+        (d) =>
+          ({ id: d.id, ...d.data() }) as Database["public"]["Tables"]["trades"]["Row"]
       );
     } else {
       const supabase = createClient<Database>(
@@ -200,20 +140,7 @@ async function handlePost(request: NextRequest) {
       );
     }
 
-    const trades: Trade[] = tradeRows.map((r) => ({
-      id: r.id,
-      ticker: r.ticker,
-      type: r.type,
-      quantity: r.quantity,
-      premium: r.premium,
-      strike: r.strike,
-      result: r.result,
-      expiration: r.expiration,
-      date: r.date,
-      status: r.status,
-      autoClosed: r.autoClosed,
-      createdAt: r.created_at ?? null,
-    }));
+    const trades: Trade[] = tradeRows.map(rowToTrade);
 
     // Stored (frozen / GP-edited) monthly-profit records win over the live
     // compute so the email matches the app and the log exactly.
