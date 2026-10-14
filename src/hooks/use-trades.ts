@@ -1169,6 +1169,9 @@ export function useTrades() {
 
   return {
     trades: tradesList,
+    // True when the trades fetch failed and the list is the bundled demo
+    // data. Anything that computes money (the funding day) must refuse.
+    usingSeedData,
     sellCalls,
     sellPuts,
     stockSells,

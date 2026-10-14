@@ -15,6 +15,7 @@ import {
   Settings,
   X,
   Users,
+  Landmark,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/", label: "لوحة التحكم", icon: LayoutDashboard },
   { href: "/partners", label: "الشركاء", icon: Users },
+  { href: "/funding", label: "يوم التمويل", icon: Landmark },
   { href: "/trades", label: "الصفقات", icon: LineChart },
   { href: "/history", label: "السجل", icon: History },
 ];
