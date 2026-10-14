@@ -1,0 +1,43 @@
+# Read-only rehearsal of the funding day (يوم التمويل) on live data.
+# Plans the day exactly as the server would and checks the fund-wide
+# invariants. It has NO write path — there is no flag or input that makes
+# it change anything.
+#
+# Runs on a push whose commit message contains [funding-dry], or manually.
+# The repository is public, so the script prints no names and no amounts.
+
+name: Funding Dry Run
+
+on:
+  push:
+    branches:
+      - claude/write-app-prompt-8V4uK
+  workflow_dispatch:
+    inputs:
+      requests_json:
+        description: "Optional FundingRequest[] JSON to rehearse"
+        type: string
+        default: ""
+
+jobs:
+  dry-run:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message || '', '[funding-dry]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/write-app-prompt-8V4uK
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Planner tests
+        run: npx tsx scripts/test-funding-day.ts
+      - name: Dry run on live data (read-only)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.requests_json || '' }}
+        run: npx tsx scripts/funding-dry-run.ts

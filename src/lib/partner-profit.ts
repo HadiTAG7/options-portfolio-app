@@ -107,7 +107,7 @@ export function tradeMonthKey(t: Trade): string | null {
 // events order correctly; legacy rows (null created_at) are backfilled to
 // midnight of their trade date by migration 011, preserving their historical
 // behavior.
-function isEligible(
+export function isEligible(
   partner: Partner,
   profitDate: string,
   recordedAt?: string | null
