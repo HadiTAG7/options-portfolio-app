@@ -176,7 +176,10 @@ export type FundOperationKind =
   | "capitalize"
   | "deposit"
   | "commission_withdraw"
-  | "commission_capitalize";
+  | "commission_capitalize"
+  // يوم التمويل: every partner settled and moved in one transaction.
+  // Undone as a unit by the server (api/funding/undo), never row by row.
+  | "funding_day";
 
 // One reversible money operation (the undo journal). Stored in the
 // `operations` Firestore collection (GP-only). `snapshots` holds the
@@ -191,6 +194,13 @@ export interface FundOperation {
   partnerIds: string[];
   snapshots: PartnerSnapshot[];
   reversedAt: string | null;
+  // funding_day only: the round it executed, and every operation that was
+  // still applied when it ran. Those sit underneath it — undoing one would
+  // restore a before-state the funding day already superseded — so they
+  // stay locked while it stands, whatever their timestamps say (operation
+  // times come from different devices' clocks).
+  roundId?: string | null;
+  priorOpIds?: string[];
 }
 
 // ============================================================

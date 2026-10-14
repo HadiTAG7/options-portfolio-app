@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { safeNumber, formatCurrency, getPartnerInvestment } from "@/lib/utils";
 import type { Partner, FundOperation, PartnerSnapshot } from "@/types";
-import type { BalanceHistoryEntry } from "@/types/database";
+import type { BalanceHistoryEntry, PartnerRow } from "@/types/database";
 import { rowToPartner } from "@/lib/fund-rows";
 
 
@@ -210,6 +210,34 @@ async function recordOperation(op: {
 // BEFORE snapshot so the caller can add it to the operation's undo
 // record. Non-fatal by design: the LP's own settlement has already
 // committed, so a failure here is surfaced loudly but rolls nothing back.
+// Refuse a money write computed from a stale copy of the partner.
+// Every action below writes ABSOLUTE values derived from the Partner it
+// was handed; if the row changed since the page loaded it — another
+// device, or a funding day that settled everyone — the write would
+// silently roll that change back. Re-read and compare the fields the
+// actions derive from. Returns the message to show, or null when fresh
+// (or when the row can't be read: the write path reports that itself).
+async function staleReason(partner: Partner): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("partners")
+    .select("*")
+    .eq("id", partner.id)
+    .single();
+  if (error || !data) return null;
+  const fresh = rowToPartner(data as PartnerRow);
+  const same = (a: unknown, b: unknown) =>
+    Math.abs(safeNumber(a) - safeNumber(b)) < 1e-6;
+  const ok =
+    same(fresh.totalDeposits, partner.totalDeposits) &&
+    same(fresh.currentBalance, partner.currentBalance) &&
+    same(fresh.gpFeesAccrued, partner.gpFeesAccrued) &&
+    same(fresh.profitTakenGross, partner.profitTakenGross) &&
+    (fresh.lastSettlementDate ?? null) === (partner.lastSettlementDate ?? null);
+  return ok
+    ? null
+    : "بيانات الشريك تغيّرت منذ تحميل الصفحة (من جهاز آخر أو يوم التمويل) — حدّث الصفحة ثم أعد المحاولة.";
+}
+
 async function accrueGpFee(
   transfer: FeeTransfer,
   opId?: string
@@ -296,6 +324,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     feeTransfer?: FeeTransfer | null
   ) => {
     set({ error: null, notification: null });
+    {
+      const stale = await staleReason(partner);
+      if (stale) {
+        set({ notification: { type: "error", message: stale } });
+        throw new Error(stale);
+      }
+    }
 
     // --- Client-side validation ---
     // Validate against the same capital basis the WithdrawalDialog
@@ -561,6 +596,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     feeTransfer?: FeeTransfer | null
   ) => {
     set({ error: null, notification: null });
+    {
+      const stale = await staleReason(partner);
+      if (stale) {
+        set({ notification: { type: "error", message: stale } });
+        throw new Error(stale);
+      }
+    }
 
     if (netProfitAmount <= 0) {
       const msg = "لا توجد أرباح للتثبيت";
@@ -679,6 +721,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
     onDone?: () => Promise<void>
   ) => {
     set({ error: null, notification: null });
+    {
+      const stale = await staleReason(partner);
+      if (stale) {
+        set({ notification: { type: "error", message: stale } });
+        throw new Error(stale);
+      }
+    }
 
     if (amount <= 0) {
       const msg = "مبلغ الإيداع يجب أن يكون أكبر من صفر";
@@ -819,6 +868,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
   // never in capital). Money leaves the fund, journaled as a Withdrawal.
   withdrawGpCommission: async (partner, amount, onDone) => {
     set({ error: null, notification: null });
+    {
+      const stale = await staleReason(partner);
+      if (stale) {
+        set({ notification: { type: "error", message: stale } });
+        throw new Error(stale);
+      }
+    }
     const accrued = safeNumber(partner.gpFeesAccrued);
 
     if (amount <= 0) {
@@ -886,6 +942,13 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
   // the commission pot.
   capitalizeGpCommission: async (partner, amount, onDone) => {
     set({ error: null, notification: null });
+    {
+      const stale = await staleReason(partner);
+      if (stale) {
+        set({ notification: { type: "error", message: stale } });
+        throw new Error(stale);
+      }
+    }
     const accrued = safeNumber(partner.gpFeesAccrued);
 
     if (amount <= 0) {
@@ -996,6 +1059,12 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
       throw new Error(msg);
     }
 
+    if (op.kind === "funding_day") {
+      const msg = "إلغاء يوم التمويل يتم من صفحة «يوم التمويل» — لأنه يشمل كل الشركاء.";
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
+
     const touched = new Set(
       op.partnerIds && op.partnerIds.length > 0
         ? op.partnerIds
@@ -1015,6 +1084,19 @@ export const usePartnersStore = create<PartnersState>((set, get) => ({
         Array.isArray(o.partnerIds) &&
         o.partnerIds.some((pid: string) => touched.has(pid))
     );
+    // A funding day that ran after this op locks it regardless of clocks.
+    const lockedBy = (allOps ?? []).find(
+      (o) =>
+        !o.reversedAt &&
+        o.kind === "funding_day" &&
+        Array.isArray(o.priorOpIds) &&
+        o.priorOpIds.includes(op.id)
+    );
+    if (lockedBy) {
+      const msg = `لا يمكن التراجع: يوم التمويل (${lockedBy.label}) نُفّذ بعد هذه العملية. ألغِ يوم التمويل أولاً.`;
+      set({ notification: { type: "error", message: msg } });
+      throw new Error(msg);
+    }
     if (clash) {
       const msg = `لا يمكن التراجع: توجد عملية أحدث (${clash.label}) على نفس الشريك. تراجع عنها أولاً.`;
       set({ notification: { type: "error", message: msg } });

@@ -109,14 +109,27 @@ function PartnerDetailInner() {
   // opId → the operation undoable right now. LIFO/overlap-safe: iterating
   // newest-first, an op is undoable only if none of its partners were
   // already claimed by a newer still-applied op. GP-only.
+  //
+  // A funding day (kind funding_day) is never offered here: it settled
+  // every partner at once, so undoing it from one partner's statement
+  // would reverse all of them — that lives on the funding page. It still
+  // CLAIMS its partners, and the operations it superseded (priorOpIds)
+  // stay locked even if a device clock dated them later.
   const undoableByOpId = useMemo(() => {
     if (!viewerIsGP) return undefined;
+    const locked = new Set(
+      operations
+        .filter((o) => o.kind === "funding_day" && !o.reversedAt)
+        .flatMap((o) => o.priorOpIds ?? [])
+    );
     const claimed = new Set<string>();
     const map = new Map<string, FundOperation>();
     for (const op of operations) {
       if (op.reversedAt) continue;
       const overlaps = op.partnerIds.some((p) => claimed.has(p));
-      if (!overlaps) map.set(op.id, op);
+      if (!overlaps && op.kind !== "funding_day" && !locked.has(op.id)) {
+        map.set(op.id, op);
+      }
       op.partnerIds.forEach((p) => claimed.add(p));
     }
     return map;

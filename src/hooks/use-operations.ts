@@ -16,6 +16,8 @@ function rowToOperation(row: OperationRow): FundOperation {
       ? (row.snapshots as PartnerSnapshot[])
       : [],
     reversedAt: row.reversedAt ?? null,
+    roundId: row.roundId ?? null,
+    priorOpIds: Array.isArray(row.priorOpIds) ? row.priorOpIds : [],
   };
 }
 

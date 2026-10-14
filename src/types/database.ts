@@ -192,6 +192,8 @@ export interface Database {
           snapshots: unknown[];
           reversedAt: string | null;
           created_at?: string;
+          roundId?: string | null;
+          priorOpIds?: string[] | null;
         };
         Insert: {
           id?: string;
@@ -202,6 +204,8 @@ export interface Database {
           snapshots: unknown[];
           reversedAt?: string | null;
           created_at?: string;
+          roundId?: string | null;
+          priorOpIds?: string[] | null;
         };
         Update: Partial<Database["public"]["Tables"]["operations"]["Insert"]>;
         Relationships: [];

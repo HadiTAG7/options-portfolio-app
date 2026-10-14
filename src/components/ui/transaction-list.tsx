@@ -183,11 +183,16 @@ export function TransactionList({
                       إلغاء
                     </button>
                   ))}
+                {/* A row type implies its sign, except a Capitalize that
+                    books a losing cycle into capital (funding day): its
+                    amount is negative, and must not render "+-$300". */}
                 <span
-                  className={`font-mono text-sm font-bold tabular-nums ${meta.tone}`}
+                  className={`font-mono text-sm font-bold tabular-nums ${
+                    t.amount < 0 ? "text-rose-300" : meta.tone
+                  }`}
                 >
-                  {meta.sign}
-                  {formatCurrency(t.amount)}
+                  {t.amount < 0 ? "−" : meta.sign}
+                  {formatCurrency(Math.abs(t.amount))}
                 </span>
               </div>
             </div>
