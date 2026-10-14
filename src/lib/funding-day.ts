@@ -53,7 +53,11 @@ export interface PlanInput {
   partners: Partner[]; // active partners, mapped by fund-rows.rowToPartner
   trades: Trade[];
   requests: FundingRequest[];
-  sarPerUsd: number;
+  // SAR per USD, by direction: the bank sells dollars (riyal deposits) and
+  // buys them back (riyal withdrawals) at different prices, so each
+  // partner is booked at the rate their direction actually costs.
+  depositSarPerUsd: number;
+  withdrawSarPerUsd: number;
   // The moment the plan is computed for. On the server: server time at
   // execution. In the browser preview: device time (an estimate).
   now: Date;
@@ -123,6 +127,13 @@ export interface FundingTotals {
   sarOut: number;
   fxNeededSar: number; // |sarIn − sarOut|
   fxAvoidedSar: number; // 2·min(sarIn, sarOut)
+  // The GP's spread when riyal deposits and withdrawals offset each other:
+  // each side is booked at its own rate, but the netted riyals never
+  // convert, so the difference stays with the GP. Decided: it belongs to
+  // the GP and is NOT booked in the fund's ledger. Negative when the
+  // deposit rate is below the withdrawal rate (the GP covers it).
+  fxSpreadUsd: number;
+  fxSpreadSar: number;
   settledGross: number; // Σ cycle profit settled (before fees)
   feesToGp: number;
 }
@@ -158,7 +169,8 @@ function floor2(n: number): number {
   return n <= 0 ? 0 : Math.floor(n * 100 + 1e-7) / 100;
 }
 
-// A request amount in USD (books are USD). SAR converts at the round rate.
+// A request amount in USD (books are USD). SAR converts at the rate for
+// the request's direction.
 export function toUsd(amount: number, currency: FundingCurrency, sarPerUsd: number): number {
   return round2(currency === "SAR" ? amount / sarPerUsd : amount);
 }
@@ -183,7 +195,9 @@ const KIND_AR: Record<FundingRequestKind, string> = {
 export function planFundingDay(input: PlanInput): FundingPlan {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const rate = input.sarPerUsd;
+  const rd = input.depositSarPerUsd;
+  const rw = input.withdrawSarPerUsd;
+  const rateOk = (r: number) => Number.isFinite(r) && r > 0;
   const nowMs = input.now.getTime();
 
   // Deterministic order, so the browser and the server sum floats in the
@@ -209,8 +223,12 @@ export function planFundingDay(input: PlanInput): FundingPlan {
       errors.push(`أكثر من طلب لـ ${nameOf(r.partnerId)} — طلب واحد لكل شريك.`);
       continue;
     }
-    if (r.currency === "SAR" && !(Number.isFinite(rate) && rate > 0)) {
-      errors.push("سعر الصرف غير صالح.");
+    if (r.currency === "SAR") {
+      const isDeposit = r.kind === "deposit";
+      if (!rateOk(isDeposit ? rd : rw)) {
+        const msg = isDeposit ? "سعر صرف الإيداع غير صالح." : "سعر صرف السحب غير صالح.";
+        if (!errors.includes(msg)) errors.push(msg);
+      }
     }
     if (r.kind === "deposit" || r.kind === "withdraw") {
       if (!(typeof r.amount === "number" && Number.isFinite(r.amount) && r.amount > 0)) {
@@ -292,7 +310,7 @@ export function planFundingDay(input: PlanInput): FundingPlan {
 
     const requestUsd =
       req && (req.kind === "deposit" || req.kind === "withdraw") && req.amount !== null
-        ? toUsd(req.amount, req.currency, rate)
+        ? toUsd(req.amount, req.currency, req.kind === "deposit" ? rd : rw)
         : null;
 
     let profitPaid = 0;
@@ -370,17 +388,17 @@ export function planFundingDay(input: PlanInput): FundingPlan {
     const cashOut = profitPaid + potPaid + capitalWithdrawn;
     const currency: FundingCurrency = req?.currency ?? "USD";
     // What changes hands: the GP's typed SAR amount when given, otherwise
-    // the USD figure converted at the round rate.
+    // the USD figure converted at the rate for that direction.
     const typedSar =
       req && req.currency === "SAR" && req.amount !== null && requestUsd !== null
         ? req.amount
         : null;
     const cashInCurrency =
-      currency === "SAR" ? (cashIn > 0 ? (typedSar ?? round2(cashIn * rate)) : 0) : cashIn;
+      currency === "SAR" ? (cashIn > 0 ? (typedSar ?? round2(cashIn * rd)) : 0) : cashIn;
     const cashOutCurrency =
       currency === "SAR"
         ? cashOut > 0
-          ? (req?.kind === "withdraw" && typedSar !== null ? typedSar : round2(cashOut * rate))
+          ? (req?.kind === "withdraw" && typedSar !== null ? typedSar : round2(cashOut * rw))
           : 0
         : cashOut;
 
@@ -392,8 +410,8 @@ export function planFundingDay(input: PlanInput): FundingPlan {
     const cashRows = [profitPaid, potPaid, capitalWithdrawn].filter((v) => v >= CENT).length;
     const exactSarFor = (isDeposit: boolean) =>
       isDeposit || (req?.kind === "withdraw" && cashRows === 1) ? typedSar : null;
-    const sarNote = (usd: number, exact: number | null) =>
-      currency === "SAR" ? ` — ${fmtSar(exact ?? round2(usd * rate))} بسعر ${rate}` : "";
+    const sarNote = (usd: number, exact: number | null, r: number) =>
+      currency === "SAR" ? ` — ${fmtSar(exact ?? round2(usd * r))} بسعر ${r}` : "";
     const extra = req?.note?.trim() ? ` — ${req.note.trim()}` : "";
 
     pushTx({
@@ -419,14 +437,14 @@ export function planFundingDay(input: PlanInput): FundingPlan {
       investorId: p.id,
       type: "Withdrawal",
       amount: profitPaid,
-      note: `سحب أرباح — ${dayTag}${sarNote(profitPaid, exactSarFor(false))}${extra}`,
+      note: `سحب أرباح — ${dayTag}${sarNote(profitPaid, exactSarFor(false), rw)}${extra}`,
       relatedPartnerId: null,
     });
     pushTx({
       investorId: p.id,
       type: "Withdrawal",
       amount: potPaid,
-      note: `سحب عمولة المدير (نقداً) — ${dayTag}${sarNote(potPaid, exactSarFor(false))}${extra}`,
+      note: `سحب عمولة المدير (نقداً) — ${dayTag}${sarNote(potPaid, exactSarFor(false), rw)}${extra}`,
       relatedPartnerId: null,
     });
     pushTx({
@@ -435,7 +453,8 @@ export function planFundingDay(input: PlanInput): FundingPlan {
       amount: capitalWithdrawn,
       note: `${exits ? "خروج من الصندوق" : "سحب من رأس المال"} — ${dayTag}${sarNote(
         capitalWithdrawn,
-        exactSarFor(false)
+        exactSarFor(false),
+        rw
       )}${extra}`,
       relatedPartnerId: null,
     });
@@ -443,7 +462,7 @@ export function planFundingDay(input: PlanInput): FundingPlan {
       investorId: p.id,
       type: "Deposit",
       amount: deposit,
-      note: `إيداع رأس مال — ${dayTag}${sarNote(deposit, exactSarFor(true))}${extra}`,
+      note: `إيداع رأس مال — ${dayTag}${sarNote(deposit, exactSarFor(true), rd)}${extra}`,
       relatedPartnerId: null,
     });
 
@@ -494,6 +513,15 @@ export function planFundingDay(input: PlanInput): FundingPlan {
     }
   }
   const net = deposits - withdrawals;
+  // GP spread on the riyals that offset each other (see FundingTotals).
+  const netted = Math.min(sarIn, sarOut);
+  const ratesOk = rateOk(rd) && rateOk(rw);
+  const fxSpreadUsd = ratesOk ? netted * (1 / rw - 1 / rd) : 0;
+  const fxSpreadSar = ratesOk
+    ? sarIn >= sarOut
+      ? sarOut * (rd / rw - 1)
+      : sarIn * (1 - rw / rd)
+    : 0;
   const totals: FundingTotals = {
     deposits,
     withdrawals,
@@ -506,6 +534,8 @@ export function planFundingDay(input: PlanInput): FundingPlan {
     sarOut,
     fxNeededSar: Math.abs(sarIn - sarOut),
     fxAvoidedSar: 2 * Math.min(sarIn, sarOut),
+    fxSpreadUsd,
+    fxSpreadSar,
     settledGross,
     feesToGp,
   };
@@ -583,6 +613,12 @@ export function planFundingDay(input: PlanInput): FundingPlan {
       );
     }
   }
+  if (ratesOk && rd < rw) {
+    warnings.push(
+      `سعر صرف الإيداع (${rd}) أقل من سعر السحب (${rw}) — عادةً العكس.` +
+        (netted >= CENT ? ` فرق الصرف عليك: ${fmtSar(fxSpreadSar)}.` : "")
+    );
+  }
   if (
     typeof input.brokerCashUsd === "number" &&
     Number.isFinite(input.brokerCashUsd) &&
@@ -616,13 +652,14 @@ export function fingerprintPlan(
   plan: FundingPlan,
   roundId: string,
   roundVersion: number,
-  sarPerUsd: number
+  depositSarPerUsd: number,
+  withdrawSarPerUsd: number
 ): string {
   const c = (n: number) => Math.round(n * 100);
   const canonical = JSON.stringify({
     r: roundId,
     v: roundVersion,
-    x: Math.round(sarPerUsd * 1e6),
+    x: [Math.round(depositSarPerUsd * 1e6), Math.round(withdrawSarPerUsd * 1e6)],
     l: plan.lines.map((l) => [
       l.partnerId,
       c(l.pendingNet),

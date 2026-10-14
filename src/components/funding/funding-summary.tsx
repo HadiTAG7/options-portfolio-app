@@ -10,11 +10,12 @@ import { fmtSar, fmtUsd } from "@/lib/money-format";
 // app's display-currency switch — because these are instructions.
 export function FundingSummary({
   plan,
-  sarPerUsd,
+  rates,
   source,
 }: {
   plan: FundingPlan;
-  sarPerUsd: number;
+  // SAR per USD for riyal deposits (rd) and riyal withdrawals (rw).
+  rates: { rd: number; rw: number };
   source: "estimate" | "server";
 }) {
   const t = plan.totals;
@@ -62,7 +63,7 @@ export function FundingSummary({
             <div className="text-left" dir="ltr">
               <p className="font-mono text-2xl font-bold tabular-nums text-white">{fmtUsd(net)}</p>
               <p className="font-mono text-[11px] tabular-nums text-zinc-400">
-                ≈ {fmtSar(net * sarPerUsd)}
+                ≈ {fmtSar(net * (t.brokerAction === "deposit" ? rates.rd : rates.rw))}
               </p>
             </div>
           )}
@@ -108,8 +109,27 @@ export function FundingSummary({
           بالريال: تستلم <span dir="ltr" className="font-mono text-zinc-200">{fmtSar(t.sarIn)}</span> وتدفع{" "}
           <span dir="ltr" className="font-mono text-zinc-200">{fmtSar(t.sarOut)}</span> — صافي الريال
           المطلوب تحويله: <span dir="ltr" className="font-mono font-bold text-white">{fmtSar(t.fxNeededSar)}</span>{" "}
-          (بسعر {sarPerUsd}).
+          (الإيداع بسعر {rates.rd}، والسحب بسعر {rates.rw}).
         </p>
+      )}
+      {Math.abs(t.fxSpreadSar ?? 0) >= 0.005 && (
+        <div
+          className={`rounded-lg border p-3 text-[11px] leading-relaxed ${
+            (t.fxSpreadSar ?? 0) > 0
+              ? "border-blue-500/30 bg-blue-500/[0.06] text-blue-100"
+              : "border-rose-500/30 bg-rose-500/[0.06] text-rose-200"
+          }`}
+        >
+          {(t.fxSpreadSar ?? 0) > 0 ? "فرق الصرف — لك كمدير: " : "فرق الصرف — عليك كمدير: "}
+          <span dir="ltr" className="font-mono font-bold">
+            {fmtSar(Math.abs(t.fxSpreadSar ?? 0))}
+          </span>{" "}
+          <span dir="ltr" className="font-mono text-zinc-400">
+            (≈ {fmtUsd(Math.abs(t.fxSpreadUsd ?? 0))})
+          </span>
+          . الريالات التي تقابلت داخلياً لم تُحوَّل فعلياً، والفرق بين سعري الإيداع والسحب عليها يبقى عندك — خارج دفاتر
+          الصندوق.
+        </div>
       )}
 
       {/* Cash routing */}

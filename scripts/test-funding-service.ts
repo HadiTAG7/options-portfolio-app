@@ -99,6 +99,8 @@ async function main() {
   await step("create + save a draft (versioned)", async () => {
     const r = await createDraft(db, UID, 3.735);
     roundId = r.id;
+    assert.equal(r.depositSarPerUsd, 3.735, "deposit rate seeded");
+    assert.equal(r.withdrawSarPerUsd, 3.735, "withdrawal rate seeded");
     const again = await createDraft(db, UID, 3.735);
     assert.equal(again.id, r.id, "one open draft at a time");
     const saved = await saveDraft(db, UID, r.id, r.version, {
@@ -217,6 +219,50 @@ async function main() {
     assert.ok(ok.length >= 1, "at least one succeeded");
     const funding = (await db.collection("operations").get()).docs.filter((d) => d.data().kind === "funding_day");
     assert.equal(funding.length, 1, "exactly one funding operation");
+  });
+
+  await step("a legacy round with one sarPerUsd still plans, same rate both ways", async () => {
+    await seed();
+    const now = new Date().toISOString();
+    await db.collection("funding_rounds").doc("legacy").set({
+      id: "legacy", status: "draft", version: 1, plannedDate: null, sarPerUsd: 3.75, brokerCashUsd: null,
+      requests: [
+        { partnerId: "b", kind: "deposit", amount: 3_750, currency: "SAR", note: null },
+        { partnerId: "a", kind: "withdraw", amount: 3_750, currency: "SAR", note: null },
+      ],
+      createdAt: now, createdBy: UID, updatedAt: now, updatedBy: UID,
+      executedAt: null, ledgerDate: null, opId: null, fingerprint: null, summary: null, revertedAt: null,
+    });
+    const prev = await previewRound(db, "legacy");
+    assert.deepEqual(prev.plan.errors, []);
+    assert.ok(Math.abs(prev.plan.lines.find((l) => l.partnerId === "b")!.deposit - 1_000) < 1e-9, "deposit at 3.75");
+    assert.ok(Math.abs(prev.plan.lines.find((l) => l.partnerId === "a")!.cashOut - 1_000) < 1e-9, "withdrawal at 3.75");
+    assert.ok(Math.abs(prev.plan.totals.fxSpreadSar) < 1e-9, "one rate → no spread");
+  });
+
+  await step("two rates: stored, executed, and seeded into the next round", async () => {
+    await seed();
+    const r = await createDraft(db, UID, 3.735);
+    const saved = await saveDraft(db, UID, r.id, r.version, {
+      depositSarPerUsd: 3.7575,
+      withdrawSarPerUsd: 3.7425,
+      requests: [
+        { partnerId: "b", kind: "deposit", amount: 37_575, currency: "SAR", note: null },
+        { partnerId: "a", kind: "withdraw", amount: 37_425, currency: "SAR", note: null },
+      ],
+    });
+    assert.equal(saved.depositSarPerUsd, 3.7575);
+    assert.equal(saved.withdrawSarPerUsd, 3.7425);
+    const prev = await previewRound(db, r.id);
+    assert.ok(Math.abs(prev.plan.totals.fxSpreadSar - 150) < 1e-6, "150 ر.س spread");
+    const res = await executeRound(db, UID, r.id, saved.version, prev.fingerprint);
+    assert.ok(Math.abs((res.round.summary!.totals.fxSpreadSar ?? 0) - 150) < 1e-6, "spread kept in the round summary");
+    const ledger = (await db.collection("transactions").get()).docs.map((d) => d.data());
+    const spreadRows = ledger.filter((x) => String(x.note).includes("فرق"));
+    assert.equal(spreadRows.length, 0, "the spread is NOT booked in the fund's ledger");
+    const next = await createDraft(db, UID, 3.735);
+    assert.equal(next.depositSarPerUsd, 3.7575, "next round starts from the last deposit rate");
+    assert.equal(next.withdrawSarPerUsd, 3.7425, "next round starts from the last withdrawal rate");
   });
 
   console.log(`\n✓ ${passed} integration steps passed (emulator)`);

@@ -108,7 +108,7 @@ function equityById(partners: Partner[], trades: Trade[]): Record<string, number
 }
 
 function run(reqs: FundingRequest[], partners = basePartners, trades = baseTrades, extra: Partial<Parameters<typeof planFundingDay>[0]> = {}): FundingPlan {
-  return planFundingDay({ partners, trades, requests: reqs, sarPerUsd: 3.735, now: NOW, ...extra });
+  return planFundingDay({ partners, trades, requests: reqs, depositSarPerUsd: 3.735, withdrawSarPerUsd: 3.735, now: NOW, ...extra });
 }
 
 function assertInvariants(plan: FundingPlan, partners: Partner[], trades: Trade[], label: string) {
@@ -253,6 +253,7 @@ check("SAR netting: FX needed is only the riyal difference", () => {
   assertInvariants(plan, basePartners, baseTrades, "fx");
   near(plan.totals.fxNeededSar, 3_735, 1e-9, "net riyals");
   near(plan.totals.fxAvoidedSar, 7_470, 1e-9, "avoided riyals");
+  near(plan.totals.fxSpreadSar, 0, 1e-9, "one rate → no spread");
 });
 
 check("losing cycle is booked into capital, fee 0", () => {
@@ -305,14 +306,14 @@ check("freezes: completed months only, never overwrite, skip zeros", () => {
 
 check("fingerprint: stable under reordering, sensitive to a cent", () => {
   const reqs: FundingRequest[] = [{ partnerId: "a", kind: "withdraw", amount: 1_000, currency: "USD", note: null }];
-  const f1 = fingerprintPlan(run(reqs), "r1", 3, 3.735);
-  const f2 = fingerprintPlan(run(reqs, [...basePartners].reverse(), [...baseTrades].reverse()), "r1", 3, 3.735);
+  const f1 = fingerprintPlan(run(reqs), "r1", 3, 3.735, 3.735);
+  const f2 = fingerprintPlan(run(reqs, [...basePartners].reverse(), [...baseTrades].reverse()), "r1", 3, 3.735, 3.735);
   assert.equal(f1, f2, "order-independent");
-  const f3 = fingerprintPlan(run([{ ...reqs[0], amount: 1_000.01 }]), "r1", 3, 3.735);
+  const f3 = fingerprintPlan(run([{ ...reqs[0], amount: 1_000.01 }]), "r1", 3, 3.735, 3.735);
   assert.notEqual(f1, f3, "a cent changes it");
-  assert.notEqual(f1, fingerprintPlan(run(reqs), "r1", 4, 3.735), "version changes it");
+  assert.notEqual(f1, fingerprintPlan(run(reqs), "r1", 4, 3.735, 3.735), "version changes it");
   const moreTrades = [...baseTrades, trade({ id: "t9", result: 50, createdAt: "2026-10-10T10:00:00.000Z" })];
-  assert.notEqual(f1, fingerprintPlan(run(reqs, basePartners, moreTrades), "r1", 3, 3.735), "new trade changes it");
+  assert.notEqual(f1, fingerprintPlan(run(reqs, basePartners, moreTrades), "r1", 3, 3.735, 3.735), "new trade changes it");
 });
 
 check("no pending + deposit matches the store's deposit arithmetic", () => {
@@ -325,6 +326,85 @@ check("no pending + deposit matches the store's deposit arithmetic", () => {
   near(a.after.totalDeposits, p.totalDeposits + 5_000, 1e-9, "totalDeposits");
   near(a.after.currentBalance, p.currentBalance + 5_000, 1e-9, "currentBalance");
   assert.equal(plan.ledger.filter((r) => r.investorId === "a").length, 1, "one Deposit row only");
+});
+
+// ── Two rates: deposit vs withdrawal ────────────────────────────────
+const RD = 3.7575;
+const RW = 3.7425;
+const settledAll = basePartners.map((p) => ({ ...p, lastSettlementDate: "2026-10-13T00:00:00.000Z", profitTakenGross: 0, entryDate: "2026-01-01" }));
+
+check("the GP's example: 37,575 ر.س in at 3.7575, $10,000 out at 3.7425 → 150 ر.س spread", () => {
+  const plan = run(
+    [
+      { partnerId: "b", kind: "deposit", amount: 37_575, currency: "SAR", note: null },
+      { partnerId: "gp", kind: "withdraw", amount: 37_425, currency: "SAR", note: null },
+    ],
+    settledAll,
+    baseTrades,
+    { depositSarPerUsd: RD, withdrawSarPerUsd: RW }
+  );
+  assertInvariants(plan, settledAll, baseTrades, "spread-example");
+  const ali = plan.lines.find((l) => l.partnerId === "b")!;
+  const hadi = plan.lines.find((l) => l.partnerId === "gp")!;
+  near(ali.deposit, 10_000, 1e-9, "Ali booked $10,000");
+  near(hadi.cashOut, 10_000, 1e-9, "Hadi booked $10,000");
+  near(hadi.cashOutCurrency, 37_425, 1e-9, "Hadi receives the typed riyals");
+  assert.equal(plan.totals.brokerAction, "none", "nothing crosses the broker");
+  near(plan.totals.fxSpreadSar, 150, 1e-6, "150 ر.س stay with the GP");
+  near(plan.totals.fxSpreadUsd, 37_425 * (1 / RW - 1 / RD), 1e-9, "spread in USD");
+  near(plan.totals.fxSpreadUsd, 39.92, 0.005, "≈ $39.92");
+});
+
+check("each direction converts and is noted at its own rate", () => {
+  const plan = run(
+    [
+      { partnerId: "b", kind: "deposit", amount: 3_757.5, currency: "SAR", note: null },
+      { partnerId: "a", kind: "withdraw", amount: 3_742.5, currency: "SAR", note: null },
+    ],
+    settledAll,
+    baseTrades,
+    { depositSarPerUsd: RD, withdrawSarPerUsd: RW }
+  );
+  assertInvariants(plan, settledAll, baseTrades, "directions");
+  near(plan.lines.find((l) => l.partnerId === "b")!.deposit, 1_000, 1e-9, "deposit at rd");
+  near(plan.lines.find((l) => l.partnerId === "a")!.cashOut, 1_000, 1e-9, "withdrawal at rw");
+  assert.ok(plan.ledger.some((r) => r.type === "Deposit" && r.note.includes(`بسعر ${RD}`)), "deposit note rd");
+  assert.ok(plan.ledger.some((r) => r.type === "Withdrawal" && r.note.includes(`بسعر ${RW}`)), "withdrawal note rw");
+  assert.ok(!plan.ledger.some((r) => r.type === "Deposit" && r.note.includes(`بسعر ${RW}`)), "no rw on deposits");
+});
+
+check("computed riyal payout (all profits) converts at the withdrawal rate", () => {
+  const plan = run(
+    [{ partnerId: "a", kind: "withdraw_profits", amount: null, currency: "SAR", note: null }],
+    basePartners,
+    baseTrades,
+    { depositSarPerUsd: RD, withdrawSarPerUsd: RW }
+  );
+  assertInvariants(plan, basePartners, baseTrades, "profits-sar");
+  const a = plan.lines.find((l) => l.partnerId === "a")!;
+  near(a.cashOutCurrency, Math.round(a.cashOut * RW * 100) / 100, 1e-9, "paid at rw");
+});
+
+check("inverted rates: negative spread, warned", () => {
+  const plan = run(
+    [
+      { partnerId: "b", kind: "deposit", amount: 10_000, currency: "SAR", note: null },
+      { partnerId: "a", kind: "withdraw", amount: 5_000, currency: "SAR", note: null },
+    ],
+    settledAll,
+    baseTrades,
+    { depositSarPerUsd: RW, withdrawSarPerUsd: RD }
+  );
+  assertInvariants(plan, settledAll, baseTrades, "inverted");
+  assert.ok(plan.totals.fxSpreadSar < 0, "the GP covers it");
+  assert.ok(plan.warnings.some((w) => w.includes("أقل من سعر السحب")), "warned");
+});
+
+check("fingerprint changes when either rate changes", () => {
+  const reqs: FundingRequest[] = [{ partnerId: "b", kind: "deposit", amount: 37_575, currency: "SAR", note: null }];
+  const base = fingerprintPlan(run(reqs, settledAll, baseTrades, { depositSarPerUsd: RD, withdrawSarPerUsd: RW }), "r", 1, RD, RW);
+  assert.notEqual(base, fingerprintPlan(run(reqs, settledAll, baseTrades, { depositSarPerUsd: 3.76, withdrawSarPerUsd: RW }), "r", 1, 3.76, RW), "rd");
+  assert.notEqual(base, fingerprintPlan(run(reqs, settledAll, baseTrades, { depositSarPerUsd: RD, withdrawSarPerUsd: 3.74 }), "r", 1, RD, 3.74), "rw");
 });
 
 // ── Randomized property test ────────────────────────────────────────
@@ -350,9 +430,13 @@ check("randomized request mixes keep every invariant", () => {
       }
       reqs.push({ partnerId: p.id, kind: k, amount, currency, note: null });
     }
-    const plan = run(reqs);
+    const twoRates = i % 2 === 1;
+    const plan = twoRates
+      ? run(reqs, basePartners, baseTrades, { depositSarPerUsd: RD, withdrawSarPerUsd: RW })
+      : run(reqs);
     if (plan.errors.length > 0) { skipped++; continue; }
-    assertInvariants(plan, basePartners, baseTrades, `random#${i}`);
+    assertInvariants(plan, basePartners, baseTrades, `random#${i}${twoRates ? "/2rates" : ""}`);
+    if (twoRates) assert.ok(plan.totals.fxSpreadSar >= -1e-9, "rd > rw never charges the GP");
     tested++;
   }
   console.log(`  random: tested ${tested}, skipped ${skipped}`);

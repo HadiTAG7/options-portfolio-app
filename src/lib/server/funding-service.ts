@@ -7,7 +7,7 @@ import {
   fingerprintPlan,
   type FundingPlan,
 } from "@/lib/funding-day";
-import type { FundingRound, FundingRoundPatch, FundingSummaryLine } from "@/lib/funding-round";
+import { roundRates, type FundingRound, type FundingRoundPatch, type FundingSummaryLine } from "@/lib/funding-round";
 import { mapFundState, type DocLike } from "@/lib/server/fund-state";
 
 // Server side of يوم التمويل. Everything that moves money happens inside
@@ -109,17 +109,25 @@ export async function createDraft(
 ): Promise<FundingRound> {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(db.collection(ROUNDS));
-    const existing = snap.docs.map(roundFromDoc).find((r) => r.status === "draft");
+    const all = snap.docs.map(roundFromDoc);
+    const existing = all.find((r) => r.status === "draft");
     if (existing) return existing;
     const now = new Date().toISOString();
     const ref = db.collection(ROUNDS).doc(randomUUID());
     const rate = sarPerUsd && Number.isFinite(sarPerUsd) && sarPerUsd > 1 ? sarPerUsd : DEFAULT_RATE;
+    // A new round starts from the rates of the last executed one — the GP
+    // set those against the bank — else the app's settings rate.
+    const lastExecuted = all
+      .filter((r) => r.status === "executed")
+      .sort((a, b) => ((a.executedAt ?? "") < (b.executedAt ?? "") ? 1 : -1))[0];
+    const seeded = lastExecuted ? roundRates(lastExecuted) : { rd: rate, rw: rate };
     const round: FundingRound = {
       id: ref.id,
       status: "draft",
       version: 1,
       plannedDate: null,
-      sarPerUsd: rate,
+      depositSarPerUsd: seeded.rd,
+      withdrawSarPerUsd: seeded.rw,
       brokerCashUsd: null,
       requests: [],
       createdAt: now,
@@ -202,11 +210,13 @@ async function readState(db: Firestore, tx?: Transaction) {
 }
 
 function planFor(round: FundingRound, state: ReturnType<typeof mapFundState>, now: Date): FundingPlan {
+  const { rd, rw } = roundRates(round);
   return planFundingDay({
     partners: state.partners,
     trades: state.trades,
     requests: round.requests,
-    sarPerUsd: round.sarPerUsd,
+    depositSarPerUsd: rd,
+    withdrawSarPerUsd: rw,
     now,
     existingMonthlyKeys: state.monthlyKeys,
     brokerCashUsd: round.brokerCashUsd,
@@ -232,7 +242,7 @@ export async function previewRound(db: Firestore, roundId: string): Promise<Prev
   return {
     round,
     plan,
-    fingerprint: fingerprintPlan(plan, round.id, round.version, round.sarPerUsd),
+    fingerprint: fingerprintPlan(plan, round.id, round.version, roundRates(round).rd, roundRates(round).rw),
     serverTime: now.toISOString(),
   };
 }
@@ -294,7 +304,8 @@ export async function executeRound(
     if (plan.errors.length > 0) {
       throw new FundingError("لا يمكن التنفيذ", 422, "plan_errors", { errors: plan.errors });
     }
-    const fp = fingerprintPlan(plan, round.id, round.version, round.sarPerUsd);
+    const { rd, rw } = roundRates(round);
+    const fp = fingerprintPlan(plan, round.id, round.version, rd, rw);
     if (fp !== fingerprint) {
       throw new FundingError(
         "تغيّرت البيانات منذ المعاينة (صفقة أو رصيد) — راجع المعاينة الجديدة ثم نفّذ",

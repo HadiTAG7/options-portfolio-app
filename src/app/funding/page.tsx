@@ -14,21 +14,31 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCurrencyStore } from "@/hooks/use-currency";
 import { fundingApi } from "@/lib/funding-api";
 import { planFundingDay, type FundingRequest } from "@/lib/funding-day";
-import type { FundingRound, FundingRoundPatch } from "@/lib/funding-round";
+import { roundRates, type FundingRound, type FundingRoundPatch } from "@/lib/funding-round";
 
 interface Local {
   requests: FundingRequest[];
   plannedDate: string;
-  rate: string;
+  rd: string; // SAR per USD for riyal deposits
+  rw: string; // SAR per USD for riyal withdrawals
   brokerCash: string;
 }
 
-const toLocal = (r: FundingRound): Local => ({
-  requests: r.requests,
-  plannedDate: r.plannedDate ?? "",
-  rate: String(r.sarPerUsd),
-  brokerCash: r.brokerCashUsd === null ? "" : String(r.brokerCashUsd),
-});
+const toLocal = (r: FundingRound): Local => {
+  const { rd, rw } = roundRates(r);
+  return {
+    requests: r.requests,
+    plannedDate: r.plannedDate ?? "",
+    rd: String(rd),
+    rw: String(rw),
+    brokerCash: r.brokerCashUsd === null ? "" : String(r.brokerCashUsd),
+  };
+};
+
+const validRate = (s: string) => {
+  const v = Number(s);
+  return Number.isFinite(v) && v > 1 && v < 10 ? v : null;
+};
 
 // يوم التمويل — collect every partner's deposit/withdrawal request over
 // the days before, then execute them all at once so only the NET amount
@@ -96,8 +106,10 @@ function FundingDay() {
       requests: l.requests,
       plannedDate: l.plannedDate || null,
     };
-    const rate = Number(l.rate);
-    if (Number.isFinite(rate) && rate > 1 && rate < 10) patch.sarPerUsd = rate;
+    const rdV = validRate(l.rd);
+    const rwV = validRate(l.rw);
+    if (rdV !== null) patch.depositSarPerUsd = rdV;
+    if (rwV !== null) patch.withdrawSarPerUsd = rwV;
     if (l.brokerCash.trim() === "") patch.brokerCashUsd = null;
     else if (Number.isFinite(Number(l.brokerCash)) && Number(l.brokerCash) >= 0) {
       patch.brokerCashUsd = Number(l.brokerCash);
@@ -168,20 +180,22 @@ function FundingDay() {
     return null;
   }
 
-  const rate = local ? Number(local.rate) : NaN;
-  const rateOk = Number.isFinite(rate) && rate > 1 && rate < 10;
+  const rd = local ? validRate(local.rd) : null;
+  const rw = local ? validRate(local.rw) : null;
+  const rateOk = rd !== null && rw !== null;
   const dataReady = !partnersLoading && !tradesLoading && !usingSeedData;
   const estimate = useMemo(() => {
-    if (!local || !dataReady || !rateOk) return null;
+    if (!local || !dataReady || rd === null || rw === null) return null;
     return planFundingDay({
       partners,
       trades,
       requests: local.requests,
-      sarPerUsd: rate,
+      depositSarPerUsd: rd,
+      withdrawSarPerUsd: rw,
       now,
       brokerCashUsd: local.brokerCash.trim() === "" ? null : Number(local.brokerCash),
     });
-  }, [local, dataReady, rateOk, partners, trades, rate, now]);
+  }, [local, dataReady, rd, rw, partners, trades, now]);
 
   if (!isGP) {
     return <p className="p-8 text-center text-sm text-zinc-400">هذه الصفحة للمدير فقط.</p>;
@@ -242,24 +256,31 @@ function FundingDay() {
         </div>
       ) : (
         <div className="mb-8 space-y-5">
-          <div className="grid gap-4 rounded-xl border border-zinc-800/60 bg-zinc-950/60 p-5 sm:grid-cols-3">
+          <div className="grid gap-4 rounded-xl border border-zinc-800/60 bg-zinc-950/60 p-5 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="mb-1.5 text-[10px] font-bold text-zinc-500">تاريخ التنفيذ المخطط</p>
               <DatePicker value={local.plannedDate} onChange={(v) => edit({ plannedDate: v })} placeholder="اختر اليوم" />
             </div>
-            <div>
-              <p className="mb-1.5 text-[10px] font-bold text-zinc-500">سعر الصرف لهذه الجولة (ر.س لكل $)</p>
-              <input
-                value={local.rate}
-                onChange={(e) => edit({ rate: e.target.value })}
-                inputMode="decimal"
-                dir="ltr"
-                className={`w-full rounded-md border bg-zinc-950/80 px-3 py-2.5 text-right font-mono text-sm text-white focus:outline-none ${
-                  rateOk ? "border-zinc-700/60 focus:border-blue-500" : "border-rose-500/60"
-                }`}
-              />
-              <p className="mt-1 text-[10px] text-zinc-600">اضبطه على سعر البنك يوم التنفيذ ليطابق البروكر.</p>
-            </div>
+            {(
+              [
+                ["rd", "سعر صرف الإيداع (ر.س لكل $)", "للإيداعات بالريال: تحويل الريال إلى دولار (عادةً الأعلى).", rd],
+                ["rw", "سعر صرف السحب (ر.س لكل $)", "للسحوبات بالريال: تحويل الدولار إلى ريال (عادةً الأقل).", rw],
+              ] as const
+            ).map(([key, label, hint, parsed]) => (
+              <div key={key}>
+                <p className="mb-1.5 text-[10px] font-bold text-zinc-500">{label}</p>
+                <input
+                  value={local[key]}
+                  onChange={(e) => edit({ [key]: e.target.value })}
+                  inputMode="decimal"
+                  dir="ltr"
+                  className={`w-full rounded-md border bg-zinc-950/80 px-3 py-2.5 text-right font-mono text-sm text-white focus:outline-none ${
+                    parsed !== null ? "border-zinc-700/60 focus:border-blue-500" : "border-rose-500/60"
+                  }`}
+                />
+                <p className="mt-1 text-[10px] text-zinc-600">{hint}</p>
+              </div>
+            ))}
             <div>
               <p className="mb-1.5 text-[10px] font-bold text-zinc-500">النقد المتاح عند البروكر ($ — اختياري)</p>
               <input
@@ -282,7 +303,9 @@ function FundingDay() {
             onChange={(next) => edit({ requests: next })}
           />
 
-          {estimate && <FundingSummary plan={estimate} sarPerUsd={rate} source="estimate" />}
+          {estimate && rd !== null && rw !== null && (
+            <FundingSummary plan={estimate} rates={{ rd, rw }} source="estimate" />
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             {confirmCancel ? (

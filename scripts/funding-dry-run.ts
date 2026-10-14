@@ -44,7 +44,8 @@ async function main() {
       partners: state.partners,
       trades: state.trades,
       requests,
-      sarPerUsd: getSarRateFallback(),
+      depositSarPerUsd: getSarRateFallback(),
+    withdrawSarPerUsd: getSarRateFallback(),
       now: new Date(),
       existingMonthlyKeys: state.monthlyKeys,
     });
@@ -56,7 +57,7 @@ async function main() {
       `writes: partners ${plan.lines.length}, ledger rows ${plan.ledger.length}, monthly freezes ${plan.freezes.length}, + 1 operation + 1 round`
     );
     console.log(`broker action: ${plan.totals.brokerAction}`);
-    console.log(`fingerprint: ${fingerprintPlan(plan, "dry-run", 0, getSarRateFallback())}`);
+    console.log(`fingerprint: ${fingerprintPlan(plan, "dry-run", 0, getSarRateFallback(), getSarRateFallback())}`);
     if (plan.errors.length > 0) {
       console.log("(errors block execution — invariants not evaluated)");
       return;

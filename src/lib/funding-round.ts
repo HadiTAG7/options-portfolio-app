@@ -30,7 +30,11 @@ export interface FundingRound {
   // based on, so two devices can't silently overwrite each other.
   version: number;
   plannedDate: string | null; // YYYY-MM-DD, informational
-  sarPerUsd: number;
+  // SAR per USD by direction (riyal deposits / riyal withdrawals).
+  depositSarPerUsd?: number;
+  withdrawSarPerUsd?: number;
+  // Legacy single rate — rounds saved before the split carry only this.
+  sarPerUsd?: number;
   brokerCashUsd: number | null;
   requests: FundingRequest[];
   createdAt: string;
@@ -48,8 +52,24 @@ export interface FundingRound {
 export interface FundingRoundPatch {
   requests?: FundingRequest[];
   plannedDate?: string | null;
-  sarPerUsd?: number;
+  depositSarPerUsd?: number;
+  withdrawSarPerUsd?: number;
   brokerCashUsd?: number | null;
+}
+
+const DEFAULT_SAR_PER_USD = 3.735;
+
+// A round's two rates, reading rounds saved before the split (one
+// sarPerUsd) as the same rate in both directions — no migration needed.
+export function roundRates(round: Pick<FundingRound, "depositSarPerUsd" | "withdrawSarPerUsd" | "sarPerUsd">): {
+  rd: number;
+  rw: number;
+} {
+  const legacy = round.sarPerUsd ?? DEFAULT_SAR_PER_USD;
+  return {
+    rd: round.depositSarPerUsd ?? legacy,
+    rw: round.withdrawSarPerUsd ?? legacy,
+  };
 }
 
 const KINDS: readonly FundingRequestKind[] = ["deposit", "withdraw", "withdraw_profits", "exit"];
@@ -92,10 +112,15 @@ export function sanitizePatch(raw: unknown): { patch: FundingRoundPatch } | { er
     else if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) patch.plannedDate = d;
     else return { error: "تاريخ غير صالح" };
   }
-  if ("sarPerUsd" in r) {
-    const v = Number(r.sarPerUsd);
-    if (!(Number.isFinite(v) && v > 1 && v < 10)) return { error: "سعر صرف غير صالح" };
-    patch.sarPerUsd = v;
+  for (const [key, label] of [
+    ["depositSarPerUsd", "سعر صرف الإيداع"],
+    ["withdrawSarPerUsd", "سعر صرف السحب"],
+  ] as const) {
+    if (key in r) {
+      const v = Number(r[key]);
+      if (!(Number.isFinite(v) && v > 1 && v < 10)) return { error: `${label} غير صالح` };
+      patch[key] = v;
+    }
   }
   if ("brokerCashUsd" in r) {
     const v = r.brokerCashUsd;

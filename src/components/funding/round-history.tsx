@@ -74,6 +74,14 @@ export function RoundHistory({
                   </span>
                 )}
               </div>
+              {t && Math.abs(t.fxSpreadSar ?? 0) >= 0.005 && (
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  فرق الصرف {(t.fxSpreadSar ?? 0) > 0 ? "لك" : "عليك"}:{" "}
+                  <span dir="ltr" className="font-mono text-zinc-300">
+                    {fmtSar(Math.abs(t.fxSpreadSar ?? 0))}
+                  </span>
+                </p>
+              )}
               {r.summary && (
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-400">
                   {r.summary.lines
