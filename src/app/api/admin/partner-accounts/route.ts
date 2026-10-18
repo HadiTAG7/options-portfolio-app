@@ -3,7 +3,15 @@ import { corsPreflight, withCors } from "@/lib/cors";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { BACKEND } from "@/lib/backend";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
+import { verifyGPToken } from "@/lib/server/gp-auth";
+import {
+  IdentityError,
+  createAuthUser,
+  findAuthUserByEmail,
+  setAuthClaims,
+  setAuthPassword,
+} from "@/lib/server/identity-admin";
 
 // GP-only account management: creates a Supabase Auth user for a
 // partner and links it via partners.auth_user_id, or resets a linked
@@ -40,12 +48,15 @@ function jsonError(status: number, message: string) {
 // exception), but users live in Firebase Auth and the link lives on the
 // partner doc. Also stamps the gp/partnerId custom claims that
 // firestore.rules authorize by.
+//
+// Auth work goes through the Identity Toolkit REST API (identity-admin),
+// never firebase-admin/auth: that module's jwks-rsa → jose chain is
+// ESM-only and crashed this route on Vercel before it did anything
+// (ERR_REQUIRE_ESM on every «إنشاء ربط» / password reset).
 async function postFirebase(request: NextRequest) {
   try {
-    let auth: Awaited<ReturnType<typeof adminAuth>>;
     let db: ReturnType<typeof adminDb>;
     try {
-      auth = await adminAuth();
       db = adminDb();
     } catch (e) {
       return jsonError(
@@ -77,18 +88,19 @@ async function postFirebase(request: NextRequest) {
 
     let callerIsGp = false;
     if (token) {
-      try {
-        const decoded = await auth.verifyIdToken(token);
+      // Signature + expiry checked by Google; then the uid must still be
+      // linked to the active isAdmin partner (the gp claim alone would
+      // outlive an unlinked or archived GP row).
+      const gp = await verifyGPToken(token);
+      if (gp) {
         const q = await db
           .collection("partners")
-          .where("auth_user_id", "==", decoded.uid)
+          .where("auth_user_id", "==", gp.uid)
           .get();
         callerIsGp = q.docs.some((d) => {
           const r = d.data();
           return r.isAdmin === true && !r.archived_at;
         });
-      } catch {
-        // invalid/expired token → not GP
       }
     }
 
@@ -116,7 +128,7 @@ async function postFirebase(request: NextRequest) {
       if (!password || password.length < 8) {
         return jsonError(400, "كلمة المرور يجب ألا تقل عن 8 أحرف.");
       }
-      await auth.updateUser(String(target.auth_user_id), { password });
+      await setAuthPassword(String(target.auth_user_id), password);
       return Response.json({ success: true, action: "reset-password" });
     }
 
@@ -135,21 +147,15 @@ async function postFirebase(request: NextRequest) {
 
     let authUserId: string | null = null;
     try {
-      const created = await auth.createUser({
-        email,
-        password,
-        emailVerified: true,
-      });
-      authUserId = created.uid;
+      authUserId = await createAuthUser(email, password);
     } catch (e: unknown) {
-      const code = String(
-        e && typeof e === "object" && "code" in e
-          ? (e as { code: unknown }).code
-          : ""
-      );
-      if (code.includes("email-already-exists")) {
-        const existing = await auth.getUserByEmail(email);
-        authUserId = existing.uid;
+      if (e instanceof IdentityError && e.code === "EMAIL_EXISTS") {
+        // An account with this email already exists: link to it.
+        authUserId = await findAuthUserByEmail(email);
+      } else if (e instanceof IdentityError && e.code === "WEAK_PASSWORD") {
+        return jsonError(400, "كلمة المرور ضعيفة — استخدم 8 أحرف أو أكثر.");
+      } else if (e instanceof IdentityError && e.code === "INVALID_EMAIL") {
+        return jsonError(400, "البريد الإلكتروني غير صالح.");
       } else {
         return jsonError(
           500,
@@ -163,7 +169,7 @@ async function postFirebase(request: NextRequest) {
     // Claims drive firestore.rules (gp write access; LP own-statement
     // reads). Stamped before the link so a partner never holds a linked
     // account without its claims.
-    await auth.setCustomUserClaims(authUserId, {
+    await setAuthClaims(authUserId, {
       gp: target.isAdmin === true,
       partnerId: targetSnap.id,
     });
