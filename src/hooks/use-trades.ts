@@ -9,6 +9,8 @@ import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
 import { rowToTrade } from "@/lib/fund-rows";
+import { stocksApi } from "@/lib/stocks-api";
+import type { PositionResult } from "@/lib/stock-lots";
 
 
 // A trade is expired when it's still open, has a valid expiration date,
@@ -55,6 +57,7 @@ function rowToActiveStock(row: ActiveStockRow): ActiveStock {
     targetSellPrice: safeNumber(row.targetSellPrice),
     purchaseDate: row.purchaseDate ?? "",
     costBasis: qty * price,
+    purchases: Array.isArray(row.purchases) ? row.purchases : undefined,
     // Hydrate with the last price persisted in the DB so the P&L column
     // is populated instantly on page load; the live refresh overwrites it.
     currentPrice: cached,
@@ -458,6 +461,45 @@ export function useTrades() {
     })();
   }, [loading, tradesList, healRan, usingSeedData]);
 
+  // Bring a position the server just wrote (buy folded into the row, or
+  // duplicates collapsed) into local state: every row of that ticker is
+  // replaced by the one survivor, keeping its live price, and covered
+  // calls re-pointed on the server are re-pointed here too.
+  const applyPosition = useCallback(
+    (res: PositionResult): ActiveStock => {
+      const lot = rowToActiveStock(res.lot as unknown as ActiveStockRow);
+      const ticker = lot.ticker.toUpperCase();
+      setActiveStocksList((prev) => {
+        const live = prev.find((s) => s.id === lot.id);
+        const next = live
+          ? { ...lot, currentPrice: live.currentPrice ?? lot.currentPrice, previousClose: live.previousClose }
+          : lot;
+        return [...prev.filter((s) => s.ticker.toUpperCase() !== ticker), next];
+      });
+      if (res.relinkedTradeIds.length > 0) {
+        const ids = new Set(res.relinkedTradeIds);
+        setTradesList((prev) =>
+          prev.map((t) => (ids.has(t.id) ? { ...t, linkedStockId: lot.id } : t))
+        );
+      }
+      void enrichWithLivePrices([lot]);
+      return lot;
+    },
+    [enrichWithLivePrices]
+  );
+
+  // Collapse duplicate rows of one ticker into one position (weighted
+  // average cost). Returns an error message, or null on success.
+  const mergeDuplicateLots = useCallback(
+    async (ticker: string): Promise<string | null> => {
+      const res = await stocksApi.merge(ticker);
+      if (!res.ok) return res.error;
+      if (res.result) applyPosition(res.result);
+      return null;
+    },
+    [applyPosition]
+  );
+
   const addTrade = useCallback(
     async (payload: {
       type: "Stock" | "Sell Call" | "Sell Put";
@@ -476,6 +518,28 @@ export function useTrades() {
 
       // ----- Stock -----
       if (payload.type === "Stock") {
+        // One row per ticker: the server folds this buy into the existing
+        // position at the weighted-average cost (or opens one), atomically.
+        const res = await stocksApi.buy({
+          ticker,
+          quantity: payload.quantity,
+          price: payload.price,
+          date: payload.date,
+        });
+        if (res.ok) {
+          applyPosition(res);
+          return;
+        }
+        // A refusal (bad input, not the GP) is final. Only when the server
+        // can't be reached (or the backend isn't Firebase) does the old
+        // direct insert run — a separate row the merge banner can fold in
+        // later, rather than a purchase that isn't recorded at all.
+        if (res.status >= 400 && res.status < 500) {
+          setError(res.error);
+          throw new Error(res.error);
+        }
+        console.warn("[addTrade] position service unavailable, direct insert:", res.error);
+
         // ALWAYS try the Supabase insert first — even in seed mode —
         // so the row actually persists. Only fall back to local-only
         // state if the DB rejects it (missing table, RLS, offline).
@@ -579,7 +643,7 @@ export function useTrades() {
       console.log("[addTrade] trades insert succeeded:", data);
       setTradesList((prev) => [rowToTrade(data as TradeRow), ...prev]);
     },
-    [enrichWithLivePrices]
+    [enrichWithLivePrices, applyPosition]
   );
 
   const updateTrade = useCallback(
@@ -738,29 +802,45 @@ export function useTrades() {
     ) => {
       setError(null);
 
-      const stockPayload = {
-        id: crypto.randomUUID(),
+      // Assigned shares join the existing position for the ticker (one
+      // row, weighted-average cost) — same server path as a buy.
+      const res = await stocksApi.buy({
         ticker: trade.ticker.toUpperCase(),
         quantity: opts.quantity,
-        purchasePrice: opts.price,
-        purchaseDate: opts.date,
-      };
+        price: opts.price,
+        date: opts.date,
+      });
+      if (res.ok) {
+        applyPosition(res);
+      } else if (res.status >= 400 && res.status < 500) {
+        setError(`فشل تسجيل الـ Assignment: ${res.error}`);
+        throw new Error(res.error);
+      } else {
+        console.warn("[recordAssignment] position service unavailable, direct insert:", res.error);
+        const stockPayload = {
+          id: crypto.randomUUID(),
+          ticker: trade.ticker.toUpperCase(),
+          quantity: opts.quantity,
+          purchasePrice: opts.price,
+          purchaseDate: opts.date,
+        };
 
-      const { data, error: insertError } = await supabase
-        .from("active_stocks")
-        .insert(stockPayload)
-        .select()
-        .single();
+        const { data, error: insertError } = await supabase
+          .from("active_stocks")
+          .insert(stockPayload)
+          .select()
+          .single();
 
-      if (insertError) {
-        console.error("[recordAssignment] stock insert failed:", insertError);
-        setError(`فشل تسجيل الـ Assignment: ${insertError.message}`);
-        throw insertError;
+        if (insertError) {
+          console.error("[recordAssignment] stock insert failed:", insertError);
+          setError(`فشل تسجيل الـ Assignment: ${insertError.message}`);
+          throw insertError;
+        }
+
+        const newStock = rowToActiveStock(data as ActiveStockRow);
+        setActiveStocksList((prev) => [...prev, newStock]);
+        void enrichWithLivePrices([newStock]);
       }
-
-      const newStock = rowToActiveStock(data as ActiveStockRow);
-      setActiveStocksList((prev) => [...prev, newStock]);
-      void enrichWithLivePrices([newStock]);
 
       // Close the option if still open — premium × quantity is the
       // realized result (the premium was kept; the assignment cost is
@@ -789,7 +869,7 @@ export function useTrades() {
         `تم تسجيل Assignment: ${opts.quantity} سهم ${trade.ticker.toUpperCase()} @ ${opts.price}`
       );
     },
-    [usingSeedData, enrichWithLivePrices]
+    [usingSeedData, enrichWithLivePrices, applyPosition]
   );
 
   // Record an early buy-back of a short option as TWO dated cash flows:
@@ -1197,6 +1277,7 @@ export function useTrades() {
     recordAssignment,
     recordBuyback,
     sellStock,
+    mergeDuplicateLots,
     recordDividend,
     toast,
     dismissToast: () => setToast(null),

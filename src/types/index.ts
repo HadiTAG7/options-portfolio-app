@@ -215,6 +215,9 @@ export interface ActiveStock {
   targetSellPrice: number;
   purchaseDate: string;
   costBasis: number; // computed: quantity * purchasePrice
+  // Every buy merged into this one position (oldest first); absent on lots
+  // that predate merging. purchasePrice is their weighted average.
+  purchases?: { date: string; quantity: number; price: number }[];
   currentPrice?: number | null; // live quote (null if fetch failed)
   // Previous session's close, used for the "today only" P&L card
   // ((currentPrice − previousClose) × quantity). In-memory only — it comes

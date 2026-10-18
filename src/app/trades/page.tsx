@@ -120,6 +120,7 @@ export default function TradesPage() {
     recordAssignment,
     recordBuyback,
     sellStock,
+    mergeDuplicateLots,
     recordDividend,
     toast,
     dismissToast,
@@ -157,6 +158,32 @@ export default function TradesPage() {
 
   // Active stocks whose live price reached the user's target sell
   // price. Feeds the banner above the table and the row highlight.
+  // Tickers held in more than one row — bought before positions were
+  // merged, or added while the merge service was unreachable. The banner
+  // below folds each into one row at the weighted-average cost.
+  const duplicateTickers = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const s of activeStocks) {
+      const t = s.ticker.toUpperCase();
+      count.set(t, (count.get(t) ?? 0) + 1);
+    }
+    return [...count.entries()].filter(([, n]) => n > 1);
+  }, [activeStocks]);
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  async function mergeAllDuplicates() {
+    setMerging(true);
+    setMergeError(null);
+    for (const [ticker] of duplicateTickers) {
+      const err = await mergeDuplicateLots(ticker);
+      if (err) {
+        setMergeError(`${ticker}: ${err}`);
+        break;
+      }
+    }
+    setMerging(false);
+  }
+
   const targetHits = useMemo(
     () =>
       activeStocks.filter(
@@ -598,6 +625,28 @@ export default function TradesPage() {
         </div>
       )}
 
+      {/* Same ticker in more than one row → one-click merge */}
+      {duplicateTickers.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100">
+          <div>
+            <p className="font-bold">نفس السهم مسجّل في أكثر من سطر</p>
+            <p className="mt-1 text-[11px] text-blue-200/80">
+              {duplicateTickers.map(([t, n]) => `${t} (${n})`).join(" · ")} — الدمج يجمع الكميات في سطر واحد
+              بمتوسط السعر المرجّح، وينقل أي عقد مغطى للسطر المدموج.
+            </p>
+            {mergeError && <p className="mt-1 text-[11px] text-rose-300">{mergeError}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => void mergeAllDuplicates()}
+            disabled={merging}
+            className="rounded-md bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            {merging ? "جارٍ الدمج…" : "دمج في سطر واحد"}
+          </button>
+        </div>
+      )}
+
       {/* Active Stocks - Trading Pit */}
       <section className="mb-8 overflow-hidden rounded-xl border border-zinc-800/60 bg-gradient-to-br from-zinc-900/60 via-zinc-950/80 to-black backdrop-blur-sm shadow-[0_0_40px_-12px_rgba(34,184,138,0.15)]">
         <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/60 px-6 py-4">
@@ -767,6 +816,16 @@ export default function TradesPage() {
                             <span className="font-mono font-bold tracking-wider text-white">
                               {stock.ticker}
                             </span>
+                            {(stock.purchases?.length ?? 0) > 1 && (
+                              <span
+                                className="inline-flex items-center rounded-full border border-zinc-600/60 px-1.5 py-[1px] font-mono text-[9px] text-zinc-400"
+                                title={`متوسط مرجّح من ${stock.purchases!.length} عمليات شراء:\n${stock.purchases!
+                                  .map((b) => `${b.quantity} × $${b.price.toFixed(2)} (${b.date})`)
+                                  .join("\n")}`}
+                              >
+                                ×{stock.purchases!.length}
+                              </span>
+                            )}
                             {hitTarget && (
                               <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest text-emerald-300">
                                 بلغ الهدف

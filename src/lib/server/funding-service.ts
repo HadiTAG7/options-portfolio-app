@@ -9,22 +9,14 @@ import {
 } from "@/lib/funding-day";
 import { roundRates, type FundingRound, type FundingRoundPatch, type FundingSummaryLine } from "@/lib/funding-round";
 import { mapFundState, type DocLike } from "@/lib/server/fund-state";
+import { RouteError } from "@/lib/server/route-error";
 
 // Server side of يوم التمويل. Everything that moves money happens inside
 // ONE Firestore transaction: all reads first, then every write, committed
 // together or not at all. The browser's store actions can't do this — the
 // client shim has no transactions — which is why execution lives here.
 
-export class FundingError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code: string,
-    readonly payload?: unknown
-  ) {
-    super(message);
-  }
-}
+export class FundingError extends RouteError {}
 
 const ROUNDS = "funding_rounds";
 const DEFAULT_RATE = 3.735;
