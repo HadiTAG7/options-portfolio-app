@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Copy, MessageCircle, X } from "lucide-react";
 import { useCurrencyStore } from "@/hooks/use-currency";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -109,7 +110,7 @@ export function WhatsAppReportsDialog({
     [reports, deadline, sarPerUsd]
   );
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   async function copy(id: string, text: string) {
     try {
@@ -146,8 +147,17 @@ export function WhatsAppReportsDialog({
   }
 
   const doneCount = rows.filter((r) => opened.has(r.partner.id)).length;
+  // A month with no profit for anyone is almost always the wrong month
+  // (e.g. the current one, still empty): the praise line only appears in
+  // a profitable month, so the messages read as the bare template.
+  const noProfitMonth =
+    rows.length > 0 && reports.every((r) => !(r.data.partnerSummary.netProfit > 0.005));
 
-  return (
+  // Portalled to <body>: this dialog is opened from inside a settings card
+  // whose backdrop-filter makes the card the containing block for fixed
+  // elements — without the portal the overlay is laid out inside the card
+  // and clipped by it, hiding the title and the first partner.
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md"
@@ -182,7 +192,13 @@ export function WhatsAppReportsDialog({
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+          {noProfitMonth && (
+            <p className="rounded-lg border border-rose-500/30 bg-rose-500/[0.06] p-3 text-[11px] leading-relaxed text-rose-200">
+              شهر {arabicMonthLabel(month)} ما فيه أرباح مسجّلة لأي شريك — لذلك لا يظهر سطر «نحمد الله» في
+              الرسائل. إذا قصدت تقرير الشهر الماضي، أغلق النافذة واختره من قائمة الأشهر.
+            </p>
+          )}
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-4">
             <p className="mb-2 text-[11px] font-bold text-amber-200">
               آخر موعد لطلبات الإيداع والسحب
@@ -330,6 +346,7 @@ export function WhatsAppReportsDialog({
           بالريال أيضاً بسعر الصرف المحدد في الإعدادات ({sarPerUsd}).
         </p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

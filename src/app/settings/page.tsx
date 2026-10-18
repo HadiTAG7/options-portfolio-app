@@ -585,9 +585,15 @@ function MonthlyReportSender() {
   const { partners, updatePartnerPhone } = usePartners();
   const { trades } = useTrades();
   const { entries: storedMonthly } = useMonthlyProfits(true);
+  // Default to the last COMPLETED month: a monthly report (email, PDF,
+  // WhatsApp) describes a finished month. The current month is still in
+  // progress — early in it there are no results at all, and a report
+  // for it reads as the plain, empty template.
   const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
   const [downloadMsg, setDownloadMsg] = useState<string | null>(null);
