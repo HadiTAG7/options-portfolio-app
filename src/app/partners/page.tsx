@@ -699,6 +699,18 @@ export default function PartnersPage() {
                             GP
                           </span>
                         )}
+                        {/* Added with no capital, funded later through يوم
+                            التمويل. Never-funded only: an exited partner
+                            (withdrawals > 0) is not "awaiting". */}
+                        {getPartnerInvestment(partner) === 0 &&
+                          (partner.totalWithdrawals ?? 0) === 0 && (
+                            <span
+                              className="inline-flex shrink-0 items-center rounded-full border border-blue-400/40 bg-blue-500/10 px-1.5 py-[1px] text-[9px] font-bold text-blue-300"
+                              title="بدون رصيد بعد — أضف له طلب إيداع في يوم التمويل"
+                            >
+                              بانتظار التمويل
+                            </span>
+                          )}
                       </span>
                       <span className="font-mono text-[10px] tracking-wider text-zinc-500">
                         {partner.code}

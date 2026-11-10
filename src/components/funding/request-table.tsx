@@ -82,6 +82,14 @@ export function RequestTable({
                       المدير
                     </span>
                   )}
+                  {getPartnerInvestment(p) === 0 && (p.totalWithdrawals ?? 0) === 0 && (
+                    <span
+                      className="ms-2 rounded-full border border-blue-400/40 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold text-blue-300"
+                      title="بدون رصيد بعد — اختر «إيداع» لتمويله في هذه الجولة"
+                    >
+                      بانتظار التمويل
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-3 font-mono tabular-nums text-zinc-300" dir="ltr">
                   {fmtUsd(getPartnerInvestment(p))}

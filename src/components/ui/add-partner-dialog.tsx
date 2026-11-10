@@ -48,9 +48,11 @@ export function AddPartnerDialog({ open, onClose, onSubmit }: AddPartnerDialogPr
       return;
     }
 
-    const numericCapital = parseFloat(capital);
-    if (!capital || isNaN(numericCapital) || numericCapital <= 0) {
-      setError("يرجى إدخال مبلغ صحيح أكبر من صفر");
+    // Empty or 0 is allowed: the partner can be added now and funded
+    // later through يوم التمويل (a deposit request there).
+    const numericCapital = capital.trim() === "" ? 0 : parseFloat(capital);
+    if (!Number.isFinite(numericCapital) || numericCapital < 0) {
+      setError("المبلغ لا يمكن أن يكون سالباً");
       return;
     }
 
@@ -175,6 +177,9 @@ export function AddPartnerDialog({ open, onClose, onSubmit }: AddPartnerDialogPr
                 className="w-full rounded-md border border-zinc-700/60 bg-zinc-950/80 pr-8 pl-4 py-3 text-sm text-white font-mono tabular-nums outline-none transition-all placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/40 disabled:opacity-50"
               />
             </div>
+            <p className="text-[10px] text-zinc-500">
+              اتركه صفراً إذا كان رصيده سيُضاف في يوم التمويل.
+            </p>
           </div>
 
           {/* Error */}

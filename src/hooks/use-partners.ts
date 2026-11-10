@@ -103,11 +103,15 @@ export function usePartners() {
         setError(msg);
         throw new Error(msg);
       }
-      if (!Number.isFinite(capital) || capital <= 0) {
-        const msg = "يرجى إدخال مبلغ صحيح أكبر من صفر";
+      // 0 is allowed: a partner added now and funded later through يوم
+      // التمويل. With totalDeposits 0 they weigh 0% in every trade, so
+      // nobody else's share moves until their deposit lands.
+      if (!Number.isFinite(capital) || capital < 0) {
+        const msg = "المبلغ لا يمكن أن يكون سالباً";
         setError(msg);
         throw new Error(msg);
       }
+      const funded = capital > 0;
 
       const nowIso = new Date().toISOString();
       const today = nowIso.split("T")[0];
@@ -120,7 +124,7 @@ export function usePartners() {
           baseCapital: capital,
           total_balance: capital,
           managementFeePercent: 20,
-          balanceHistory: [{ date: nowIso, balance: capital }],
+          balanceHistory: funded ? [{ date: nowIso, balance: capital }] : [],
           isAdmin: false,
           entry_date: today,
         };
@@ -141,17 +145,19 @@ export function usePartners() {
 
         console.log("[addPartner] Insert succeeded, returned row:", insertedRow);
 
-        // Log the initial deposit (non-fatal)
-        const { error: txError } = await supabase.from("transactions").insert({
-          investorId: insertedRow?.id ?? trimmedName,
-          amount: capital,
-          type: "Deposit" as const,
-          date: today,
-          note: "إيداع رأس المال الأولي",
-        });
-
-        if (txError) {
-          console.warn("[addPartner] Transaction insert failed (non-fatal):", txError.message);
+        // Log the initial deposit (non-fatal). An unfunded partner has none
+        // yet — their first deposit is booked by the funding day.
+        if (funded) {
+          const { error: txError } = await supabase.from("transactions").insert({
+            investorId: insertedRow?.id ?? trimmedName,
+            amount: capital,
+            type: "Deposit" as const,
+            date: today,
+            note: "إيداع رأس المال الأولي",
+          });
+          if (txError) {
+            console.warn("[addPartner] Transaction insert failed (non-fatal):", txError.message);
+          }
         }
 
         // Recalculate ownership server-side (non-fatal)

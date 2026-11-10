@@ -328,6 +328,51 @@ check("no pending + deposit matches the store's deposit arithmetic", () => {
   assert.equal(plan.ledger.filter((r) => r.investorId === "a").length, 1, "one Deposit row only");
 });
 
+// ── A partner added with no capital, funded on the funding day ──────
+const newcomer = partner({
+  id: "n",
+  name: "مستثمر جديد",
+  totalDeposits: 0,
+  entryDate: "2026-10-14",
+  lastSettlementDate: null,
+  balanceHistory: [],
+});
+const withNewcomer = [...basePartners, newcomer];
+
+check("an unfunded partner changes nothing and gets nothing", () => {
+  const plain = run([]);
+  const plan = run([], withNewcomer);
+  assertInvariants(plan, withNewcomer, baseTrades, "unfunded");
+  const n = plan.lines.find((l) => l.partnerId === "n")!;
+  assert.equal(n.pendingNet, 0, "weight 0 → no share of past trades");
+  assert.equal(n.investmentAfter, 0);
+  assert.equal(plan.ledger.filter((r) => r.investorId === "n").length, 0, "no ledger rows");
+  for (const l of plain.lines) {
+    const same = plan.lines.find((x) => x.partnerId === l.partnerId)!;
+    near(same.pendingNet, l.pendingNet, 1e-9, `${l.name} unaffected`);
+  }
+});
+
+check("funded on the funding day, shares only in trades after it", () => {
+  const plan = run(
+    [{ partnerId: "n", kind: "deposit", amount: 50_000, currency: "USD", note: null }],
+    withNewcomer
+  );
+  assertInvariants(plan, withNewcomer, baseTrades, "funded");
+  const n = plan.lines.find((l) => l.partnerId === "n")!;
+  near(n.investmentAfter, 50_000, 1e-9, "capital = the deposit");
+  const after = applyPlanToPartners(withNewcomer, plan);
+  const postTrade = trade({
+    id: "post",
+    result: 1_000,
+    date: "2026-10-15",
+    createdAt: new Date(new Date(plan.settlementAt).getTime() + 60_000).toISOString(),
+  });
+  const dist = computePartnerDistributionFromTrades(after, [...baseTrades, postTrade]);
+  const total = after.reduce((s2, p) => s2 + getPartnerInvestment(p), 0);
+  near(dist.n.grossProfit, 1_000 * (50_000 / total), 1e-9, "pro-rata share of the next trade");
+});
+
 // ── Two rates: deposit vs withdrawal ────────────────────────────────
 const RD = 3.7575;
 const RW = 3.7425;
