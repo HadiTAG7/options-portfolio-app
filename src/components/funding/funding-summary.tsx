@@ -22,8 +22,6 @@ export function FundingSummary({
   const net = Math.abs(t.net);
   const receive = plan.lines.filter((l) => l.cashIn >= 0.005);
   const pay = plan.lines.filter((l) => l.cashOut >= 0.005);
-  const money = (usd: number, sar: number, currency: "USD" | "SAR") =>
-    currency === "SAR" ? fmtSar(sar) : fmtUsd(usd);
 
   return (
     <div className="space-y-4">
@@ -132,35 +130,55 @@ export function FundingSummary({
         </div>
       )}
 
-      {/* Cash routing */}
+      {/* Cash routing — each amount in the currency the cash actually
+          moves in, with the other currency under it (deposits at the
+          deposit rate, payouts at the withdrawal rate). */}
       {(receive.length > 0 || pay.length > 0) && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
-            <p className="mb-2 text-[11px] font-bold text-emerald-300">تستلم من</p>
-            {receive.length === 0 && <p className="text-[11px] text-zinc-500">—</p>}
-            {receive.map((l) => (
-              <div key={l.partnerId} className="flex items-center justify-between py-1 text-xs">
-                <span className="text-zinc-300">{l.name}</span>
-                <span dir="ltr" className="font-mono font-bold tabular-nums text-emerald-300">
-                  {money(l.cashIn, l.cashInCurrency, l.currency)}
-                </span>
-              </div>
-            ))}
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
+            <p className="mb-2 text-sm font-bold text-emerald-300">تستلم من</p>
+            {receive.length === 0 && <p className="text-sm text-zinc-500">—</p>}
+            {receive.map((l) => {
+              const usd = l.cashIn;
+              const sar = l.currency === "SAR" ? l.cashInCurrency : l.cashIn * rates.rd;
+              return (
+                <div key={l.partnerId} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                  <span className="text-zinc-200">{l.name}</span>
+                  <span dir="ltr" className="flex flex-col items-end font-mono tabular-nums">
+                    <span className="font-bold text-emerald-300">
+                      {l.currency === "SAR" ? fmtSar(sar) : fmtUsd(usd)}
+                    </span>
+                    <span className="text-xs text-zinc-400">
+                      ≈ {l.currency === "SAR" ? fmtUsd(usd) : fmtSar(sar)}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3">
-            <p className="mb-2 text-[11px] font-bold text-rose-300">تدفع لـ</p>
-            {pay.length === 0 && <p className="text-[11px] text-zinc-500">—</p>}
-            {pay.map((l) => (
-              <div key={l.partnerId} className="flex items-center justify-between py-1 text-xs">
-                <span className="text-zinc-300">
-                  {l.name}
-                  {l.exits && <span className="ms-1 text-[10px] text-rose-400">(خروج)</span>}
-                </span>
-                <span dir="ltr" className="font-mono font-bold tabular-nums text-rose-300">
-                  {money(l.cashOut, l.cashOutCurrency, l.currency)}
-                </span>
-              </div>
-            ))}
+          <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-4">
+            <p className="mb-2 text-sm font-bold text-rose-300">تدفع لـ</p>
+            {pay.length === 0 && <p className="text-sm text-zinc-500">—</p>}
+            {pay.map((l) => {
+              const usd = l.cashOut;
+              const sar = l.currency === "SAR" ? l.cashOutCurrency : l.cashOut * rates.rw;
+              return (
+                <div key={l.partnerId} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                  <span className="text-zinc-200">
+                    {l.name}
+                    {l.exits && <span className="ms-1 text-xs text-rose-400">(خروج)</span>}
+                  </span>
+                  <span dir="ltr" className="flex flex-col items-end font-mono tabular-nums">
+                    <span className="font-bold text-rose-300">
+                      {l.currency === "SAR" ? fmtSar(sar) : fmtUsd(usd)}
+                    </span>
+                    <span className="text-xs text-zinc-400">
+                      ≈ {l.currency === "SAR" ? fmtUsd(usd) : fmtSar(sar)}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
