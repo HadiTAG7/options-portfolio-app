@@ -87,19 +87,16 @@ export function RoundHistory({
               })()}
               {(() => {
                 const sv = roundSavings(r);
-                if (!sv || !hasSavings(sv)) return null;
+                if (!sv || !hasSavings(sv) || Math.abs(sv.savedSar) < 0.005) return null;
                 return (
                   <p className="mt-1 text-[11px] text-zinc-500">
-                    وفّرت:{" "}
-                    <span dir="ltr" className={`font-mono font-bold ${sv.totalUsd >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                      {sv.totalUsd < 0 ? "−" : ""}
-                      {fmtUsd(Math.abs(sv.totalUsd))}
+                    {sv.savedSar > 0 ? "وفّر فرق العملة: " : "فرق العملة عليك: "}
+                    <span dir="ltr" className={`font-mono font-bold ${sv.savedSar > 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      {fmtSar(Math.abs(sv.savedSar))}
                     </span>{" "}
                     <span dir="ltr" className="font-mono text-zinc-400">
-                      (≈ {sv.totalSar < 0 ? "−" : ""}
-                      {fmtSar(Math.abs(sv.totalSar))})
+                      (≈ {fmtUsd(Math.abs(sv.savedUsd))})
                     </span>
-                    {sv.transfersAvoided > 0 && !sv.feesSet && " — بدون رسوم الحوالات (ما كانت محددة)"}
                   </p>
                 );
               })()}

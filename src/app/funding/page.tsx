@@ -14,7 +14,7 @@ import { useTrades } from "@/hooks/use-trades";
 import { useAuth } from "@/hooks/use-auth";
 import { useCurrencyStore } from "@/hooks/use-currency";
 import { fundingApi } from "@/lib/funding-api";
-import { planFundingDay, type FundingCurrency, type FundingRequest } from "@/lib/funding-day";
+import { planFundingDay, type FundingRequest } from "@/lib/funding-day";
 import {
   newerPayments,
   paymentItemsFor,
@@ -22,8 +22,6 @@ import {
   roundRates,
   type FundingRound,
   type FundingRoundPatch,
-  type TransferFee,
-  type TransferFees,
 } from "@/lib/funding-round";
 
 interface Local {
@@ -32,11 +30,6 @@ interface Local {
   rd: string; // SAR per USD for riyal deposits
   rw: string; // SAR per USD for riyal withdrawals
   brokerCash: string;
-  // Cost of one transfer into / out of the broker (for the savings only).
-  feeIn: string;
-  feeInCcy: FundingCurrency;
-  feeOut: string;
-  feeOutCcy: FundingCurrency;
 }
 
 const toLocal = (r: FundingRound): Local => {
@@ -47,23 +40,7 @@ const toLocal = (r: FundingRound): Local => {
     rd: String(rd),
     rw: String(rw),
     brokerCash: r.brokerCashUsd === null ? "" : String(r.brokerCashUsd),
-    feeIn: r.transferFees?.deposit ? String(r.transferFees.deposit.amount) : "",
-    feeInCcy: r.transferFees?.deposit?.currency ?? "SAR",
-    feeOut: r.transferFees?.withdraw ? String(r.transferFees.withdraw.amount) : "",
-    feeOutCcy: r.transferFees?.withdraw?.currency ?? "USD",
   };
-};
-
-// "" → no fee; a valid amount → the fee; anything else → undefined (invalid).
-const parseFee = (s: string, currency: FundingCurrency): TransferFee | null | undefined => {
-  if (s.trim() === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n >= 0 && n < 1e6 ? { amount: n, currency } : undefined;
-};
-const localFees = (l: Local): TransferFees | undefined => {
-  const deposit = parseFee(l.feeIn, l.feeInCcy);
-  const withdraw = parseFee(l.feeOut, l.feeOutCcy);
-  return deposit === undefined || withdraw === undefined ? undefined : { deposit, withdraw };
 };
 
 // Two copies of the same round can carry payments from different moments
@@ -152,8 +129,6 @@ function FundingDay() {
     const rwV = validRate(l.rw);
     if (rdV !== null) patch.depositSarPerUsd = rdV;
     if (rwV !== null) patch.withdrawSarPerUsd = rwV;
-    const fees = localFees(l);
-    if (fees) patch.transferFees = fees;
     if (l.brokerCash.trim() === "") patch.brokerCashUsd = null;
     else if (Number.isFinite(Number(l.brokerCash)) && Number(l.brokerCash) >= 0) {
       patch.brokerCashUsd = Number(l.brokerCash);
@@ -359,7 +334,7 @@ function FundingDay() {
         </div>
       ) : (
         <div className="mb-8 space-y-5">
-          <div className="grid gap-4 rounded-xl border border-zinc-800/60 bg-zinc-950/60 p-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 rounded-xl border border-zinc-800/60 bg-zinc-950/60 p-5 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="mb-1.5 text-[10px] font-bold text-zinc-500">تاريخ التنفيذ المخطط</p>
               <DatePicker value={local.plannedDate} onChange={(v) => edit({ plannedDate: v })} placeholder="اختر اليوم" />
@@ -396,46 +371,6 @@ function FundingDay() {
               />
               <p className="mt-1 text-[10px] text-zinc-600">للتنبيه إذا كان السحب الصافي أكبر منه.</p>
             </div>
-            {(
-              [
-                ["feeIn", "feeInCcy", "رسوم حوالة الإيداع للبروكر"],
-                ["feeOut", "feeOutCcy", "رسوم حوالة السحب من البروكر"],
-              ] as const
-            ).map(([key, ccyKey, label]) => (
-              <div key={key}>
-                <p className="mb-1.5 text-[10px] font-bold text-zinc-500">{label}</p>
-                <div className="flex gap-1.5" dir="ltr">
-                  <input
-                    value={local[key]}
-                    onChange={(e) => edit({ [key]: e.target.value })}
-                    inputMode="decimal"
-                    dir="ltr"
-                    placeholder="—"
-                    aria-label={label}
-                    className={`min-w-0 flex-1 rounded-md border bg-zinc-950/80 px-3 py-2.5 text-right font-mono text-sm text-white placeholder:text-zinc-600 focus:outline-none ${
-                      parseFee(local[key], local[ccyKey]) !== undefined
-                        ? "border-zinc-700/60 focus:border-blue-500"
-                        : "border-rose-500/60"
-                    }`}
-                  />
-                  <div className="flex overflow-hidden rounded-md border border-zinc-700/60">
-                    {(["USD", "SAR"] as const).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => edit({ [ccyKey]: c })}
-                        className={`px-2.5 text-xs font-bold ${
-                          local[ccyKey] === c ? "bg-blue-600 text-white" : "bg-zinc-950/80 text-zinc-400 hover:text-white"
-                        }`}
-                      >
-                        {c === "USD" ? "$" : "ر.س"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="mt-1 text-[10px] text-zinc-600">للحوالة الواحدة — لحساب التوفير فقط، ما تدخل في الدفاتر.</p>
-              </div>
-            ))}
           </div>
 
           <RequestTable
@@ -453,8 +388,6 @@ function FundingDay() {
               source="estimate"
               tracking={trackingFor(round.id, round.payments, mergeDraftPayments)}
               beforeAdd={flushBeforePayment}
-              fees={localFees(local) ?? null}
-              feesEditable
             />
           )}
 
@@ -554,7 +487,6 @@ function TrackedRound({
           rates={roundRates(round)}
           source="executed"
           tracking={tracking}
-          fees={round.transferFees}
         />
       )}
     </section>

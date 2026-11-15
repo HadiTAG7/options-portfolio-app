@@ -9,7 +9,6 @@ import {
   unmatchedPayments,
   type FundingPayment,
   type PaymentProgress,
-  type TransferFees,
 } from "@/lib/funding-round";
 import { fmtSar, fmtUsd } from "@/lib/money-format";
 import { PaymentBlock, UnmatchedPayments } from "@/components/funding/payment-block";
@@ -44,8 +43,6 @@ export function FundingSummary({
   source,
   tracking,
   beforeAdd,
-  fees,
-  feesEditable = false,
 }: {
   plan: SummaryPlan;
   // SAR per USD for riyal deposits (rd) and riyal withdrawals (rw).
@@ -54,16 +51,12 @@ export function FundingSummary({
   tracking?: SummaryTracking;
   // Runs before a payment is recorded; a returned message aborts it.
   beforeAdd?: () => Promise<string | null>;
-  // Transfer fees to price the savings with; the fee fields are on screen
-  // when the draft is open (feesEditable).
-  fees?: TransferFees | null;
-  feesEditable?: boolean;
 }) {
   const t = plan.totals;
   const net = Math.abs(t.net);
   const receive = plan.lines.filter((l) => l.cashIn >= 0.005);
   const pay = plan.lines.filter((l) => l.cashOut >= 0.005);
-  const savings = fundingSavings(t, plan.lines, fees, rates);
+  const savings = fundingSavings(t);
   const items = tracking ? paymentItemsFor(t, plan.lines) : [];
   const progressBy = new Map<string, PaymentProgress>(
     tracking ? paymentProgress(items, tracking.payments).map((p) => [p.party, p]) : []
@@ -136,6 +129,15 @@ export function FundingSummary({
             </div>
           )}
         </div>
+        {t.transferAvoided >= 0.005 && (
+          <p className="mt-3 text-[11px] text-zinc-300">
+            التجميع خلّى{" "}
+            <span className="font-mono font-bold text-emerald-300" dir="ltr">
+              {fmtUsd(t.transferAvoided)}
+            </span>{" "}
+            ما تمر عبر البروكر — كانت بتروح وترجع لو نُفّذت الطلبات كلٌ على حدة.
+          </p>
+        )}
         {t.brokerAction !== "none" &&
           block(
             "broker",
@@ -144,7 +146,7 @@ export function FundingSummary({
           )}
       </div>
 
-      <SavingsBox savings={savings} tense={source === "executed" ? "past" : "future"} feesEditable={feesEditable} />
+      <SavingsBox savings={savings} tense={source === "executed" ? "past" : "future"} />
 
       {/* Totals */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -262,6 +262,7 @@ async function main() {
     assert.ok(Math.abs(prev.plan.totals.fxSpreadSar - 150) < 1e-6, "150 ر.س spread");
     const res = await executeRound(db, UID, r.id, saved.version, prev.fingerprint);
     assert.ok(Math.abs((res.round.summary!.totals.fxSpreadSar ?? 0) - 150) < 1e-6, "spread kept in the round summary");
+    assert.ok(Math.abs(roundSavings(res.round)!.savedSar - 150) < 1e-6, "the day's saving = the currency difference");
     const ledger = (await db.collection("transactions").get()).docs.map((d) => d.data());
     const spreadRows = ledger.filter((x) => String(x.note).includes("فرق"));
     assert.equal(spreadRows.length, 0, "the spread is NOT booked in the fund's ledger");
@@ -348,32 +349,6 @@ async function main() {
     });
     await cancelDraft(db, UID, d.id);
     await expectFundingError(addPayment(db, UID, d.id, { party: "a", amount: 1, date: "2026-11-14", note: null }), "not_payable");
-  });
-
-  await step("transfer fees: saved on the draft, kept through execution, seeded into the next round", async () => {
-    await seed();
-    const r = await createDraft(db, UID, 3.75);
-    assert.equal(r.transferFees, undefined, "no fees until the GP enters them");
-    const saved = await saveDraft(db, UID, r.id, r.version, {
-      depositSarPerUsd: 3.75,
-      withdrawSarPerUsd: 3.75,
-      transferFees: { deposit: { amount: 25, currency: "SAR" }, withdraw: { amount: 10, currency: "USD" } },
-      requests: [
-        { partnerId: "a", kind: "deposit", amount: 3000, currency: "USD", note: null },
-        { partnerId: "b", kind: "deposit", amount: 2000, currency: "USD", note: null },
-        { partnerId: "e", kind: "withdraw", amount: 1000, currency: "USD", note: null },
-      ],
-    });
-    const prev = await previewRound(db, r.id);
-    assert.deepEqual(prev.plan.errors, []);
-    const res = await executeRound(db, UID, r.id, saved.version, prev.fingerprint);
-    assert.deepEqual(res.round.transferFees, saved.transferFees, "fees kept on the executed day");
-    const sv = roundSavings(res.round)!;
-    assert.equal(sv.transfersAvoided, 2, "3 transfers became 1");
-    assert.ok(Math.abs(sv.feesSavedUsd - (25 / 3.75 + 10)) < 1e-9, "one deposit fee + one withdrawal fee saved");
-    assert.equal(await count("transactions"), prev.plan.ledger.length, "fees never reach the ledger");
-    const next = await createDraft(db, UID, 3.75);
-    assert.deepEqual(next.transferFees, saved.transferFees, "the next round starts with the same fees");
   });
 
   console.log(`\n✓ ${passed} integration steps passed (emulator)`);

@@ -1,9 +1,12 @@
-// Unit checks for what a funding day saves (transfers avoided × fees, and
-// the exchange spread kept on riyals that offset each other). Run:
+// Unit checks for what a funding day saves. Transfers cost nothing; the
+// only saving is the currency difference on riyals that offset each other
+// (never converted, so the bank's spread stays with the GP). Run:
 //   npx tsx scripts/test-funding-savings.ts
 import assert from "node:assert/strict";
+import { planFundingDay } from "@/lib/funding-day";
 import { fundingSavings, roundSavings, sanitizePatch, type FundingRound } from "@/lib/funding-round";
-import { hasSavings, transfersLabel } from "@/components/funding/savings-box";
+import { hasSavings } from "@/components/funding/savings-box";
+import type { Partner } from "@/types";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -11,118 +14,94 @@ function check(name: string, fn: () => void) {
   passed++;
   console.log(`✓ ${name}`);
 }
-const near = (a: number, b: number, msg: string) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} ≠ ${b}`);
-const rates = { rd: 3.75, rw: 3.75 };
-const ins = (n: number) => Array.from({ length: n }, () => ({ cashIn: 1000, cashOut: 0 }));
-const outs = (n: number) => Array.from({ length: n }, () => ({ cashIn: 0, cashOut: 400 }));
-const totals = (brokerAction: "deposit" | "withdraw" | "none", o: Partial<{ transferAvoided: number; fxAvoidedSar: number; fxSpreadUsd: number; fxSpreadSar: number }> = {}) => ({
-  brokerAction,
-  transferAvoided: 0,
-  fxAvoidedSar: 0,
-  ...o,
+const near = (a: number, b: number, msg: string) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} ≠ ${b}`);
+
+const partner = (id: string, capital: number, isAdmin = false) =>
+  ({
+    id, name: id, isAdmin, managementFeePercent: isAdmin ? 0 : 20,
+    currentBalance: capital, total_balance: capital, totalDeposits: capital, baseCapital: capital,
+    totalWithdrawals: 0, gpFeesAccrued: 0, profitTakenGross: 0,
+    last_settlement_date: "2026-10-01T00:00:00.000Z", entry_date: "2026-01-01", balanceHistory: [], archived_at: null,
+  }) as unknown as Partner;
+const partners = [partner("gp", 100000, true), partner("a", 50000), partner("b", 50000), partner("c", 50000)];
+const plan = (requests: Parameters<typeof planFundingDay>[0]["requests"], rd = 3.7575, rw = 3.7425) =>
+  planFundingDay({ partners, trades: [], requests, depositSarPerUsd: rd, withdrawSarPerUsd: rw, now: new Date("2026-11-15T12:00:00Z"), brokerCashUsd: null });
+
+check("riyals that offset each other: the rate difference on them is the saving", () => {
+  const p = plan([
+    { partnerId: "a", kind: "deposit", amount: 37575, currency: "SAR", note: null },
+    { partnerId: "b", kind: "withdraw", amount: 37425, currency: "SAR", note: null },
+  ]);
+  assert.deepEqual(p.errors, []);
+  const sv = fundingSavings(p.totals);
+  near(sv.savedSar, 150, "37,575 − 37,425 riyals kept, both sides booked at $10,000");
+  assert.ok(sv.savedUsd > 0, "same saving in dollars");
+  near(sv.fxAvoidedSar, 2 * 37425, "riyals that never needed converting");
+  assert.equal(hasSavings(sv), true);
 });
 
-check("3 deposits + 2 withdrawals netted into one deposit: 4 transfers avoided, priced per side", () => {
-  const sv = fundingSavings(
-    totals("deposit", { transferAvoided: 1600 }),
-    [...ins(3), ...outs(2), { cashIn: 0, cashOut: 0 }],
-    { deposit: { amount: 25, currency: "SAR" }, withdraw: { amount: 10, currency: "USD" } },
-    rates
+check("dollar requests save nothing — transfers cost nothing", () => {
+  const p = plan([
+    { partnerId: "a", kind: "deposit", amount: 5000, currency: "USD", note: null },
+    { partnerId: "b", kind: "withdraw", amount: 3000, currency: "USD", note: null },
+  ]);
+  const sv = fundingSavings(p.totals);
+  assert.equal(sv.savedSar, 0);
+  assert.ok(sv.volumeAvoidedUsd > 0, "netting still kept dollars off the broker");
+  assert.equal(hasSavings(sv), false, "no savings box for dollar-only netting");
+});
+
+check("riyals in one direction only: nothing to offset, nothing saved", () => {
+  const p = plan([
+    { partnerId: "a", kind: "deposit", amount: 10000, currency: "SAR", note: null },
+    { partnerId: "b", kind: "deposit", amount: 5000, currency: "SAR", note: null },
+  ]);
+  const sv = fundingSavings(p.totals);
+  assert.equal(sv.fxAvoidedSar, 0);
+  assert.equal(hasSavings(sv), false);
+});
+
+check("one rate both ways: riyals still offset, but there is no difference to count", () => {
+  const p = plan(
+    [
+      { partnerId: "a", kind: "deposit", amount: 3750, currency: "SAR", note: null },
+      { partnerId: "b", kind: "withdraw", amount: 3750, currency: "SAR", note: null },
+    ],
+    3.75,
+    3.75
   );
-  assert.equal(sv.depositTransfers, 3);
-  assert.equal(sv.withdrawTransfers, 2);
-  assert.equal(sv.transfersWith, 1);
-  assert.equal(sv.transfersAvoided, 4);
-  assert.equal(sv.feesSet, true);
-  near(sv.feesSavedUsd, 2 * (25 / 3.75) + 2 * 10, "2 deposit fees (riyals) + 2 withdrawal fees (dollars)");
-  near(sv.feesSavedSar, 2 * 25 + 2 * 10 * 3.75, "same in riyals");
-  near(sv.totalUsd, sv.feesSavedUsd, "no riyals netted → fees only");
-  assert.equal(sv.volumeAvoidedUsd, 1600);
+  const sv = fundingSavings(p.totals);
+  near(sv.savedSar, 0, "no spread");
+  assert.equal(hasSavings(sv), true, "the box still shows, with the equal-rates note");
 });
 
-check("perfect offset: nothing crosses the broker, every transfer avoided", () => {
-  const sv = fundingSavings(totals("none"), [...ins(2), ...outs(2)], { deposit: { amount: 5, currency: "USD" }, withdraw: { amount: 5, currency: "USD" } }, rates);
-  assert.equal(sv.transfersWith, 0);
-  assert.equal(sv.transfersAvoided, 4);
-  near(sv.feesSavedUsd, 20, "4 × $5");
+check("a deposit rate below the withdrawal rate is a cost, shown negative", () => {
+  const sv = fundingSavings({ transferAvoided: 0, fxAvoidedSar: 7500, fxSpreadSar: -15, fxSpreadUsd: -4 });
+  assert.equal(sv.savedSar, -15);
+  assert.equal(sv.savedUsd, -4);
 });
 
-check("a net withdrawal keeps one withdrawal fee, saves the rest", () => {
-  const sv = fundingSavings(totals("withdraw"), [...ins(1), ...outs(3)], { deposit: { amount: 7, currency: "USD" }, withdraw: { amount: 10, currency: "USD" } }, rates);
-  assert.equal(sv.transfersAvoided, 3);
-  near(sv.feesSavedUsd, 7 + 2 * 10, "1 deposit fee + 2 of 3 withdrawal fees");
+check("legacy totals without spread fields read as zero", () => {
+  const sv = fundingSavings({ transferAvoided: 100, fxAvoidedSar: 0 });
+  assert.equal(sv.savedSar, 0);
+  assert.equal(sv.savedUsd, 0);
 });
 
-check("riyal fees convert at the rate of their side", () => {
-  const sv = fundingSavings(totals("none"), [...ins(1), ...outs(1)], { deposit: { amount: 37.5, currency: "SAR" }, withdraw: { amount: 37.4, currency: "SAR" } }, { rd: 3.75, rw: 3.74 });
-  near(sv.feesSavedUsd, 10 + 10, "37.5/3.75 + 37.4/3.74");
-  near(sv.feesSavedSar, 37.5 + 37.4, "riyal fees stay exact in riyals");
-});
-
-check("no fee entered: transfers still counted, fee part flagged unknown", () => {
-  const sv = fundingSavings(totals("deposit"), [...ins(2), ...outs(1)], null, rates);
-  assert.equal(sv.transfersAvoided, 2);
-  assert.equal(sv.feesSet, false);
-  assert.equal(sv.feesSavedUsd, 0);
-  const zero = fundingSavings(totals("deposit"), [...ins(2), ...outs(1)], { deposit: { amount: 0, currency: "USD" }, withdraw: null }, rates);
-  assert.equal(zero.feesSet, false, "a zero fee is the same as none");
-});
-
-check("the exchange spread on netted riyals counts as saved (and a negative spread as a cost)", () => {
-  const sv = fundingSavings(totals("none", { fxSpreadUsd: 40, fxSpreadSar: 150, fxAvoidedSar: 74850 }), [...ins(1), ...outs(1)], null, rates);
-  near(sv.fxSavedSar, 150, "spread in riyals");
-  near(sv.totalUsd, 40, "total = fx when no fee");
-  near(sv.totalSar, 150, "total in riyals = the exact spread");
-  assert.equal(sv.fxAvoidedSar, 74850);
-  const neg = fundingSavings(totals("none", { fxSpreadUsd: -4, fxSpreadSar: -15 }), [...ins(1), ...outs(1)], { deposit: { amount: 10, currency: "USD" }, withdraw: null }, rates);
-  near(neg.totalUsd, 10 - 4, "fees saved minus the spread the GP covers");
-});
-
-check("a single request saves nothing; legacy totals without spread fields read as zero", () => {
-  const one = fundingSavings(totals("deposit"), ins(1), { deposit: { amount: 25, currency: "SAR" }, withdraw: null }, rates);
-  assert.equal(one.transfersAvoided, 0);
-  assert.equal(one.totalUsd, 0);
-  assert.equal(hasSavings(one), false);
-  assert.equal(hasSavings(fundingSavings(totals("none"), [], null, rates)), false);
-});
-
-check("roundSavings: executed rounds only, priced with the round's own fees and rates", () => {
+check("roundSavings: executed rounds only, from the stored summary", () => {
   const base = {
     id: "r", version: 3, plannedDate: null, brokerCashUsd: null, requests: [], createdAt: "", createdBy: "", updatedAt: "", updatedBy: "",
     executedAt: "2026-11-01T10:00:00.000Z", ledgerDate: "2026-11-01", opId: "op", fingerprint: "f", revertedAt: null,
-    depositSarPerUsd: 3.75, withdrawSarPerUsd: 3.75,
-    transferFees: { deposit: { amount: 10, currency: "USD" as const }, withdraw: { amount: 10, currency: "USD" as const } },
-    summary: {
-      totals: { brokerAction: "deposit", transferAvoided: 800, fxAvoidedSar: 0, fxSpreadUsd: 0, fxSpreadSar: 0 },
-      lines: [...ins(2), ...outs(1)].map((l, i) => ({ partnerId: `p${i}`, name: "", kind: null, currency: "USD", cashInCurrency: l.cashIn, cashOutCurrency: l.cashOut, capitalized: 0, investmentAfter: 0, exits: false, ...l })),
-    },
+    summary: { totals: { transferAvoided: 0, fxAvoidedSar: 74850, fxSpreadSar: 150, fxSpreadUsd: 40 }, lines: [] },
   } as unknown as FundingRound;
-  near(roundSavings({ ...base, status: "executed" })!.totalUsd, 20, "2 transfers avoided × $10");
+  near(roundSavings({ ...base, status: "executed" })!.savedSar, 150, "executed day");
   assert.equal(roundSavings({ ...base, status: "reverted" }), null, "an undone day saved nothing");
   assert.equal(roundSavings({ ...base, status: "draft" }), null);
 });
 
-check("sanitizePatch: transfer fees validated (amount ≥ 0, USD/SAR, null allowed)", () => {
-  const ok = sanitizePatch({ transferFees: { deposit: { amount: "25", currency: "SAR" }, withdraw: null } });
-  assert.ok("patch" in ok);
-  assert.deepEqual(ok.patch.transferFees, { deposit: { amount: 25, currency: "SAR" }, withdraw: null });
-  for (const bad of [
-    { transferFees: null },
-    { transferFees: "x" },
-    { transferFees: { deposit: { amount: -1, currency: "USD" }, withdraw: null } },
-    { transferFees: { deposit: { amount: 5, currency: "EUR" }, withdraw: null } },
-    { transferFees: { deposit: null, withdraw: { amount: 1e7, currency: "USD" } } },
-    { transferFees: { deposit: 5, withdraw: null } },
-  ]) {
-    assert.ok("error" in sanitizePatch(bad), `rejected: ${JSON.stringify(bad)}`);
-  }
-});
-
-check("Arabic transfer counts read naturally", () => {
-  assert.equal(transfersLabel(1), "حوالة وحدة");
-  assert.equal(transfersLabel(2), "حوالتين");
-  assert.equal(transfersLabel(4), "4 حوالات");
-  assert.equal(transfersLabel(12), "12 حوالة");
+check("the removed fee fields are not accepted from a client any more", () => {
+  const r = sanitizePatch({ transferFees: { deposit: { amount: 25, currency: "SAR" }, withdraw: null } });
+  assert.ok("patch" in r);
+  assert.equal("transferFees" in r.patch, false);
 });
 
 console.log(`\n✓ ${passed} savings checks passed`);
