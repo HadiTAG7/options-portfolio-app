@@ -36,6 +36,9 @@ export interface FundingRound {
   // Legacy single rate — rounds saved before the split carry only this.
   sarPerUsd?: number;
   brokerCashUsd: number | null;
+  // What one transfer into / out of the broker costs — only to price the
+  // transfers the funding day avoids (see fundingSavings). Never booked.
+  transferFees?: TransferFees;
   requests: FundingRequest[];
   createdAt: string;
   createdBy: string;
@@ -187,6 +190,88 @@ export interface FundingRoundPatch {
   depositSarPerUsd?: number;
   withdrawSarPerUsd?: number;
   brokerCashUsd?: number | null;
+  transferFees?: TransferFees;
+}
+
+// The cost of ONE transfer, in the currency it is charged in (a bank wire
+// fee in riyals, a broker withdrawal fee in dollars…).
+export interface TransferFee {
+  amount: number;
+  currency: FundingCurrency;
+}
+export interface TransferFees {
+  deposit: TransferFee | null; // per transfer into the broker
+  withdraw: TransferFee | null; // per transfer out of the broker
+}
+
+// What a funding day saved against moving every request on its own:
+// the transfers it avoided (priced at the GP's fees) and the exchange
+// spread kept on riyals that offset each other instead of going through
+// the bank. Informational only — nothing here is booked.
+export interface FundingSavings {
+  depositTransfers: number; // transfers INTO the broker without netting
+  withdrawTransfers: number; // transfers OUT of the broker without netting
+  transfersWith: number; // 0 or 1 with netting
+  transfersAvoided: number;
+  feesSet: boolean; // false → no fee entered yet, the fee part is unknown
+  feesSavedUsd: number;
+  feesSavedSar: number;
+  fxSavedUsd: number; // spread kept on netted riyals (negative = a cost)
+  fxSavedSar: number;
+  totalUsd: number; // feesSavedUsd + fxSavedUsd
+  totalSar: number; // feesSavedSar + fxSavedSar
+  volumeAvoidedUsd: number; // dollars that never crossed the broker
+  fxAvoidedSar: number; // riyals that never needed converting
+}
+
+export function feeUsd(fee: TransferFee | null | undefined, sarPerUsd: number): number {
+  if (!fee || !(fee.amount > 0)) return 0;
+  return fee.currency === "SAR" ? fee.amount / sarPerUsd : fee.amount;
+}
+export function feeSar(fee: TransferFee | null | undefined, sarPerUsd: number): number {
+  if (!fee || !(fee.amount > 0)) return 0;
+  return fee.currency === "SAR" ? fee.amount : fee.amount * sarPerUsd;
+}
+
+export function fundingSavings(
+  totals: Pick<FundingTotals, "brokerAction" | "transferAvoided" | "fxAvoidedSar"> &
+    Partial<Pick<FundingTotals, "fxSpreadUsd" | "fxSpreadSar">>,
+  lines: Array<Pick<FundingSummaryLine, "cashIn" | "cashOut">>,
+  fees: TransferFees | null | undefined,
+  rates: { rd: number; rw: number }
+): FundingSavings {
+  const depositTransfers = lines.filter((l) => l.cashIn >= HALF_CENT).length;
+  const withdrawTransfers = lines.filter((l) => l.cashOut >= HALF_CENT).length;
+  const into = totals.brokerAction === "deposit" ? 1 : 0;
+  const out = totals.brokerAction === "withdraw" ? 1 : 0;
+  // A riyal fee is converted at the rate of the side it is paid on.
+  const savedIn = Math.max(0, depositTransfers - into);
+  const savedOut = Math.max(0, withdrawTransfers - out);
+  const feesSavedUsd = savedIn * feeUsd(fees?.deposit, rates.rd) + savedOut * feeUsd(fees?.withdraw, rates.rw);
+  const feesSavedSar = savedIn * feeSar(fees?.deposit, rates.rd) + savedOut * feeSar(fees?.withdraw, rates.rw);
+  const fxSavedUsd = totals.fxSpreadUsd ?? 0;
+  const fxSavedSar = totals.fxSpreadSar ?? 0;
+  return {
+    depositTransfers,
+    withdrawTransfers,
+    transfersWith: into + out,
+    transfersAvoided: Math.max(0, depositTransfers + withdrawTransfers - into - out),
+    feesSet: Boolean((fees?.deposit && fees.deposit.amount > 0) || (fees?.withdraw && fees.withdraw.amount > 0)),
+    feesSavedUsd,
+    feesSavedSar,
+    fxSavedUsd,
+    fxSavedSar,
+    totalUsd: feesSavedUsd + fxSavedUsd,
+    totalSar: feesSavedSar + fxSavedSar,
+    volumeAvoidedUsd: totals.transferAvoided ?? 0,
+    fxAvoidedSar: totals.fxAvoidedSar ?? 0,
+  };
+}
+
+// Savings of an executed round, from what it stored at execution.
+export function roundSavings(round: FundingRound): FundingSavings | null {
+  if (round.status !== "executed" || !round.summary) return null;
+  return fundingSavings(round.summary.totals, round.summary.lines, round.transferFees, roundRates(round));
 }
 
 const DEFAULT_SAR_PER_USD = 3.735;
@@ -253,6 +338,23 @@ export function sanitizePatch(raw: unknown): { patch: FundingRoundPatch } | { er
       if (!(Number.isFinite(v) && v > 1 && v < 10)) return { error: `${label} غير صالح` };
       patch[key] = v;
     }
+  }
+  if ("transferFees" in r) {
+    const f = r.transferFees as Record<string, unknown> | null;
+    if (!f || typeof f !== "object") return { error: "رسوم الحوالة غير صالحة" };
+    const one = (v: unknown): TransferFee | null | "bad" => {
+      if (v === null || v === undefined) return null;
+      if (typeof v !== "object") return "bad";
+      const o = v as Record<string, unknown>;
+      const amount = Number(o.amount);
+      const currency = o.currency === "SAR" ? "SAR" : o.currency === "USD" ? "USD" : null;
+      if (!currency || !(Number.isFinite(amount) && amount >= 0 && amount < 1e6)) return "bad";
+      return { amount, currency };
+    };
+    const deposit = one(f.deposit);
+    const withdraw = one(f.withdraw);
+    if (deposit === "bad" || withdraw === "bad") return { error: "رسوم الحوالة غير صالحة" };
+    patch.transferFees = { deposit, withdraw };
   }
   if ("brokerCashUsd" in r) {
     const v = r.brokerCashUsd;

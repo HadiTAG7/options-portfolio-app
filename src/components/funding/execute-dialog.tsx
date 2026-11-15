@@ -141,7 +141,12 @@ export function ExecuteDialog({
               {phase.k === "ready" && phase.notice && (
                 <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">{phase.notice}</p>
               )}
-              <FundingSummary plan={view.plan} rates={roundRates(view.round)} source="server" />
+              <FundingSummary
+                plan={view.plan}
+                rates={roundRates(view.round)}
+                source="server"
+                fees={view.round.transferFees}
+              />
               {view.plan.errors.length === 0 && (
                 <div className="space-y-2 rounded-lg border border-zinc-800/60 bg-zinc-950/50 p-4 text-xs text-zinc-300">
                   <label className="flex cursor-pointer items-start gap-2">

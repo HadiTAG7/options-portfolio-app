@@ -120,6 +120,10 @@ export async function createDraft(
       .filter((r) => r.status === "executed")
       .sort((a, b) => ((a.executedAt ?? "") < (b.executedAt ?? "") ? 1 : -1))[0];
     const seeded = lastExecuted ? roundRates(lastExecuted) : { rd: rate, rw: rate };
+    // Transfer fees carry over from the last round that had them set.
+    const lastFees = all
+      .filter((r) => r.transferFees)
+      .sort((a, b) => ((a.updatedAt ?? "") < (b.updatedAt ?? "") ? 1 : -1))[0]?.transferFees;
     const round: FundingRound = {
       id: ref.id,
       status: "draft",
@@ -128,6 +132,7 @@ export async function createDraft(
       depositSarPerUsd: seeded.rd,
       withdrawSarPerUsd: seeded.rw,
       brokerCashUsd: null,
+      ...(lastFees ? { transferFees: lastFees } : {}),
       requests: [],
       createdAt: now,
       createdBy: uid,

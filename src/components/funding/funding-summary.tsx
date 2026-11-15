@@ -3,14 +3,17 @@
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, XCircle } from "lucide-react";
 import type { FundingLine, FundingTotals } from "@/lib/funding-day";
 import {
+  fundingSavings,
   paymentItemsFor,
   paymentProgress,
   unmatchedPayments,
   type FundingPayment,
   type PaymentProgress,
+  type TransferFees,
 } from "@/lib/funding-round";
 import { fmtSar, fmtUsd } from "@/lib/money-format";
 import { PaymentBlock, UnmatchedPayments } from "@/components/funding/payment-block";
+import { SavingsBox } from "@/components/funding/savings-box";
 
 // What the summary reads from a plan — a live/server FundingPlan satisfies
 // it, and so does an executed round's stored summary.
@@ -41,6 +44,8 @@ export function FundingSummary({
   source,
   tracking,
   beforeAdd,
+  fees,
+  feesEditable = false,
 }: {
   plan: SummaryPlan;
   // SAR per USD for riyal deposits (rd) and riyal withdrawals (rw).
@@ -49,11 +54,16 @@ export function FundingSummary({
   tracking?: SummaryTracking;
   // Runs before a payment is recorded; a returned message aborts it.
   beforeAdd?: () => Promise<string | null>;
+  // Transfer fees to price the savings with; the fee fields are on screen
+  // when the draft is open (feesEditable).
+  fees?: TransferFees | null;
+  feesEditable?: boolean;
 }) {
   const t = plan.totals;
   const net = Math.abs(t.net);
   const receive = plan.lines.filter((l) => l.cashIn >= 0.005);
   const pay = plan.lines.filter((l) => l.cashOut >= 0.005);
+  const savings = fundingSavings(t, plan.lines, fees, rates);
   const items = tracking ? paymentItemsFor(t, plan.lines) : [];
   const progressBy = new Map<string, PaymentProgress>(
     tracking ? paymentProgress(items, tracking.payments).map((p) => [p.party, p]) : []
@@ -126,24 +136,6 @@ export function FundingSummary({
             </div>
           )}
         </div>
-        {t.transferAvoided >= 0.005 && (
-          <p className="mt-3 text-[11px] text-zinc-300">
-            التجميع وفّر تحويل{" "}
-            <span className="font-mono font-bold text-emerald-300" dir="ltr">
-              {fmtUsd(t.transferAvoided)}
-            </span>{" "}
-            كان سيمر عبر البروكر لو نُفّذت الطلبات كلٌ على حدة.
-            {t.fxAvoidedSar >= 0.005 && (
-              <>
-                {" "}وتحويل عملة تجنّبته:{" "}
-                <span className="font-mono font-bold text-emerald-300" dir="ltr">
-                  {fmtSar(t.fxAvoidedSar)}
-                </span>
-                .
-              </>
-            )}
-          </p>
-        )}
         {t.brokerAction !== "none" &&
           block(
             "broker",
@@ -151,6 +143,8 @@ export function FundingSummary({
             false
           )}
       </div>
+
+      <SavingsBox savings={savings} tense={source === "executed" ? "past" : "future"} feesEditable={feesEditable} />
 
       {/* Totals */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -175,25 +169,6 @@ export function FundingSummary({
           المطلوب تحويله: <span dir="ltr" className="font-mono font-bold text-white">{fmtSar(t.fxNeededSar)}</span>{" "}
           (الإيداع بسعر {rates.rd}، والسحب بسعر {rates.rw}).
         </p>
-      )}
-      {Math.abs(t.fxSpreadSar ?? 0) >= 0.005 && (
-        <div
-          className={`rounded-lg border p-3 text-[11px] leading-relaxed ${
-            (t.fxSpreadSar ?? 0) > 0
-              ? "border-blue-500/30 bg-blue-500/[0.06] text-blue-100"
-              : "border-rose-500/30 bg-rose-500/[0.06] text-rose-200"
-          }`}
-        >
-          {(t.fxSpreadSar ?? 0) > 0 ? "فرق الصرف — لك كمدير: " : "فرق الصرف — عليك كمدير: "}
-          <span dir="ltr" className="font-mono font-bold">
-            {fmtSar(Math.abs(t.fxSpreadSar ?? 0))}
-          </span>{" "}
-          <span dir="ltr" className="font-mono text-zinc-400">
-            (≈ {fmtUsd(Math.abs(t.fxSpreadUsd ?? 0))})
-          </span>
-          . الريالات التي تقابلت داخلياً لم تُحوَّل فعلياً، والفرق بين سعري الإيداع والسحب عليها يبقى عندك — خارج دفاتر
-          الصندوق.
-        </div>
       )}
 
       {/* Cash routing — each amount in the currency the cash actually

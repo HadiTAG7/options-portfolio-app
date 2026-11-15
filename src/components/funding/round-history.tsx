@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { History, Undo2 } from "lucide-react";
-import { paymentItemsFor, paymentProgress, type FundingRound } from "@/lib/funding-round";
+import { paymentItemsFor, paymentProgress, roundSavings, type FundingRound } from "@/lib/funding-round";
+import { hasSavings } from "@/components/funding/savings-box";
 import { fmtSar, fmtUsd } from "@/lib/money-format";
 
 const STATUS: Record<FundingRound["status"], { label: string; cls: string }> = {
@@ -84,14 +85,24 @@ export function RoundHistory({
                   </p>
                 );
               })()}
-              {t && Math.abs(t.fxSpreadSar ?? 0) >= 0.005 && (
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  فرق الصرف {(t.fxSpreadSar ?? 0) > 0 ? "لك" : "عليك"}:{" "}
-                  <span dir="ltr" className="font-mono text-zinc-300">
-                    {fmtSar(Math.abs(t.fxSpreadSar ?? 0))}
-                  </span>
-                </p>
-              )}
+              {(() => {
+                const sv = roundSavings(r);
+                if (!sv || !hasSavings(sv)) return null;
+                return (
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    وفّرت:{" "}
+                    <span dir="ltr" className={`font-mono font-bold ${sv.totalUsd >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      {sv.totalUsd < 0 ? "−" : ""}
+                      {fmtUsd(Math.abs(sv.totalUsd))}
+                    </span>{" "}
+                    <span dir="ltr" className="font-mono text-zinc-400">
+                      (≈ {sv.totalSar < 0 ? "−" : ""}
+                      {fmtSar(Math.abs(sv.totalSar))})
+                    </span>
+                    {sv.transfersAvoided > 0 && !sv.feesSet && " — بدون رسوم الحوالات (ما كانت محددة)"}
+                  </p>
+                );
+              })()}
               {r.summary && (
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-400">
                   {r.summary.lines
