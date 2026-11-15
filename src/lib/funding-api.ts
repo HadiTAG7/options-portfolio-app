@@ -36,4 +36,10 @@ export const fundingApi = {
       fingerprint,
     }),
   undo: (roundId: string) => call<{ round: FundingRound }>("/api/funding/undo", { roundId }),
+  addPayment: (
+    roundId: string,
+    payment: { party: string; amount: number; date: string; note: string | null }
+  ) => call<{ round: FundingRound }>("/api/funding/round", { action: "addPayment", roundId, payment }),
+  removePayment: (roundId: string, paymentId: string) =>
+    call<{ round: FundingRound }>("/api/funding/round", { action: "removePayment", roundId, paymentId }),
 };

@@ -1,8 +1,35 @@
 "use client";
 
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, XCircle } from "lucide-react";
-import type { FundingPlan } from "@/lib/funding-day";
+import type { FundingLine, FundingTotals } from "@/lib/funding-day";
+import {
+  paymentItemsFor,
+  paymentProgress,
+  unmatchedPayments,
+  type FundingPayment,
+  type PaymentProgress,
+} from "@/lib/funding-round";
 import { fmtSar, fmtUsd } from "@/lib/money-format";
+import { PaymentBlock, UnmatchedPayments } from "@/components/funding/payment-block";
+
+// What the summary reads from a plan — a live/server FundingPlan satisfies
+// it, and so does an executed round's stored summary.
+export interface SummaryPlan {
+  totals: FundingTotals;
+  lines: Array<
+    Pick<FundingLine, "partnerId" | "name" | "cashIn" | "cashOut" | "cashInCurrency" | "cashOutCurrency" | "currency" | "exits">
+  >;
+  errors: string[];
+  warnings: string[];
+}
+
+// Optional payment tracking: paid / remaining per item, with recording.
+export interface SummaryTracking {
+  payments: FundingPayment[];
+  editable: boolean;
+  onAdd: (party: string, amount: number, date: string, note: string | null) => Promise<string | null>;
+  onRemove: (paymentId: string) => Promise<string | null>;
+}
 
 // The answer to "what do I do at the broker?" plus everything behind it:
 // totals, the conversion that netting avoided, and who to collect from
@@ -12,16 +39,45 @@ export function FundingSummary({
   plan,
   rates,
   source,
+  tracking,
+  beforeAdd,
 }: {
-  plan: FundingPlan;
+  plan: SummaryPlan;
   // SAR per USD for riyal deposits (rd) and riyal withdrawals (rw).
   rates: { rd: number; rw: number };
-  source: "estimate" | "server";
+  source: "estimate" | "server" | "executed";
+  tracking?: SummaryTracking;
+  // Runs before a payment is recorded; a returned message aborts it.
+  beforeAdd?: () => Promise<string | null>;
 }) {
   const t = plan.totals;
   const net = Math.abs(t.net);
   const receive = plan.lines.filter((l) => l.cashIn >= 0.005);
   const pay = plan.lines.filter((l) => l.cashOut >= 0.005);
+  const items = tracking ? paymentItemsFor(t, plan.lines) : [];
+  const progressBy = new Map<string, PaymentProgress>(
+    tracking ? paymentProgress(items, tracking.payments).map((p) => [p.party, p]) : []
+  );
+  const unmatched = tracking ? unmatchedPayments(items, tracking.payments) : [];
+  const nameOf = (party: string) =>
+    party === "broker" ? "البروكر" : (plan.lines.find((l) => l.partnerId === party)?.name ?? "شريك");
+  const block = (party: string, label: string, compact: boolean) => {
+    const pr = progressBy.get(party);
+    if (!tracking || !pr) return null;
+    return (
+      <PaymentBlock
+        progress={pr}
+        label={label}
+        editable={tracking.editable}
+        compact={compact}
+        onAdd={async (amount, date, note) => {
+          const err = beforeAdd ? await beforeAdd() : null;
+          return err ?? tracking.onAdd(party, amount, date, note);
+        }}
+        onRemove={tracking.onRemove}
+      />
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -46,7 +102,11 @@ export function FundingSummary({
             )}
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
-                {source === "server" ? "معاينة الخادم — هذا ما سيُنفَّذ" : "تقدير مباشر"}
+                {source === "server"
+                  ? "معاينة الخادم — هذا ما سيُنفَّذ"
+                  : source === "executed"
+                    ? "منفّذ — متابعة الدفعات"
+                    : "تقدير مباشر"}
               </p>
               <p className="font-headline text-lg font-bold text-white">
                 {t.brokerAction === "deposit"
@@ -84,6 +144,12 @@ export function FundingSummary({
             )}
           </p>
         )}
+        {t.brokerAction !== "none" &&
+          block(
+            "broker",
+            t.brokerAction === "deposit" ? "تم تحويله للبروكر" : "تم استلامه من البروكر",
+            false
+          )}
       </div>
 
       {/* Totals */}
@@ -142,7 +208,8 @@ export function FundingSummary({
               const usd = l.cashIn;
               const sar = l.currency === "SAR" ? l.cashInCurrency : l.cashIn * rates.rd;
               return (
-                <div key={l.partnerId} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                <div key={l.partnerId} className="py-1.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-zinc-200">{l.name}</span>
                   <span dir="ltr" className="flex flex-col items-end font-mono tabular-nums">
                     <span className="font-bold text-emerald-300">
@@ -152,6 +219,8 @@ export function FundingSummary({
                       ≈ {l.currency === "SAR" ? fmtUsd(usd) : fmtSar(sar)}
                     </span>
                   </span>
+                </div>
+                {block(l.partnerId, "تم استلامه", true)}
                 </div>
               );
             })}
@@ -163,7 +232,8 @@ export function FundingSummary({
               const usd = l.cashOut;
               const sar = l.currency === "SAR" ? l.cashOutCurrency : l.cashOut * rates.rw;
               return (
-                <div key={l.partnerId} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                <div key={l.partnerId} className="py-1.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-zinc-200">
                     {l.name}
                     {l.exits && <span className="ms-1 text-xs text-rose-400">(خروج)</span>}
@@ -177,10 +247,21 @@ export function FundingSummary({
                     </span>
                   </span>
                 </div>
+                {block(l.partnerId, "تم دفعه", true)}
+                </div>
               );
             })}
           </div>
         </div>
+      )}
+
+      {tracking && unmatched.length > 0 && (
+        <UnmatchedPayments
+          payments={unmatched}
+          nameOf={nameOf}
+          editable={tracking.editable}
+          onRemove={tracking.onRemove}
+        />
       )}
 
       {plan.errors.length > 0 && (

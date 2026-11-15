@@ -6,18 +6,23 @@
 // Exercises the real transactions end to end: draft → preview → execute
 // → idempotent re-execute → undo (byte-for-byte restore), plus the
 // guards: stale version, data changed since preview, undo after a later
-// change, concurrent executes.
+// change, concurrent executes — and payment tracking (installments on the
+// draft and the executed day, never touching the version or the books).
 import assert from "node:assert/strict";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import {
+  addPayment,
+  cancelDraft,
   createDraft,
+  removePayment,
   saveDraft,
   previewRound,
   executeRound,
   undoRound,
   FundingError,
 } from "@/lib/server/funding-service";
+import { paymentItemsFor, paymentProgress } from "@/lib/funding-round";
 import { mapFundState } from "@/lib/server/fund-state";
 import { computePartnerDistributionFromTrades } from "@/lib/partner-profit";
 
@@ -263,6 +268,86 @@ async function main() {
     const next = await createDraft(db, UID, 3.735);
     assert.equal(next.depositSarPerUsd, 3.7575, "next round starts from the last deposit rate");
     assert.equal(next.withdrawSarPerUsd, 3.7425, "next round starts from the last withdrawal rate");
+  });
+
+  let payRoundId = "";
+  let payVersion = 0;
+  await step("payments on a draft: recorded, currency fixed by party, version untouched", async () => {
+    await seed();
+    const r = await createDraft(db, UID, 3.735);
+    const saved = await saveDraft(db, UID, r.id, r.version, {
+      requests: [
+        { partnerId: "b", kind: "deposit", amount: 7470, currency: "SAR", note: null },
+        { partnerId: "a", kind: "withdraw", amount: 500, currency: "USD", note: null },
+      ],
+    });
+    payRoundId = r.id;
+    const p1 = await addPayment(db, UID, r.id, { party: "b", amount: 3000, date: "2026-11-10", note: "دفعة أولى" });
+    assert.equal(p1.payments!.length, 1);
+    assert.equal(p1.payments![0].currency, "SAR", "a riyal request is paid in riyals");
+    assert.equal(p1.payments![0].createdBy, UID);
+    assert.equal(p1.paymentsRev, 1);
+    assert.equal(p1.version, saved.version, "recording a payment never bumps the draft version");
+    const p2 = await addPayment(db, UID, r.id, { party: "broker", amount: 100, date: "2026-11-10", note: null });
+    assert.equal(p2.payments![1].currency, "USD", "the broker side is in dollars");
+    await expectFundingError(addPayment(db, UID, r.id, { party: "e", amount: 1, date: "2026-11-10", note: null }), "bad_party");
+    await expectFundingError(addPayment(db, UID, r.id, { party: "nobody", amount: 1, date: "2026-11-10", note: null }), "bad_party");
+    await expectFundingError(addPayment(db, UID, "missing", { party: "b", amount: 1, date: "2026-11-10", note: null }), "not_found");
+    // the autosave still works with the version it holds, and keeps payments
+    const resaved = await saveDraft(db, UID, r.id, saved.version, { plannedDate: "2026-11-20" });
+    assert.equal(resaved.payments!.length, 2, "a draft save keeps the recorded payments");
+    payVersion = resaved.version;
+    assert.equal(await count("transactions"), 0, "payments never touch the ledger");
+  });
+
+  await step("concurrent payments all survive; removal is exact", async () => {
+    await Promise.all([
+      addPayment(db, UID, payRoundId, { party: "a", amount: 100, date: "2026-11-11", note: null }),
+      addPayment(db, UID, payRoundId, { party: "a", amount: 150, date: "2026-11-11", note: null }),
+      addPayment(db, UID, payRoundId, { party: "a", amount: 250, date: "2026-11-12", note: null }),
+    ]);
+    const doc = (await db.collection("funding_rounds").doc(payRoundId).get()).data()!;
+    assert.equal(doc.payments.length, 5, "no concurrent payment lost");
+    assert.equal(doc.paymentsRev, 5);
+    const victim = doc.payments.find((p: { amount: number }) => p.amount === 150).id as string;
+    const after = await removePayment(db, payRoundId, victim);
+    assert.equal(after.payments!.length, 4);
+    assert.ok(!after.payments!.some((p) => p.id === victim));
+    assert.equal(after.paymentsRev, 6, "removal bumps the payments revision");
+    assert.equal(after.version, payVersion, "…but not the draft version");
+    await expectFundingError(removePayment(db, payRoundId, victim), "payment_not_found");
+  });
+
+  await step("payments carry through execution and keep tracking afterwards", async () => {
+    const prev = await previewRound(db, payRoundId);
+    assert.deepEqual(prev.plan.errors, []);
+    const res = await executeRound(db, UID, payRoundId, payVersion, prev.fingerprint);
+    assert.equal(res.round.status, "executed");
+    assert.equal(res.round.payments!.length, 4, "draft payments carried into the executed day");
+    const more = await addPayment(db, UID, payRoundId, { party: "b", amount: 4470, date: "2026-11-13", note: "الباقي" });
+    assert.equal(more.payments!.at(-1)!.currency, "SAR", "currency from the executed line");
+    await expectFundingError(addPayment(db, UID, payRoundId, { party: "gp", amount: 1, date: "2026-11-13", note: null }), "bad_party");
+    const s = more.summary!;
+    const pr = Object.fromEntries(paymentProgress(paymentItemsFor(s.totals, s.lines), more.payments).map((p) => [p.party, p]));
+    assert.equal(pr.b.expected, 7470, "expected = the riyals the partner sends");
+    assert.equal(pr.b.complete, true, "3000 + 4470 riyals = complete");
+    assert.equal(pr.a.paid, 350);
+    assert.ok(Math.abs(pr.a.remaining - 150) < 1e-9, "500 − 350 = 150 left to pay");
+    assert.equal(pr.broker.paid, 100);
+  });
+
+  await step("reverted and cancelled rounds refuse payments", async () => {
+    await undoRound(db, UID, payRoundId);
+    await expectFundingError(addPayment(db, UID, payRoundId, { party: "b", amount: 1, date: "2026-11-14", note: null }), "not_payable");
+    const kept = (await db.collection("funding_rounds").doc(payRoundId).get()).data()!;
+    await expectFundingError(removePayment(db, payRoundId, kept.payments[0].id), "not_payable");
+    assert.equal(kept.payments.length, 5, "an undone day keeps its payment record");
+    const d = await createDraft(db, UID, 3.735);
+    await saveDraft(db, UID, d.id, d.version, {
+      requests: [{ partnerId: "a", kind: "withdraw", amount: 10, currency: "USD", note: null }],
+    });
+    await cancelDraft(db, UID, d.id);
+    await expectFundingError(addPayment(db, UID, d.id, { party: "a", amount: 1, date: "2026-11-14", note: null }), "not_payable");
   });
 
   console.log(`\n✓ ${passed} integration steps passed (emulator)`);

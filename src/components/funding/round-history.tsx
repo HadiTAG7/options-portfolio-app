@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { History, Undo2 } from "lucide-react";
-import type { FundingRound } from "@/lib/funding-round";
+import { paymentItemsFor, paymentProgress, type FundingRound } from "@/lib/funding-round";
 import { fmtSar, fmtUsd } from "@/lib/money-format";
 
 const STATUS: Record<FundingRound["status"], { label: string; cls: string }> = {
@@ -74,6 +74,16 @@ export function RoundHistory({
                   </span>
                 )}
               </div>
+              {r.status === "executed" && r.summary && (r.payments ?? []).length > 0 && (() => {
+                const pr = paymentProgress(paymentItemsFor(r.summary.totals, r.summary.lines), r.payments);
+                if (pr.length === 0) return null;
+                const open = pr.filter((p) => !p.complete).length;
+                return (
+                  <p className={`mt-1 text-[11px] ${open ? "text-amber-300" : "text-emerald-300"}`}>
+                    {open ? `الدفعات: باقي ${open} من ${pr.length}` : "الدفعات: مكتملة ✓"}
+                  </p>
+                );
+              })()}
               {t && Math.abs(t.fxSpreadSar ?? 0) >= 0.005 && (
                 <p className="mt-1 text-[11px] text-zinc-500">
                   فرق الصرف {(t.fxSpreadSar ?? 0) > 0 ? "لك" : "عليك"}:{" "}

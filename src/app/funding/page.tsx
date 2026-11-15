@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Landmark, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Landmark, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { DatePicker } from "@/components/ui/date-picker";
 import { RequestTable } from "@/components/funding/request-table";
-import { FundingSummary } from "@/components/funding/funding-summary";
+import { FundingSummary, type SummaryTracking } from "@/components/funding/funding-summary";
 import { ExecuteDialog } from "@/components/funding/execute-dialog";
 import { RoundHistory } from "@/components/funding/round-history";
 import { usePartners } from "@/hooks/use-partners";
@@ -14,7 +14,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCurrencyStore } from "@/hooks/use-currency";
 import { fundingApi } from "@/lib/funding-api";
 import { planFundingDay, type FundingRequest } from "@/lib/funding-day";
-import { roundRates, type FundingRound, type FundingRoundPatch } from "@/lib/funding-round";
+import {
+  newerPayments,
+  paymentItemsFor,
+  paymentProgress,
+  roundRates,
+  type FundingRound,
+  type FundingRoundPatch,
+} from "@/lib/funding-round";
 
 interface Local {
   requests: FundingRequest[];
@@ -34,6 +41,15 @@ const toLocal = (r: FundingRound): Local => {
     brokerCash: r.brokerCashUsd === null ? "" : String(r.brokerCashUsd),
   };
 };
+
+// Two copies of the same round can carry payments from different moments
+// (a slow draft save can return payments from before an installment
+// recorded meanwhile): keep the newer payments, everything else from `next`.
+function mergeRound(prev: FundingRound | null | undefined, next: FundingRound): FundingRound {
+  if (!prev || prev.id !== next.id) return next;
+  const p = newerPayments(prev, next);
+  return { ...next, payments: p.payments, paymentsRev: p.paymentsRev };
+}
 
 const validRate = (s: string) => {
   const v = Number(s);
@@ -71,7 +87,7 @@ function FundingDay() {
 
   const adopt = useCallback((r: FundingRound | null) => {
     roundRef.current = r;
-    setRound(r);
+    setRound((prev) => (r ? mergeRound(prev, r) : null));
     const l = r ? toLocal(r) : null;
     localRef.current = l;
     setLocal(l);
@@ -85,7 +101,9 @@ function FundingDay() {
     } else {
       adopt(cur.round);
     }
-    if (list.ok) setRounds(list.rounds);
+    if (list.ok) {
+      setRounds((prev) => list.rounds.map((r) => mergeRound(prev.find((x) => x.id === r.id), r)));
+    }
     setLoading(false);
   }, [adopt]);
 
@@ -117,7 +135,7 @@ function FundingDay() {
     const res = await fundingApi.save(r.id, r.version, patch);
     if (res.ok) {
       roundRef.current = res.round;
-      setRound(res.round);
+      setRound((prev) => mergeRound(prev, res.round));
       setSaveState(dirtyRef.current ? "pending" : "saved");
       return res.round;
     }
@@ -154,6 +172,13 @@ function FundingDay() {
     timerRef.current = setTimeout(() => void flushSave(), 800);
   }
 
+  // Recording a payment on the draft flushes the autosave first, so the
+  // server knows the request (and its currency) being paid.
+  const flushBeforePayment = useCallback(
+    async () => ((await flushSave()) ? null : "تعذّر حفظ المسودة — حاول مرة أخرى"),
+    [flushSave]
+  );
+
   async function start() {
     setError(null);
     const res = await fundingApi.create(defaultRate);
@@ -171,6 +196,43 @@ function FundingDay() {
 
   async function onExecuted() {
     await Promise.all([reload(), refetchPartners()]);
+  }
+
+  // Payments on the open draft: merge only the payments (newest wins) —
+  // the rest of the draft belongs to the autosave. roundRef is left alone:
+  // payments never change the id or version the autosave relies on.
+  function mergeDraftPayments(r: FundingRound) {
+    setRound((prev) => {
+      if (!prev || prev.id !== r.id) return prev;
+      const p = newerPayments(prev, r);
+      return { ...prev, payments: p.payments, paymentsRev: p.paymentsRev };
+    });
+  }
+  // Payments on an executed round live in the rounds list.
+  function mergeListedRound(r: FundingRound) {
+    setRounds((prev) => prev.map((x) => (x.id === r.id ? mergeRound(x, r) : x)));
+  }
+  function trackingFor(
+    roundId: string,
+    payments: FundingRound["payments"],
+    merge: (r: FundingRound) => void
+  ): SummaryTracking {
+    return {
+      payments: payments ?? [],
+      editable: true,
+      onAdd: async (party: string, amount: number, date: string, note: string | null) => {
+        const res = await fundingApi.addPayment(roundId, { party, amount, date, note });
+        if (!res.ok) return res.error;
+        merge(res.round);
+        return null;
+      },
+      onRemove: async (paymentId: string) => {
+        const res = await fundingApi.removePayment(roundId, paymentId);
+        if (!res.ok) return res.error;
+        merge(res.round);
+        return null;
+      },
+    };
   }
 
   async function undo(roundId: string): Promise<string | null> {
@@ -196,6 +258,21 @@ function FundingDay() {
       brokerCashUsd: local.brokerCash.trim() === "" ? null : Number(local.brokerCash),
     });
   }, [local, dataReady, rd, rw, partners, trades, now]);
+
+  // Executed days under payment tracking: the latest one always, and any
+  // older one whose recorded installments are still incomplete. (Older
+  // days with nothing recorded predate tracking — they stay in history.)
+  const tracked = useMemo(() => {
+    const executed = rounds
+      .filter((r) => r.status === "executed" && r.summary)
+      .sort((a, b) => (b.executedAt ?? "").localeCompare(a.executedAt ?? ""));
+    return executed
+      .map((r, i) => {
+        const pr = paymentProgress(paymentItemsFor(r.summary!.totals, r.summary!.lines), r.payments);
+        return { round: r, open: pr.filter((p) => !p.complete).length, latest: i === 0 };
+      })
+      .filter((x) => x.latest || (x.open > 0 && (x.round.payments ?? []).length > 0));
+  }, [rounds]);
 
   if (!isGP) {
     return <p className="p-8 text-center text-sm text-zinc-400">هذه الصفحة للمدير فقط.</p>;
@@ -304,7 +381,13 @@ function FundingDay() {
           />
 
           {estimate && rd !== null && rw !== null && (
-            <FundingSummary plan={estimate} rates={{ rd, rw }} source="estimate" />
+            <FundingSummary
+              plan={estimate}
+              rates={{ rd, rw }}
+              source="estimate"
+              tracking={trackingFor(round.id, round.payments, mergeDraftPayments)}
+              beforeAdd={flushBeforePayment}
+            />
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -340,6 +423,15 @@ function FundingDay() {
         </div>
       )}
 
+      {tracked.map(({ round: r, open }) => (
+        <TrackedRound
+          key={r.id}
+          round={r}
+          open={open}
+          tracking={trackingFor(r.id, r.payments, mergeListedRound)}
+        />
+      ))}
+
       <RoundHistory rounds={rounds} onUndo={undo} />
 
       <ExecuteDialog
@@ -349,6 +441,52 @@ function FundingDay() {
         onExecuted={() => void onExecuted()}
       />
     </>
+  );
+}
+
+// One executed day under payment tracking. Open by default while anything
+// is still unpaid; collapsible once complete.
+function TrackedRound({
+  round,
+  open,
+  tracking,
+}: {
+  round: FundingRound;
+  open: number;
+  tracking: SummaryTracking;
+}) {
+  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const shown = expanded ?? open > 0;
+  if (!round.summary) return null;
+  return (
+    <section className="mb-8 space-y-3">
+      <button
+        type="button"
+        onClick={() => setExpanded(!shown)}
+        className="flex w-full flex-wrap items-baseline justify-between gap-2 text-start"
+      >
+        <h2 className="flex items-center gap-1.5 font-headline text-sm font-bold text-white">
+          <ChevronDown size={14} className={`transition-transform ${shown ? "" : "-rotate-90"}`} />
+          متابعة دفعات يوم التمويل{" "}
+          <span dir="ltr" className="font-mono text-zinc-400">
+            {round.ledgerDate}
+          </span>
+        </h2>
+        <span className={`text-[11px] ${open > 0 ? "text-zinc-500" : "text-emerald-300"}`}>
+          {open > 0
+            ? "سجّل كل دفعة تتم ويحسب لك الباقي — الدفاتر سُجّلت يوم التنفيذ."
+            : "اكتملت كل الدفعات ✓"}
+        </span>
+      </button>
+      {shown && (
+        <FundingSummary
+          plan={{ ...round.summary, errors: [], warnings: [] }}
+          rates={roundRates(round)}
+          source="executed"
+          tracking={tracking}
+        />
+      )}
+    </section>
   );
 }
 

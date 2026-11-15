@@ -2,15 +2,18 @@ import { corsPreflight, withCors } from "@/lib/cors";
 import { fundingRoute } from "@/lib/server/funding-route";
 import {
   FundingError,
+  addPayment,
+  removePayment,
   cancelDraft,
   createDraft,
   getCurrentDraft,
   listRounds,
   saveDraft,
 } from "@/lib/server/funding-service";
-import { sanitizePatch } from "@/lib/funding-round";
+import { sanitizePatch, sanitizePayment } from "@/lib/funding-round";
 
-// Funding-round drafts: { action: current | create | save | cancel | list }.
+// Funding rounds: { action: current | create | save | cancel | list |
+// addPayment | removePayment }.
 // Requests collected over days live here, server-side, so the GP sees the
 // same draft from the phone and the computer. POST-only (the static
 // export skips non-GET handlers).
@@ -33,6 +36,17 @@ async function handlePost(request: Request) {
           throw new FundingError("طلب غير مكتمل", 400, "bad_request");
         }
         return { round: await saveDraft(db, uid, roundId, baseVersion, clean.patch) };
+      }
+      case "addPayment": {
+        if (!roundId) throw new FundingError("طلب غير مكتمل", 400, "bad_request");
+        const clean = sanitizePayment(body.payment);
+        if ("error" in clean) throw new FundingError(clean.error, 400, "bad_payment");
+        return { round: await addPayment(db, uid, roundId, clean.payment) };
+      }
+      case "removePayment": {
+        const paymentId = typeof body.paymentId === "string" ? body.paymentId : "";
+        if (!roundId || !paymentId) throw new FundingError("طلب غير مكتمل", 400, "bad_request");
+        return { round: await removePayment(db, roundId, paymentId) };
       }
       case "cancel":
         if (!roundId) throw new FundingError("طلب غير مكتمل", 400, "bad_request");

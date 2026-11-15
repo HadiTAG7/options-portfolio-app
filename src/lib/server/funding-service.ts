@@ -7,7 +7,14 @@ import {
   fingerprintPlan,
   type FundingPlan,
 } from "@/lib/funding-day";
-import { roundRates, type FundingRound, type FundingRoundPatch, type FundingSummaryLine } from "@/lib/funding-round";
+import {
+  roundRates,
+  type FundingPayment,
+  type FundingRound,
+  type FundingRoundPatch,
+  type FundingSummaryLine,
+} from "@/lib/funding-round";
+import type { FundingCurrency } from "@/lib/funding-day";
 import { mapFundState, type DocLike } from "@/lib/server/fund-state";
 import { RouteError } from "@/lib/server/route-error";
 
@@ -186,6 +193,93 @@ export async function cancelDraft(db: Firestore, uid: string, roundId: string): 
       version: round.version + 1,
       updatedAt: new Date().toISOString(),
       updatedBy: uid,
+    };
+    tx.set(ref, clean(next));
+    return next;
+  });
+}
+
+// ── Payment tracking ─────────────────────────────────────────────────
+// Installments against the round's amounts (broker transfer, partners'
+// deposits and payouts). Operational only — the ledger is untouched. They
+// never bump `version`, so recording one can't collide with the draft's
+// autosave; every write re-reads the round inside its transaction, so
+// concurrent payments and saves all survive.
+
+// The currency a party's amounts are in, or null if the party has nothing
+// to pay or collect in this round.
+function paymentCurrency(round: FundingRound, party: string): FundingCurrency | null {
+  if (party === "broker") return "USD";
+  if (round.status === "executed" && round.summary) {
+    const line = round.summary.lines.find((l) => l.partnerId === party);
+    if (!line || (line.cashIn < 0.005 && line.cashOut < 0.005)) return null;
+    return line.currency;
+  }
+  return round.requests.find((r) => r.partnerId === party)?.currency ?? null;
+}
+
+function assertPayable(round: FundingRound) {
+  if (round.status !== "draft" && round.status !== "executed") {
+    throw new FundingError("لا يمكن تسجيل دفعات على جولة ملغاة", 409, "not_payable");
+  }
+}
+
+export async function addPayment(
+  db: Firestore,
+  uid: string,
+  roundId: string,
+  input: { party: string; amount: number; date: string; note: string | null }
+): Promise<FundingRound> {
+  const id = randomUUID(); // outside the transaction: stable across retries
+  return db.runTransaction(async (tx) => {
+    const ref = db.collection(ROUNDS).doc(roundId);
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new FundingError("الجولة غير موجودة", 404, "not_found");
+    const round = roundFromDoc(doc);
+    assertPayable(round);
+    const currency = paymentCurrency(round, input.party);
+    if (!currency) {
+      throw new FundingError("هذا الطرف ليس له مبلغ في هذه الجولة", 400, "bad_party");
+    }
+    const payment: FundingPayment = {
+      id,
+      party: input.party,
+      amount: input.amount,
+      currency,
+      date: input.date,
+      note: input.note,
+      createdAt: new Date().toISOString(),
+      createdBy: uid,
+    };
+    const next: FundingRound = {
+      ...round,
+      payments: [...(round.payments ?? []), payment],
+      paymentsRev: (round.paymentsRev ?? 0) + 1,
+    };
+    tx.set(ref, clean(next));
+    return next;
+  });
+}
+
+export async function removePayment(
+  db: Firestore,
+  roundId: string,
+  paymentId: string
+): Promise<FundingRound> {
+  return db.runTransaction(async (tx) => {
+    const ref = db.collection(ROUNDS).doc(roundId);
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new FundingError("الجولة غير موجودة", 404, "not_found");
+    const round = roundFromDoc(doc);
+    assertPayable(round);
+    const payments = round.payments ?? [];
+    if (!payments.some((p) => p.id === paymentId)) {
+      throw new FundingError("الدفعة غير موجودة", 404, "payment_not_found");
+    }
+    const next: FundingRound = {
+      ...round,
+      payments: payments.filter((p) => p.id !== paymentId),
+      paymentsRev: (round.paymentsRev ?? 0) + 1,
     };
     tx.set(ref, clean(next));
     return next;

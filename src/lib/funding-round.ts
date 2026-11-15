@@ -47,6 +47,138 @@ export interface FundingRound {
   fingerprint: string | null;
   summary: { totals: FundingTotals; lines: FundingSummaryLine[] } | null;
   revertedAt: string | null;
+  // Installments actually paid against the round's amounts — the broker
+  // transfer and each partner's deposit/payout often move in several
+  // tranches. Operational tracking only: the books were (or will be)
+  // written once, at execution. Adding one never bumps `version`, so it
+  // can't collide with the draft's autosave.
+  payments?: FundingPayment[];
+  // Bumped by every payment add/remove (never by draft saves), so a client
+  // holding two copies of the round can tell which payments are newer.
+  paymentsRev?: number;
+}
+
+// "broker" or a partnerId. The direction is implied by the round: the
+// broker side follows the net (deposit to / withdraw from the broker), a
+// partner side follows their request (receive a deposit / pay a payout).
+export type PaymentParty = "broker" | string;
+
+export interface FundingPayment {
+  id: string;
+  party: PaymentParty;
+  amount: number; // positive, in `currency`
+  // Fixed by the party: USD for the broker, the request's own currency for
+  // a partner — so a remaining amount is never a mixed-currency sum.
+  currency: FundingCurrency;
+  date: string; // YYYY-MM-DD (Riyadh)
+  note: string | null;
+  createdAt: string;
+  createdBy: string;
+}
+
+// One thing to pay or collect, and how far along it is.
+export interface PaymentItem {
+  party: PaymentParty;
+  expected: number; // in `currency`
+  currency: FundingCurrency;
+}
+
+export interface PaymentProgress extends PaymentItem {
+  paid: number;
+  remaining: number; // never negative
+  overpaid: number; // paid beyond expected, if any
+  complete: boolean;
+  payments: FundingPayment[]; // oldest first
+}
+
+const HALF_CENT = 0.005;
+
+// What there is to pay or collect in a round: the broker net (USD) and
+// each partner's deposit or payout in the currency the cash moves in.
+// One definition for the summary, the page and the history.
+export function paymentItemsFor(
+  totals: Pick<FundingTotals, "net" | "brokerAction">,
+  lines: Array<
+    Pick<FundingSummaryLine, "partnerId" | "cashIn" | "cashOut" | "cashInCurrency" | "cashOutCurrency" | "currency">
+  >
+): PaymentItem[] {
+  const items: PaymentItem[] = [];
+  if (totals.brokerAction !== "none") {
+    items.push({ party: "broker", expected: Math.abs(totals.net), currency: "USD" });
+  }
+  for (const l of lines) {
+    if (l.cashIn >= HALF_CENT) {
+      items.push({
+        party: l.partnerId,
+        expected: l.currency === "SAR" ? l.cashInCurrency : l.cashIn,
+        currency: l.currency,
+      });
+    } else if (l.cashOut >= HALF_CENT) {
+      items.push({
+        party: l.partnerId,
+        expected: l.currency === "SAR" ? l.cashOutCurrency : l.cashOut,
+        currency: l.currency,
+      });
+    }
+  }
+  return items;
+}
+
+export function paymentProgress(
+  items: PaymentItem[],
+  payments: FundingPayment[] | null | undefined
+): PaymentProgress[] {
+  const all = [...(payments ?? [])].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)
+  );
+  return items.map((item) => {
+    const mine = all.filter((p) => p.party === item.party && p.currency === item.currency);
+    const paid = mine.reduce((s2, p) => s2 + p.amount, 0);
+    const diff = item.expected - paid;
+    return {
+      ...item,
+      paid,
+      remaining: diff > HALF_CENT ? diff : 0,
+      overpaid: diff < -HALF_CENT ? -diff : 0,
+      complete: diff <= HALF_CENT,
+      payments: mine,
+    };
+  });
+}
+
+// Recorded payments that match nothing to pay in the round — the request
+// was removed or its currency changed after the payment was recorded.
+// Shown separately so a recorded payment never silently disappears.
+export function unmatchedPayments(
+  items: PaymentItem[],
+  payments: FundingPayment[] | null | undefined
+): FundingPayment[] {
+  const keys = new Set(items.map((i) => `${i.party}|${i.currency}`));
+  return (payments ?? [])
+    .filter((p) => !keys.has(`${p.party}|${p.currency}`))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+}
+
+// Of two copies of the same round, the one whose payments are newer.
+export function newerPayments<T extends Pick<FundingRound, "payments" | "paymentsRev">>(a: T, b: T): T {
+  return (b.paymentsRev ?? 0) >= (a.paymentsRev ?? 0) ? b : a;
+}
+
+// Shape check for a payment a client sends. The server fixes the currency
+// from the party; the client only names party, amount, date and note.
+export function sanitizePayment(
+  raw: unknown
+): { payment: { party: string; amount: number; date: string; note: string | null } } | { error: string } {
+  if (!raw || typeof raw !== "object") return { error: "بيانات الدفعة غير صالحة" };
+  const r = raw as Record<string, unknown>;
+  const party = typeof r.party === "string" ? r.party.trim() : "";
+  const amount = Number(r.amount);
+  const date = typeof r.date === "string" ? r.date : "";
+  if (!party || party.length > 128) return { error: "الدفعة بدون طرف" };
+  if (!(Number.isFinite(amount) && amount > 0 && amount < 1e10)) return { error: "مبلغ الدفعة غير صالح" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "تاريخ الدفعة غير صالح" };
+  const note = typeof r.note === "string" && r.note.trim() ? r.note.trim().slice(0, 200) : null;
+  return { payment: { party, amount, date, note } };
 }
 
 export interface FundingRoundPatch {
