@@ -15,6 +15,7 @@ export function PaymentBlock({
   label,
   editable,
   compact = false,
+  sarPerUsd,
   onAdd,
   onRemove,
 }: {
@@ -22,10 +23,20 @@ export function PaymentBlock({
   label: string; // e.g. «تم تحويله للبروكر»
   editable: boolean;
   compact?: boolean;
+  // The rate of this item's side (deposit or withdrawal): paid and
+  // remaining are also shown in the other currency at it.
+  sarPerUsd?: number;
   onAdd: (amount: number, date: string, note: string | null) => Promise<string | null>;
   onRemove: (paymentId: string) => Promise<string | null>;
 }) {
   const fmt = (n: number) => (progress.currency === "SAR" ? fmtSar(n) : fmtUsd(n));
+  // "≈ 342,967.61 ر.س" under a dollar amount, "≈ $2,129.30" under riyals.
+  const other = (n: number) =>
+    sarPerUsd && sarPerUsd > 0 ? (
+      <span dir="ltr" className="whitespace-nowrap font-mono text-[11px] text-zinc-500">
+        ≈ {progress.currency === "SAR" ? fmtUsd(n / sarPerUsd) : fmtSar(n * sarPerUsd)}
+      </span>
+    ) : null;
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
@@ -74,17 +85,24 @@ export function PaymentBlock({
             <CheckCircle2 size={13} /> مكتمل
             {progress.overpaid > 0 && (
               <span className="font-normal text-amber-300">
-                {" "}— زيادة <span dir="ltr" className="font-mono">{fmt(progress.overpaid)}</span>
+                {" "}— زيادة <span dir="ltr" className="font-mono">{fmt(progress.overpaid)}</span>{" "}
+                {other(progress.overpaid)}
               </span>
             )}
           </span>
         ) : (
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-300">
-            <span className="whitespace-nowrap">
-              {label}: <span dir="ltr" className="font-mono font-bold text-white">{fmt(progress.paid)}</span>
+          <span className="flex flex-wrap gap-x-4 gap-y-1 text-zinc-300">
+            <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+              <span className="whitespace-nowrap">
+                {label}: <span dir="ltr" className="font-mono font-bold text-white">{fmt(progress.paid)}</span>
+              </span>
+              {other(progress.paid)}
             </span>
-            <span className="whitespace-nowrap">
-              الباقي: <span dir="ltr" className="font-mono font-bold text-amber-200">{fmt(progress.remaining)}</span>
+            <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+              <span className="whitespace-nowrap">
+                الباقي: <span dir="ltr" className="font-mono font-bold text-amber-200">{fmt(progress.remaining)}</span>
+              </span>
+              {other(progress.remaining)}
             </span>
           </span>
         )}

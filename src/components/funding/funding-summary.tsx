@@ -64,7 +64,8 @@ export function FundingSummary({
   const unmatched = tracking ? unmatchedPayments(items, tracking.payments) : [];
   const nameOf = (party: string) =>
     party === "broker" ? "البروكر" : (plan.lines.find((l) => l.partnerId === party)?.name ?? "شريك");
-  const block = (party: string, label: string, compact: boolean) => {
+  // `rate`: the side's rate — deposit (rd) or withdrawal (rw).
+  const block = (party: string, label: string, compact: boolean, rate: number) => {
     const pr = progressBy.get(party);
     if (!tracking || !pr) return null;
     return (
@@ -73,6 +74,7 @@ export function FundingSummary({
         label={label}
         editable={tracking.editable}
         compact={compact}
+        sarPerUsd={rate}
         onAdd={async (amount, date, note) => {
           const err = beforeAdd ? await beforeAdd() : null;
           return err ?? tracking.onAdd(party, amount, date, note);
@@ -142,7 +144,8 @@ export function FundingSummary({
           block(
             "broker",
             t.brokerAction === "deposit" ? "تم تحويله للبروكر" : "تم استلامه من البروكر",
-            false
+            false,
+            t.brokerAction === "deposit" ? rates.rd : rates.rw
           )}
       </div>
 
@@ -197,7 +200,7 @@ export function FundingSummary({
                     </span>
                   </span>
                 </div>
-                {block(l.partnerId, "تم استلامه", true)}
+                {block(l.partnerId, "تم استلامه", true, rates.rd)}
                 </div>
               );
             })}
@@ -224,7 +227,7 @@ export function FundingSummary({
                     </span>
                   </span>
                 </div>
-                {block(l.partnerId, "تم دفعه", true)}
+                {block(l.partnerId, "تم دفعه", true, rates.rw)}
                 </div>
               );
             })}
