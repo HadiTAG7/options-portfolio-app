@@ -46,6 +46,7 @@ export function rowToPartner(row: PartnerRow): Partner {
     phone: row.phone ?? null,
     gpFeesAccrued: safeNumber(row.gpFeesAccrued),
     profitTakenGross: safeNumber(row.profitTakenGross),
+    profitReallocations: row.profitReallocations ?? [],
   };
 }
 

@@ -32,13 +32,12 @@ import { useCurrency, useCurrencyStore } from "@/hooks/use-currency";
 import { WhatsAppReportsDialog } from "@/components/ui/whatsapp-reports-dialog";
 import {
   tradeMonthKey,
-  tradeProfit,
-  tradeProfitDate,
+  reportTradePositions,
   cumulativeNetForPartner,
   monthlyPartnerDist,
 } from "@/lib/partner-profit";
 import { useMonthlyProfits, monthlyKey } from "@/hooks/use-monthly-profits";
-import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
+import type { MonthlyReportData } from "@/lib/report-pdf";
 import { appFontFaceCss, buildReportsDocument } from "@/lib/report-html";
 import { firebaseAuth } from "@/lib/firebase";
 import type { Partner, Trade } from "@/types";
@@ -82,19 +81,7 @@ function buildMonthlyReports(
     const net = st?.net ?? md?.netProfit ?? 0;
     const investment = md?.investment ?? 0;
     const returnPct = investment > 0 ? (net / investment) * 100 : 0;
-    const ownershipShare = (md?.ownershipPct ?? 0) / 100;
-    const entry = partner.entryDate?.trim();
-    const positions: PartnerPosition[] = tradesInMonth
-      .filter((t) => {
-        const profitDate = tradeProfitDate(t);
-        if (!profitDate) return false;
-        return !entry || entry <= profitDate;
-      })
-      .map((t) => ({
-        ticker: t.ticker,
-        type: t.type,
-        share: tradeProfit(t) * ownershipShare,
-      }));
+    const positions = reportTradePositions(partners, tradesInMonth, partner.id);
 
     out.push({
       partner,

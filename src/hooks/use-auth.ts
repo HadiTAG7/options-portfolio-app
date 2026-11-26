@@ -52,6 +52,7 @@ function rowToPartnerLite(row: PartnerRow): Partner {
     archivedAt: row.archived_at ?? null,
     gpFeesAccrued: safeNumber(row.gpFeesAccrued),
     profitTakenGross: safeNumber(row.profitTakenGross),
+    profitReallocations: row.profitReallocations ?? [],
   };
 }
 

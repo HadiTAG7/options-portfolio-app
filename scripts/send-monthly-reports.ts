@@ -24,15 +24,13 @@ import nodemailer from "nodemailer";
 import { chromium } from "playwright";
 import {
   tradeMonthKey,
-  tradeProfit,
-  tradeProfitDate,
+  reportTradePositions,
   cumulativeNetForPartner,
   monthlyPartnerDist,
 } from "../src/lib/partner-profit";
 import { safeNumber } from "../src/lib/utils";
 import type {
   MonthlyReportData,
-  PartnerPosition,
 } from "../src/lib/report-pdf";
 import { buildReportsDocument } from "../src/lib/report-html";
 import type { Partner, Trade } from "../src/types";
@@ -135,6 +133,7 @@ function rowToPartner(row: any): Partner {
     archivedAt: row.archived_at ?? null,
     gpFeesAccrued: safeNumber(row.gpFeesAccrued),
     profitTakenGross: safeNumber(row.profitTakenGross),
+    profitReallocations: row.profitReallocations ?? [],
   };
 }
 
@@ -295,19 +294,7 @@ for (const partner of targets) {
   const investment = md?.investment ?? 0;
   const returnPct = investment > 0 ? (net / investment) * 100 : 0;
 
-  const ownershipShare = (md?.ownershipPct ?? 0) / 100;
-  const entry = partner.entryDate?.trim();
-  const positions: PartnerPosition[] = tradesInMonth
-    .filter((t) => {
-      const profitDate = tradeProfitDate(t);
-      if (!profitDate) return false;
-      return !entry || entry <= profitDate;
-    })
-    .map((t) => ({
-      ticker: t.ticker,
-      type: t.type,
-      share: tradeProfit(t) * ownershipShare,
-    }));
+  const positions = reportTradePositions(partners, tradesInMonth, partner.id);
 
   const reportData: MonthlyReportData = {
     periodLabel,

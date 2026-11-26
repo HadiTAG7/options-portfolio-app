@@ -7,7 +7,16 @@ export interface BalanceHistoryEntry {
   balance: number;
 }
 
+// A booked capital correction restores the former allocation basis for
+// earlier trades. Paired signed gross amounts transfer specific earnings.
+export interface ProfitReallocation {
+  bookedAt: string;
+  priorCapitalDelta: number;
+  grossByTrade: Record<string, number>;
+}
+
 export interface Partner {
+  profitReallocations?: ProfitReallocation[];
   id: string;
   name: string;
   code: string; // e.g. "K-89204"

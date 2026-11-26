@@ -10,13 +10,12 @@ import { rowToPartner, rowToTrade, isActivePartnerRow } from "@/lib/fund-rows";
 import { verifyGPToken } from "@/lib/server/gp-auth";
 import { safeNumber } from "@/lib/utils";
 import {
-  tradeProfit,
-  tradeProfitDate,
+  reportTradePositions,
   tradeMonthKey,
   cumulativeNetForPartner,
   monthlyPartnerDist,
 } from "@/lib/partner-profit";
-import type { MonthlyReportData, PartnerPosition } from "@/lib/report-pdf";
+import type { MonthlyReportData } from "@/lib/report-pdf";
 import { buildPartnerEmailHtml } from "@/lib/report-email";
 
 function previousMonthKey(): string {
@@ -247,21 +246,7 @@ async function handlePost(request: NextRequest) {
       const investment = md?.investment ?? 0;
       const returnPct = investment > 0 ? (net / investment) * 100 : 0;
 
-      // This partner's slice of each trade = their THAT-MONTH ownership ×
-      // trade P&L, restricted to trades earned on/after their entry date.
-      const ownershipShare = (md?.ownershipPct ?? 0) / 100;
-      const entry = partner.entryDate?.trim();
-      const positions: PartnerPosition[] = tradesInMonth
-        .filter((t) => {
-          const profitDate = tradeProfitDate(t);
-          if (!profitDate) return false;
-          return !entry || entry <= profitDate;
-        })
-        .map((t) => ({
-          ticker: t.ticker,
-          type: t.type,
-          share: tradeProfit(t) * ownershipShare,
-        }));
+      const positions = reportTradePositions(partners, tradesInMonth, partner.id);
 
       const reportData: MonthlyReportData = {
         periodLabel,

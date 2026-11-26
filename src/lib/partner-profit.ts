@@ -260,6 +260,44 @@ export function computePortfolioDistribution(
   return result;
 }
 
+// Compute the same gross trade lines for settlements and statements.
+function tradeGrossShares(partners: Partner[], trade: Trade): Map<string, number> {
+  const shares = new Map<string, number>();
+  const profitDate = tradeProfitDate(trade);
+  if (!profitDate) return shares;
+  const recordedAt = Date.parse(trade.createdAt || profitDate);
+  const basis = partners.map(partner => {
+    let investment = getPartnerInvestment(partner);
+    let adjustment = 0;
+    for (const entry of partner.profitReallocations ?? []) {
+      const bookedAt = Date.parse(entry.bookedAt);
+      if (recordedAt < bookedAt) investment += entry.priorCapitalDelta;
+      if (!partner.lastSettlementDate || Date.parse(partner.lastSettlementDate) < bookedAt) {
+        adjustment += entry.grossByTrade[trade.id] ?? 0;
+      }
+    }
+    return { partner, investment, adjustment };
+  });
+  const total = basis.reduce((sum, row) => sum + row.investment, 0);
+  const profit = tradeProfit(trade);
+  for (const { partner, investment, adjustment } of basis) {
+    const eligible = isEligible(partner, profitDate, trade.createdAt);
+    if (eligible || adjustment !== 0) {
+      const ordinary = eligible && total > 0 ? profit * (investment / total) : 0;
+      shares.set(partner.id, ordinary + adjustment);
+    }
+  }
+  return shares;
+}
+
+export function reportTradePositions(partners: Partner[], trades: Trade[], partnerId: string) {
+  const statementPartners = partners.map(asEarnedBasis);
+  return trades.flatMap(trade => {
+    const share = tradeGrossShares(statementPartners, trade).get(partnerId);
+    return share === undefined ? [] : [{ ticker: trade.ticker, type: trade.type, share }];
+  });
+}
+
 // Like computePortfolioDistribution, but profit is built trade-by-trade
 // with per-partner eligibility (entry date + last settlement date).
 // After a partner calls "تثبيت الأرباح" their grossProfit resets to 0
@@ -281,19 +319,9 @@ export function computePartnerDistributionFromTrades(
     0
   );
 
-  for (const t of trades) {
-    const profit = tradeProfit(t);
-    if (profit === 0) continue;
-
-    const profitDate = tradeProfitDate(t);
-    if (!profitDate) continue;
-
-    if (totalInvestment <= 0) continue;
-
-    for (const p of partners) {
-      if (!isEligible(p, profitDate, t.createdAt)) continue;
-      const share = getPartnerInvestment(p) / totalInvestment;
-      grossById[p.id] += profit * share;
+  for (const trade of trades) {
+    for (const [id, share] of tradeGrossShares(partners, trade)) {
+      grossById[id] += share;
     }
   }
 

@@ -1,6 +1,8 @@
 // Auto-generated types matching the Supabase SQL schema.
 // Regenerate with: npx supabase gen types typescript --local > src/types/database.ts
 
+import type { ProfitReallocation } from "@/types";
+
 export interface BalanceHistoryEntry {
   date: string;
   balance: number;
@@ -44,6 +46,7 @@ export interface Database {
           // schemaless so these need no migration; absent → treated as 0.
           gpFeesAccrued?: number | null;
           profitTakenGross?: number | null;
+          profitReallocations?: ProfitReallocation[];
         };
         Insert: {
           id?: string;
@@ -76,6 +79,7 @@ export interface Database {
           auth_user_id?: string | null;
           gpFeesAccrued?: number | null;
           profitTakenGross?: number | null;
+          profitReallocations?: ProfitReallocation[];
         };
         Update: Partial<Database["public"]["Tables"]["partners"]["Insert"]>;
         Relationships: [];
