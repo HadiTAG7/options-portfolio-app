@@ -100,9 +100,10 @@ export async function fetchLivePrice(ticker: string): Promise<number | null> {
 export interface LiveQuote {
   price: number | null;
   prevClose: number | null;
+  timestamp?: number | null;
 }
 
-export async function fetchLiveQuotes(
+async function requestLiveQuotes(
   tickers: string[]
 ): Promise<Record<string, LiveQuote>> {
   const unique = Array.from(
@@ -115,11 +116,13 @@ export async function fetchLiveQuotes(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols: unique }),
+      signal: AbortSignal.timeout(18000),
       cache: "no-store",
     });
     if (res.ok) {
       const data = (await res.json()) as {
         quotes?: Record<string, number | null>;
+        timestamps?: Record<string, number | null>;
         prevCloses?: Record<string, number | null>;
         errors?: string[];
       };
@@ -132,6 +135,7 @@ export async function fetchLiveQuotes(
             t,
             {
               price: data.quotes?.[t] ?? null,
+              timestamp: data.timestamps?.[t] ?? null,
               prevClose: data.prevCloses?.[t] ?? null,
             },
           ])
@@ -153,7 +157,7 @@ export async function fetchLiveQuotes(
       try {
         const res = await fetch(
           `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`,
-          { cache: "no-store" }
+          { cache: "no-store", signal: AbortSignal.timeout(8000) }
         );
         if (!res.ok) return [symbol, { price: null, prevClose: null }];
         const q = (await res.json()) as FinnhubQuote;
@@ -161,13 +165,29 @@ export async function fetchLiveQuotes(
           Number.isFinite(q.c) && q.c > 0 ? q.c : null;
         const prevClose =
           Number.isFinite(q.pc) && q.pc > 0 ? q.pc : null;
-        return [symbol, { price, prevClose }];
+        return [symbol, { price, prevClose, timestamp: q.t }];
       } catch {
         return [symbol, { price: null, prevClose: null }];
       }
     })
   );
   return Object.fromEntries(results);
+}
+
+// The header and trades page mount separately. Share overlapping batch
+// requests so opening one page doesn't spend the quote quota twice.
+const batches = new Map<string, Promise<Record<string, LiveQuote>>>();
+export function fetchLiveQuotes(tickers: string[]): Promise<Record<string, LiveQuote>> {
+  const symbols = [...new Set(tickers.map(t => t.trim().toUpperCase()).filter(Boolean))].sort();
+  const key = symbols.join(",");
+  const pending = batches.get(key);
+  if (pending) return pending;
+  const request = requestLiveQuotes(symbols).finally(() => {
+    // The two holdings reads sometimes finish a few seconds apart.
+    setTimeout(() => batches.delete(key), 3000);
+  });
+  batches.set(key, request);
+  return request;
 }
 
 // Back-compat wrapper: prices only.

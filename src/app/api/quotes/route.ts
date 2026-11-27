@@ -54,6 +54,7 @@ async function handlePost(request: Request) {
 
   const quotes: Record<string, number | null> = {};
   const prevCloses: Record<string, number | null> = {};
+  const timestamps: Record<string, number | null> = {};
   const errors: string[] = [];
 
   // Two auth styles: the token as a query param, and the documented
@@ -62,7 +63,7 @@ async function handlePost(request: Request) {
   // header as a fallback before giving up on a symbol.
   async function quote(
     symbol: string
-  ): Promise<{ price: number | null; prevClose?: number | null; note?: string }> {
+  ): Promise<{ price: number | null; prevClose?: number | null; timestamp?: number; note?: string }> {
     const attempts: Array<{ url: string; init?: RequestInit; label: string }> = [
       {
         url: `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${KEY}`,
@@ -77,20 +78,21 @@ async function handlePost(request: Request) {
     let last = "";
     for (const a of attempts) {
       try {
-        const res = await fetch(a.url, { ...a.init, cache: "no-store" });
+        const res = await fetch(a.url, { ...a.init, next: { revalidate: 15 }, signal: AbortSignal.timeout(6500) });
         if (!res.ok) {
           last = `${a.label} HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`;
+          if (res.status !== 401 && res.status !== 403) break;
           continue;
         }
         // pc = previous close, which is what "today's P&L" is measured
         // against ((c − pc) × qty).
-        const q = (await res.json()) as { c?: number; pc?: number };
+        const q = (await res.json()) as { c?: number; pc?: number; t?: number };
         if (typeof q.c === "number" && Number.isFinite(q.c) && q.c > 0) {
           const pc =
             typeof q.pc === "number" && Number.isFinite(q.pc) && q.pc > 0
               ? q.pc
               : null;
-          return { price: q.c, prevClose: pc };
+          return { price: q.c, prevClose: pc, timestamp: q.t };
         }
         last = `${a.label} no price`;
       } catch (e) {
@@ -102,8 +104,9 @@ async function handlePost(request: Request) {
 
   await Promise.all(
     symbols.map(async (symbol) => {
-      const { price, prevClose, note } = await quote(symbol);
+      const { price, prevClose, timestamp, note } = await quote(symbol);
       quotes[symbol] = price;
+      timestamps[symbol] = timestamp ?? null;
       prevCloses[symbol] = prevClose ?? null;
       if (price === null && note) errors.push(`${symbol}: ${note}`);
     })
@@ -120,7 +123,7 @@ async function handlePost(request: Request) {
   }`;
 
   return Response.json(
-    { quotes, prevCloses, errors, ...(errors.length ? { keyInfo } : {}) },
+    { quotes, prevCloses, timestamps, errors, ...(errors.length ? { keyInfo } : {}) },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

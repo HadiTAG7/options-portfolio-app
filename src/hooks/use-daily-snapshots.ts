@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { marketDay } from "@/lib/daily-stock-pnl";
 import { safeNumber } from "@/lib/utils";
 import type { DailySnapshotRow } from "@/types/database";
 
@@ -9,10 +10,6 @@ export interface DailySnapshot {
   date: string; // YYYY-MM-DD
   stockUnrealized: number;
   stockValue: number;
-}
-
-export function todayKey(d: Date = new Date()): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Daily snapshots of the open stock book.
@@ -64,7 +61,7 @@ export function useDailySnapshots(enabled: boolean = true) {
   // want — it's the closest reading to the close.
   const recordToday = useCallback(
     async (stockUnrealized: number, stockValue: number) => {
-      const id = todayKey();
+      const id = marketDay(new Date());
       const { error } = await supabase.from("daily_snapshots").insert({
         id,
         date: id,

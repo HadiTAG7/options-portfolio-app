@@ -216,6 +216,12 @@ export interface FundOperation {
 // Active Stock Holding (from Supabase active_stocks table)
 // ============================================================
 
+export interface DailyQuote {
+  price: number;
+  prevClose: number;
+  timestamp: number; // provider timestamp, Unix seconds
+}
+
 export interface ActiveStock {
   id: string;
   ticker: string;
@@ -228,10 +234,7 @@ export interface ActiveStock {
   // that predate merging. purchasePrice is their weighted average.
   purchases?: { date: string; quantity: number; price: number }[];
   currentPrice?: number | null; // live quote (null if fetch failed)
-  // Previous session's close, used for the "today only" P&L card
-  // ((currentPrice − previousClose) × quantity). In-memory only — it comes
-  // from the live quote and is not persisted.
-  previousClose?: number | null;
+  dailyQuote?: DailyQuote | null;
   priceLoading?: boolean; // true while live quote is being fetched
 }
 

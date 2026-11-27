@@ -57,7 +57,8 @@ import { usePartners } from "@/hooks/use-partners";
 import type { Trade, ActiveStock } from "@/types";
 import { useCurrency } from "@/hooks/use-currency";
 import { useAuth } from "@/hooks/use-auth";
-import { useDailySnapshots, todayKey } from "@/hooks/use-daily-snapshots";
+import { dailyStockSummary, stockDayMove } from "@/lib/daily-stock-pnl";
+import { useDailySnapshots } from "@/hooks/use-daily-snapshots";
 
 function typeBadgeClass(type: string): string {
   switch (type) {
@@ -110,7 +111,6 @@ export default function TradesPage() {
     totalPremium,
     totalResult,
     unrealizedStockPnL,
-    todayPnL,
     realizedProfit,
     openCount,
     updateTrade,
@@ -126,20 +126,23 @@ export default function TradesPage() {
     dismissToast,
     refreshPrices,
     lastPriceUpdate,
+    todayStr,
   } = useTrades();
 
   const { partners } = usePartners();
   const { isGP: viewerIsGP } = useAuth();
   const { snapshots, recordToday } = useDailySnapshots(!!viewerIsGP);
 
+  const dailyStocks = useMemo(() => dailyStockSummary(activeStocks, todayStr), [activeStocks, todayStr]);
+
   // Snapshot today's open-stock position once per session, after live
   // prices have landed. This is what lets past days show a stock move
   // tomorrow — without it, only "today" is ever computable. Guarded so a
   // re-render can't spam writes, and skipped unless every lot has a quote
   // so a half-loaded book never becomes the day's record.
-  const [snapshotDone, setSnapshotDone] = useState(false);
+  const [snapshotDay, setSnapshotDay] = useState("");
   useEffect(() => {
-    if (!viewerIsGP || snapshotDone || activeStocks.length === 0) return;
+    if (loading || error || !viewerIsGP || snapshotDay === todayStr || dailyStocks.move === null || activeStocks.length === 0) return;
     const allPriced = activeStocks.every(
       (s) => typeof s.currentPrice === "number" && (s.currentPrice ?? 0) > 0
     );
@@ -152,9 +155,9 @@ export default function TradesPage() {
       (sum, s) => sum + (s.currentPrice as number) * s.quantity,
       0
     );
-    setSnapshotDone(true);
+    setSnapshotDay(todayStr);
     void recordToday(unrealized, value);
-  }, [viewerIsGP, snapshotDone, activeStocks, recordToday]);
+  }, [loading, error, viewerIsGP, snapshotDay, todayStr, dailyStocks.move, activeStocks, recordToday]);
 
   // Active stocks whose live price reached the user's target sell
   // price. Feeds the banner above the table and the row highlight.
@@ -218,7 +221,6 @@ export default function TradesPage() {
   // its previous close, not a price history — so past days carry realized
   // amounts only, and the dialog says so rather than implying otherwise.
   const dailyRows = useMemo<DailyBreakdownRow[]>(() => {
-    const todayStr = todayKey();
 
     const byDay: Record<string, number> = {};
     for (const t of trades) {
@@ -227,22 +229,6 @@ export default function TradesPage() {
       const key = d.slice(0, 10);
       byDay[key] = (byDay[key] ?? 0) + tradeProfit(t);
     }
-
-    const stockMoveToday = activeStocks.reduce((sum, s) => {
-      const px = s.currentPrice;
-      const pc = s.previousClose;
-      if (
-        typeof px !== "number" ||
-        !Number.isFinite(px) ||
-        px <= 0 ||
-        typeof pc !== "number" ||
-        !Number.isFinite(pc) ||
-        pc <= 0
-      ) {
-        return sum;
-      }
-      return sum + (px - pc) * s.quantity;
-    }, 0);
 
     // Stock move per past day, from consecutive snapshots:
     //   move(D) = stockUnrealized(D) − stockUnrealized(previous snapshot)
@@ -272,14 +258,24 @@ export default function TradesPage() {
           realized: byDay[key] ?? 0,
           // Today uses the live previous-close move (accurate intraday);
           // earlier days come from the snapshot diff.
-          stockMove: isToday ? stockMoveToday : (moveByDay[key] ?? 0),
-          hasStockMove: isToday || key in moveByDay,
+          stockMove: isToday ? (dailyStocks.move ?? 0) : (moveByDay[key] ?? 0),
+          hasStockMove: isToday ? !loading && !error && dailyStocks.move !== null : key in moveByDay,
           isToday,
         };
       })
       .filter((r) => r.isToday || r.realized !== 0 || r.hasStockMove);
-  }, [trades, activeStocks, snapshots]);
+  }, [trades, dailyStocks.move, todayStr, snapshots, loading, error]);
 
+  const realizedToday = dailyRows.find(r => r.isToday)?.realized ?? 0;
+  const todayPnL = loading || error || dailyStocks.move === null ? null : realizedToday + dailyStocks.move;
+  const quoteTime = dailyStocks.oldest === null ? "" : new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+    timeZone: "Asia/Riyadh", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(dailyStocks.oldest * 1000);
+  const dailyStatus = [
+    todayPnL === null && !loading && !error && dailyStocks.missing > 0
+      ? `بانتظار أسعار جلسة اليوم · المحقق ${formatCurrency(realizedToday)}` : "",
+    quoteTime ? `أقدم تسعيرة للأسهم بتوقيت الرياض: ${quoteTime}` : "",
+  ].filter(Boolean).join(" · ");
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.
   //
@@ -566,8 +562,9 @@ export default function TradesPage() {
           icon={<CalendarClock size={16} />}
           labelAr="ربح/خسارة اليوم"
           labelEn="Today's P&L"
-          value={formatCurrency(todayPnL)}
-          tone={todayPnL >= 0 ? "emerald" : "rose"}
+          value={todayPnL !== null ? formatCurrency(todayPnL) : loading || activeStocks.some(s => s.priceLoading) ? "جارٍ التحديث…" : "غير مكتمل"}
+          detail={dailyStatus}
+          tone={todayPnL === null ? "cyan" : todayPnL >= 0 ? "emerald" : "rose"}
           onClick={() => setDailyOpen(true)}
           hint="عرض الربح والخسارة يوماً بيوم"
         />
@@ -760,22 +757,11 @@ export default function TradesPage() {
                     : pnlNegative
                       ? "text-rose-400"
                       : "text-zinc-500";
-                  // Today's move for THIS lot: (current − previous close) × qty.
-                  // previousClose rides along with the live quote, so this needs
-                  // no stored history. Missing either side renders "—" rather
-                  // than a zero that would read as "flat today".
-                  const prevClose = stock.previousClose;
-                  const hasDayMove =
-                    hasLivePrice &&
-                    typeof prevClose === "number" &&
-                    Number.isFinite(prevClose) &&
-                    prevClose > 0;
-                  const dayAbs = hasDayMove
-                    ? (stock.currentPrice! - prevClose!) * stock.quantity
-                    : 0;
-                  const dayPct = hasDayMove
-                    ? ((stock.currentPrice! - prevClose!) / prevClose!) * 100
-                    : 0;
+                  const move = stockDayMove(stock, todayStr);
+                  const hasDayMove = move !== null;
+                  const dayAbs = move ?? 0;
+                  const dayPct = hasDayMove && stock.dailyQuote
+                    ? ((stock.dailyQuote.price - stock.dailyQuote.prevClose) / stock.dailyQuote.prevClose) * 100 : 0;
                   const dayTone =
                     dayAbs > 0
                       ? "text-emerald-400"
@@ -848,7 +834,7 @@ export default function TradesPage() {
                           {formatCurrency(stock.purchasePrice)}
                         </td>
                         <td className="px-4 py-3 font-mono tabular-nums">
-                          {stock.priceLoading ? (
+                          {stock.priceLoading && !hasLivePrice ? (
                             <span className="inline-flex items-center gap-2 text-zinc-500">
                               <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
                               <span className="text-[10px] uppercase tracking-widest">
@@ -864,7 +850,7 @@ export default function TradesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 font-mono tabular-nums">
-                          {stock.priceLoading ? (
+                          {stock.priceLoading && !hasDayMove ? (
                             <span className="h-3 w-3 inline-block animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
                           ) : hasDayMove ? (
                             <div className="flex flex-col">
@@ -887,7 +873,7 @@ export default function TradesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 font-mono tabular-nums">
-                          {stock.priceLoading ? (
+                          {stock.priceLoading && !hasLivePrice ? (
                             <span className="h-3 w-3 inline-block animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
                           ) : hasLivePrice ? (
                             <div className="flex items-center gap-2">
@@ -1404,6 +1390,7 @@ function SummaryCard({
   tone,
   onClick,
   hint,
+  detail,
 }: {
   icon: React.ReactNode;
   labelAr: string;
@@ -1412,6 +1399,7 @@ function SummaryCard({
   tone: "emerald" | "rose" | "cyan";
   onClick?: () => void;
   hint?: string;
+  detail?: string;
 }) {
   const accent =
     tone === "emerald"
@@ -1463,6 +1451,7 @@ function SummaryCard({
       >
         {value}
       </p>
+      {detail && <p className="mt-1 text-xs text-zinc-400">{detail}</p>}
     </Tag>
   );
 }

@@ -36,7 +36,9 @@ const KEY =
     ? FINNHUB_API_KEY.trim()
     : "d7j294pr01qp3g1rhmigd7j294pr01qp3g1rhmj0";
 
-async function quote(symbol: string): Promise<number | null> {
+type SnapshotQuote = { price: number; prevClose: number; timestamp: number };
+
+async function quote(symbol: string): Promise<SnapshotQuote | null> {
   try {
     const res = await fetch(
       `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${KEY}`
@@ -45,9 +47,9 @@ async function quote(symbol: string): Promise<number | null> {
       warn(`${symbol}: HTTP ${res.status}`);
       return null;
     }
-    const q = (await res.json()) as { c?: number };
+    const q = (await res.json()) as { c?: number; pc?: number; t?: number };
     return typeof q.c === "number" && Number.isFinite(q.c) && q.c > 0
-      ? q.c
+      ? { price: q.c, prevClose: Number(q.pc), timestamp: Number(q.t) }
       : null;
   } catch (e) {
     warn(`${symbol}: ${e instanceof Error ? e.message : "fetch failed"}`);
@@ -100,7 +102,7 @@ async function main(): Promise<void> {
   }
   ok(`loaded ${stocks.length} active stocks`);
 
-  const prices = new Map<string, number>();
+  const prices = new Map<string, SnapshotQuote>();
   for (const s of stocks) {
     if (prices.has(s.ticker)) continue;
     const p = await quote(s.ticker);
@@ -119,7 +121,7 @@ async function main(): Promise<void> {
   let stockUnrealized = 0;
   let stockValue = 0;
   for (const s of stocks) {
-    const px = prices.get(s.ticker) as number;
+    const px = prices.get(s.ticker)!.price;
     stockUnrealized += (px - s.purchasePrice) * s.quantity;
     stockValue += px * s.quantity;
   }
@@ -140,15 +142,18 @@ async function main(): Promise<void> {
   // open even if it hasn't been used in days.
   const iso = now.toISOString();
   await Promise.all(
-    stocks.map((s) =>
-      db
+    stocks.map((s) => {
+      const q = prices.get(s.ticker)!;
+      return db
         .collection("active_stocks")
         .doc(s.id)
         .set(
-          { currentPrice: prices.get(s.ticker), currentPriceUpdatedAt: iso },
+          { currentPrice: q.price, currentPriceUpdatedAt: iso,
+            ...(q.prevClose > 0 && q.timestamp > 0 ? { dailyQuote: q } : {}),
+          },
           { merge: true }
-        )
-    )
+        );
+    })
   );
   ok(`refreshed ${stocks.length} cached prices`);
 }

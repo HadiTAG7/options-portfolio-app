@@ -13,7 +13,7 @@ export interface FundSettings {
 const DEFAULTS: FundSettings = {
   managementFeePct: 20,
   autoMultiplyOptions: false,
-  priceRefreshInterval: "manual",
+  priceRefreshInterval: "1m",
 };
 
 export function useSettings() {
@@ -24,8 +24,14 @@ export function useSettings() {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as Partial<FundSettings>;
-        setSettingsState({ ...DEFAULTS, ...parsed });
+        const parsed = JSON.parse(raw) as Partial<FundSettings> & { quotePollingVersion?: number };
+        const settings = { ...DEFAULTS, ...parsed };
+        // Previously "manual" was stored even when only an unrelated setting
+        // changed, and the polling preference had no effect.
+        if (!parsed.quotePollingVersion && settings.priceRefreshInterval === "manual") {
+          settings.priceRefreshInterval = "1m";
+        }
+        setSettingsState(settings);
       }
     } catch {
       // ignore
@@ -37,7 +43,7 @@ export function useSettings() {
     setSettingsState((prev) => {
       const next = { ...prev, ...patch };
       try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...next, quotePollingVersion: 1 }));
       } catch {
         // ignore
       }

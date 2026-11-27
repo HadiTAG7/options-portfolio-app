@@ -155,7 +155,7 @@ export function DailyBreakdownDialog({
                           dayTotal >= 0 ? "text-emerald-400" : "text-rose-400"
                         }`}
                       >
-                        {formatCurrency(dayTotal)}
+                        {r.isToday && !r.hasStockMove ? "غير مكتمل" : formatCurrency(dayTotal)}
                       </td>
                     </tr>
                   );
@@ -177,7 +177,7 @@ export function DailyBreakdownDialog({
                 total >= 0 ? "text-emerald-400" : "text-rose-400"
               }`}
             >
-              {formatCurrency(total)}
+              {rows.some(r => r.isToday && !r.hasStockMove) ? "غير مكتمل" : formatCurrency(total)}
             </span>
           </div>
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">

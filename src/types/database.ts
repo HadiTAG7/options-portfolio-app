@@ -140,6 +140,7 @@ export interface Database {
           purchaseDate: string;
           currentPrice: number | null;
           currentPriceUpdatedAt: string | null;
+          dailyQuote?: import("@/types").DailyQuote | null;
           // Every buy merged into this position (one row per ticker).
           purchases?: { date: string; quantity: number; price: number }[] | null;
         };
@@ -152,6 +153,7 @@ export interface Database {
           purchaseDate?: string;
           currentPrice?: number | null;
           currentPriceUpdatedAt?: string | null;
+          dailyQuote?: import("@/types").DailyQuote | null;
           purchases?: { date: string; quantity: number; price: number }[] | null;
         };
         Update: Partial<Database["public"]["Tables"]["active_stocks"]["Insert"]>;

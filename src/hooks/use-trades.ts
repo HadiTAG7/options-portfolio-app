@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useEffectEvent, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, safeNumber } from "@/lib/utils";
+import { useSettings } from "@/hooks/use-settings";
+import { marketDay, validDailyQuote } from "@/lib/daily-stock-pnl";
+import { BACKEND } from "@/lib/backend";
 import { fetchLiveQuotes } from "@/lib/finnhub";
-import { tradeProfit, tradeProfitDate } from "@/lib/partner-profit";
+import { tradeProfit } from "@/lib/partner-profit";
 import { seedTrades, seedActiveStocks } from "@/data/seed-trades";
 import type { Trade, ActiveStock } from "@/types";
 import type { TradeRow, ActiveStockRow } from "@/types/database";
@@ -61,6 +64,7 @@ function rowToActiveStock(row: ActiveStockRow): ActiveStock {
     // Hydrate with the last price persisted in the DB so the P&L column
     // is populated instantly on page load; the live refresh overwrites it.
     currentPrice: cached,
+    dailyQuote: validDailyQuote(row.dailyQuote) ? row.dailyQuote : null,
   };
 }
 
@@ -77,66 +81,59 @@ export function useTrades() {
     if (stocks.length === 0) return;
 
     // Mark every row as loading while we hit Finnhub
-    setActiveStocksList((prev) =>
-      prev.map((s) => ({ ...s, priceLoading: true }))
-    );
-
-    const quotes = await fetchLiveQuotes(stocks.map((s) => s.ticker));
-    console.log("[enrichWithLivePrices] Finnhub results:", quotes);
-    const prices: Record<string, number | null> = Object.fromEntries(
-      Object.entries(quotes).map(([k, v]) => [k, v.price])
-    );
-
-    setActiveStocksList((prev) =>
-      prev.map((s) => ({
-        ...s,
-        currentPrice: prices[s.ticker.toUpperCase()] ?? s.currentPrice ?? null,
-        previousClose:
-          quotes[s.ticker.toUpperCase()]?.prevClose ?? s.previousClose ?? null,
-        priceLoading: false,
-      }))
-    );
+    const tickers = new Set(stocks.map(s => s.ticker.trim().toUpperCase()));
+    setActiveStocksList(prev => prev.map(s =>
+      tickers.has(s.ticker.trim().toUpperCase()) ? { ...s, priceLoading: true } : s
+    ));
+    const quotes = await fetchLiveQuotes([...tickers]);
+    const complete = (ticker: string) => {
+      const q = quotes[ticker];
+      if (!q?.price || !q.prevClose || !q.timestamp) return null;
+      const pair = { price: q.price, prevClose: q.prevClose, timestamp: q.timestamp };
+      return validDailyQuote(pair) ? pair : null;
+    };
+    setActiveStocksList(prev => prev.map(s => {
+      const ticker = s.ticker.trim().toUpperCase();
+      if (!tickers.has(ticker)) return s;
+      const pair = complete(ticker);
+      if (pair && s.dailyQuote && pair.timestamp < s.dailyQuote.timestamp) {
+        return { ...s, priceLoading: false };
+      }
+      return {
+        ...s, currentPrice: quotes[ticker]?.price ?? s.currentPrice,
+        dailyQuote: pair ?? s.dailyQuote, priceLoading: false,
+      };
+    }));
 
     // Persist the freshly fetched quotes back to Supabase so a refresh
     // shows the last known price without waiting on Finnhub. Only write
     // rows where we actually got a finite, positive price — don't clobber
     // a good cached price with null when the API rate-limits or errors.
     const nowIso = new Date().toISOString();
-    const writes = stocks
-      .map((s) => {
-        const px = prices[s.ticker.toUpperCase()];
-        if (typeof px !== "number" || !Number.isFinite(px) || px <= 0) return null;
-        return { id: s.id, ticker: s.ticker, price: px };
-      })
-      .filter((x): x is { id: string; ticker: string; price: number } => x !== null);
-
-    console.log("[enrichWithLivePrices] Will persist prices for:", writes.map((w) => `${w.ticker}=$${w.price}`));
-
+    const writes = stocks.flatMap(stock => {
+      const ticker = stock.ticker.trim().toUpperCase();
+      const price = quotes[ticker]?.price;
+      if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return [];
+      const pair = complete(ticker);
+      if (pair && stock.dailyQuote && pair.timestamp < stock.dailyQuote.timestamp) return [];
+      if (price === stock.currentPrice && (!pair || (
+        pair.timestamp === stock.dailyQuote?.timestamp && pair.price === stock.dailyQuote.price &&
+        pair.prevClose === stock.dailyQuote.prevClose
+      ))) return [];
+      return [{ id: stock.id, price, pair }];
+    });
     if (writes.length > 0) {
-      await Promise.all(
-        writes.map(async ({ id, ticker, price }) => {
-          const { error: upErr, status } = await supabase
-            .from("active_stocks")
-            .update({ currentPrice: price, currentPriceUpdatedAt: nowIso })
-            .eq("id", id);
-          if (upErr) {
-            console.error(
-              `[enrichWithLivePrices] Supabase update FAILED for ${ticker} (${id}):`,
-              upErr
-            );
-          } else {
-            console.log(
-              `[enrichWithLivePrices] Supabase update OK for ${ticker} (${id}), status:`,
-              status
-            );
-          }
-        })
-      );
+      await Promise.all(writes.map(async ({ id, price, pair }) => {
+        const { error } = await supabase.from("active_stocks").update({
+          currentPrice: price,
+          currentPriceUpdatedAt: nowIso,
+          ...(BACKEND === "firebase" && pair ? { dailyQuote: pair } : {}),
+        }).eq("id", id);
+        if (error) console.warn("[quotes] Could not save cached quote:", error.message);
+      }));
       // Stamp the wall-clock time of the most recent successful refresh
       // so the UI can render a "Last Updated" indicator.
       setLastPriceUpdate(new Date(nowIso));
-    } else {
-      console.warn("[enrichWithLivePrices] No valid prices to persist — all null/zero from Finnhub");
     }
   }, []);
 
@@ -144,12 +141,11 @@ export function useTrades() {
     setLoading(true);
     setError(null);
 
-    // --- Trades ---
-    const { data: trades, error: tradesError } = await supabase
-      .from("trades")
-      .select("*", { count: "exact" })
-      .order("date", { ascending: false });
-
+    const [tradeRead, stockRead] = await Promise.all([
+      supabase.from("trades").select("*", { count: "exact" }).order("date", { ascending: false }),
+      supabase.from("active_stocks").select("*", { count: "exact" }),
+    ]);
+    const { data: trades, error: tradesError } = tradeRead;
     console.log("Fetched Trades:", trades, tradesError);
 
     if (tradesError) {
@@ -174,15 +170,13 @@ export function useTrades() {
     }
 
     // --- Active Stocks ---
-    const { data: activeStocks, error: stocksError } = await supabase
-      .from("active_stocks")
-      .select("*", { count: "exact" });
-
+    const { data: activeStocks, error: stocksError } = stockRead;
     console.log("Fetched Active Stocks:", activeStocks, stocksError);
 
     let stocks: ActiveStock[];
     if (stocksError) {
       console.error("[useTrades] active_stocks fetch failed:", stocksError);
+      setError(prev => prev ?? `active_stocks: ${stocksError.message}`);
       stocks = seedActiveStocks;
     } else if (activeStocks && activeStocks.length > 0) {
       stocks = activeStocks.map(rowToActiveStock);
@@ -472,7 +466,7 @@ export function useTrades() {
       setActiveStocksList((prev) => {
         const live = prev.find((s) => s.id === lot.id);
         const next = live
-          ? { ...lot, currentPrice: live.currentPrice ?? lot.currentPrice, previousClose: live.previousClose }
+          ? { ...lot, currentPrice: live.currentPrice ?? lot.currentPrice, dailyQuote: live.dailyQuote ?? lot.dailyQuote }
           : lot;
         return [...prev.filter((s) => s.ticker.toUpperCase() !== ticker), next];
       });
@@ -1166,43 +1160,6 @@ export function useTrades() {
       }, 0),
     [activeStocksList]
   );
-  // Today-only P&L: two pieces, matching how the rest of the app counts
-  // profit.
-  //   1. Mark-to-market move on the stock book since the previous close:
-  //      (currentPrice − previousClose) × quantity. Rows missing either
-  //      figure contribute 0 rather than a wrong number.
-  //   2. Profit realized/collected today — the same tradeProfit() the
-  //      monthly card sums, restricted to trades whose profit date is
-  //      today (premium collected on a short opened today, stock sells,
-  //      dividends).
-  const todayPnL = useMemo(() => {
-    const now = new Date();
-    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-    const stockMove = activeStocksList.reduce((sum, s) => {
-      const px = s.currentPrice;
-      const pc = s.previousClose;
-      if (
-        typeof px !== "number" ||
-        !Number.isFinite(px) ||
-        px <= 0 ||
-        typeof pc !== "number" ||
-        !Number.isFinite(pc) ||
-        pc <= 0
-      ) {
-        return sum;
-      }
-      return sum + (px - pc) * s.quantity;
-    }, 0);
-
-    const realizedToday = tradesList.reduce((sum, t) => {
-      const d = tradeProfitDate(t);
-      return d && d.slice(0, 10) === todayKey ? sum + tradeProfit(t) : sum;
-    }, 0);
-
-    return stockMove + realizedToday;
-  }, [activeStocksList, tradesList]);
-
   // Potential profit if every active stock hits its user-set target price.
   //   Σ (targetSellPrice − purchasePrice) × quantity
   // Rows without a target (target <= 0) contribute 0 so the number is
@@ -1247,7 +1204,28 @@ export function useTrades() {
     await enrichWithLivePrices(activeStocksList);
   }, [activeStocksList, enrichWithLivePrices]);
 
+  const { settings, hydrated } = useSettings();
+  const [todayStr, setTodayStr] = useState(() => marketDay(new Date()));
+  const checkPrices = useEffectEvent((refresh: boolean) => {
+    if (document.visibilityState !== "visible") return;
+    setTodayStr(marketDay(new Date()));
+    if (refresh && !loading && !activeStocksList.some(s => s.priceLoading)) void refreshPrices();
+  });
+  const interval = settings.priceRefreshInterval;
+  useEffect(() => {
+    if (!hydrated) return;
+    const minutes = { manual: 1, "1m": 1, "5m": 5, "15m": 15 }[interval] ?? 1;
+    const timer = window.setInterval(() => checkPrices(interval !== "manual"), minutes * 60_000);
+    const resume = () => checkPrices(interval !== "manual");
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [hydrated, interval]);
+
   return {
+    todayStr,
     trades: tradesList,
     // True when the trades fetch failed and the list is the bundled demo
     // data. Anything that computes money (the funding day) must refuse.
@@ -1266,7 +1244,6 @@ export function useTrades() {
     totalProfit,
     realizedProfit,
     unrealizedStockPnL,
-    todayPnL,
     potentialTargetProfit,
     projectedPortfolioValue,
     openCount,
