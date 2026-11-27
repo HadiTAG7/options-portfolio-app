@@ -78,7 +78,7 @@ async function handlePost(request: Request) {
     let last = "";
     for (const a of attempts) {
       try {
-        const res = await fetch(a.url, { ...a.init, next: { revalidate: 15 }, signal: AbortSignal.timeout(6500) });
+        const res = await fetch(a.url, { ...a.init, cache: "no-store", signal: AbortSignal.timeout(6500) });
         if (!res.ok) {
           last = `${a.label} HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`;
           if (res.status !== 401 && res.status !== 403) break;

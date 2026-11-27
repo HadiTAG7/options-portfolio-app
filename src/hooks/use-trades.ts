@@ -68,7 +68,7 @@ function rowToActiveStock(row: ActiveStockRow): ActiveStock {
   };
 }
 
-export function useTrades() {
+export function useTrades({ refreshBook = false } = {}) {
   const [tradesList, setTradesList] = useState<Trade[]>([]);
   const [activeStocksList, setActiveStocksList] = useState<ActiveStock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +110,10 @@ export function useTrades() {
     // rows where we actually got a finite, positive price — don't clobber
     // a good cached price with null when the API rate-limits or errors.
     const nowIso = new Date().toISOString();
+    // A successful poll can return identical prices, especially after close.
+    if ([...tickers].every(ticker => complete(ticker) !== null)) {
+      setLastPriceUpdate(new Date(nowIso));
+    }
     const writes = stocks.flatMap(stock => {
       const ticker = stock.ticker.trim().toUpperCase();
       const price = quotes[ticker]?.price;
@@ -131,20 +135,22 @@ export function useTrades() {
         }).eq("id", id);
         if (error) console.warn("[quotes] Could not save cached quote:", error.message);
       }));
-      // Stamp the wall-clock time of the most recent successful refresh
-      // so the UI can render a "Last Updated" indicator.
-      setLastPriceUpdate(new Date(nowIso));
+
     }
   }, []);
 
-  const fetchTradesData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchTradesData = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
 
     const [tradeRead, stockRead] = await Promise.all([
       supabase.from("trades").select("*", { count: "exact" }).order("date", { ascending: false }),
       supabase.from("active_stocks").select("*", { count: "exact" }),
     ]);
+    if (background && (tradeRead.error || stockRead.error)) {
+      // Keep the last real book and still refresh prices on a transient read failure.
+      return false;
+    }
+    setError(null);
     const { data: trades, error: tradesError } = tradeRead;
     console.log("Fetched Trades:", trades, tradesError);
 
@@ -189,7 +195,7 @@ export function useTrades() {
         if (!acc || stamp > acc) return stamp;
         return acc;
       }, null);
-      if (latestStamp) setLastPriceUpdate(new Date(latestStamp));
+      if (!background && latestStamp) setLastPriceUpdate(new Date(latestStamp));
     } else {
       // Empty active_stocks table = empty list. Do not reintroduce
       // seeds on empty result — that was causing user-added stocks
@@ -197,12 +203,24 @@ export function useTrades() {
       console.log("[useTrades] active_stocks table is empty");
       stocks = [];
     }
-    setActiveStocksList(stocks);
+    setActiveStocksList(prev => {
+      if (!background) return stocks;
+      const known = new Map(prev.map(s => [s.id, s]));
+      return stocks.map(stock => {
+        const cached = known.get(stock.id);
+        if (cached?.dailyQuote && cached.ticker === stock.ticker &&
+            cached.dailyQuote.timestamp > (stock.dailyQuote?.timestamp ?? 0)) {
+          return { ...stock, dailyQuote: cached.dailyQuote, currentPrice: cached.currentPrice };
+        }
+        return stock;
+      });
+    });
 
     setLoading(false);
 
     // Kick off live price enrichment in the background — don't block loading
-    void enrichWithLivePrices(stocks);
+    await enrichWithLivePrices(stocks);
+    return true;
   }, [enrichWithLivePrices]);
 
   // Detect expired option positions and auto-close them.
@@ -1206,26 +1224,59 @@ export function useTrades() {
 
   const { settings, hydrated } = useSettings();
   const [todayStr, setTodayStr] = useState(() => marketDay(new Date()));
-  const checkPrices = useEffectEvent((refresh: boolean) => {
-    if (document.visibilityState !== "visible") return;
+  const [nextPriceRefreshAt, setNextPriceRefreshAt] = useState<number | null>(null);
+  const checkPrices = useEffectEvent(async () => {
     setTodayStr(marketDay(new Date()));
-    if (refresh && !loading && !activeStocksList.some(s => s.priceLoading)) void refreshPrices();
+    if (loading || activeStocksList.some(s => s.priceLoading)) return;
+    if (refreshBook && (await fetchTradesData(true))) return;
+    await refreshPrices();
   });
   const interval = settings.priceRefreshInterval;
   useEffect(() => {
     if (!hydrated) return;
-    const minutes = { manual: 1, "1m": 1, "5m": 5, "15m": 15 }[interval] ?? 1;
-    const timer = window.setInterval(() => checkPrices(interval !== "manual"), minutes * 60_000);
-    const resume = () => checkPrices(interval !== "manual");
+    if (interval === "manual") {
+      const dayTimer = window.setInterval(() => setTodayStr(marketDay(new Date())), 60_000);
+      return () => window.clearInterval(dayTimer);
+    }
+    const period = ({ "1m": 1, "5m": 5, "15m": 15 }[interval] ?? 1) * 60_000;
+    let timer: number;
+    let running = false;
+    function schedule() {
+      window.clearTimeout(timer);
+      setNextPriceRefreshAt(Date.now() + period);
+      timer = window.setTimeout(tick, period);
+    }
+    async function tick() {
+      if (document.hidden) return;
+      schedule();
+      if (running) return;
+      running = true;
+      try {
+        await checkPrices();
+      } finally {
+        running = false;
+      }
+    }
+    function resume() {
+      if (!document.hidden) void tick();
+    }
+    schedule();
     document.addEventListener("visibilitychange", resume);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("online", resume);
     return () => {
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("online", resume);
     };
   }, [hydrated, interval]);
 
+  const refetch = useCallback(() => fetchTradesData(), [fetchTradesData]);
+
   return {
     todayStr,
+    nextPriceRefreshAt: interval === "manual" ? null : nextPriceRefreshAt,
     trades: tradesList,
     // True when the trades fetch failed and the list is the bundled demo
     // data. Anything that computes money (the funding day) must refuse.
@@ -1258,7 +1309,7 @@ export function useTrades() {
     recordDividend,
     toast,
     dismissToast: () => setToast(null),
-    refetch: fetchTradesData,
+    refetch,
     refreshPrices,
     lastPriceUpdate,
   };

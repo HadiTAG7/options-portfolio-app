@@ -82,14 +82,24 @@ function formatExpiration(trade: Trade): string {
   return trade.expiration;
 }
 
-function formatRelativeTime(d: Date | null): string {
-  if (!d) return "never";
-  const diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 5) return "just now";
-  if (diff < 60) return `${Math.floor(diff)}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return d.toLocaleDateString();
+function PriceRefreshStatus({ updated, next }: { updated: Date | null; next: number | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!next) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [next]);
+  const seconds = Math.max(0, Math.ceil(((next ?? now) - now) / 1000));
+  const countdown = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 tabular-nums" dir="rtl">
+      {updated && <span>آخر تحديث <bdi>{updated.toLocaleTimeString("ar-SA", {
+        timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", second: "2-digit",
+      })}</bdi></span>}
+      {next && <span>التالي <bdi dir="ltr">{countdown}</bdi></span>}
+    </span>
+  );
 }
 
 export default function TradesPage() {
@@ -126,8 +136,9 @@ export default function TradesPage() {
     dismissToast,
     refreshPrices,
     lastPriceUpdate,
+    nextPriceRefreshAt,
     todayStr,
-  } = useTrades();
+  } = useTrades({ refreshBook: true });
 
   const { partners } = usePartners();
   const { isGP: viewerIsGP } = useAuth();
@@ -268,14 +279,6 @@ export default function TradesPage() {
 
   const realizedToday = dailyRows.find(r => r.isToday)?.realized ?? 0;
   const todayPnL = loading || error || dailyStocks.move === null ? null : realizedToday + dailyStocks.move;
-  const quoteTime = dailyStocks.oldest === null ? "" : new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
-    timeZone: "Asia/Riyadh", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  }).format(dailyStocks.oldest * 1000);
-  const dailyStatus = [
-    todayPnL === null && !loading && !error && dailyStocks.missing > 0
-      ? `بانتظار أسعار جلسة اليوم · المحقق ${formatCurrency(realizedToday)}` : "",
-    quoteTime ? `أقدم تسعيرة للأسهم بتوقيت الرياض: ${quoteTime}` : "",
-  ].filter(Boolean).join(" · ");
   // Current-month profit. Bucketing always uses the trade entry date
   // (when premium was actually collected) — never expiration.
   //
@@ -563,7 +566,7 @@ export default function TradesPage() {
           labelAr="ربح/خسارة اليوم"
           labelEn="Today's P&L"
           value={todayPnL !== null ? formatCurrency(todayPnL) : loading || activeStocks.some(s => s.priceLoading) ? "جارٍ التحديث…" : "غير مكتمل"}
-          detail={dailyStatus}
+          detail={<PriceRefreshStatus updated={lastPriceUpdate} next={nextPriceRefreshAt} />}
           tone={todayPnL === null ? "cyan" : todayPnL >= 0 ? "emerald" : "rose"}
           onClick={() => setDailyOpen(true)}
           hint="عرض الربح والخسارة يوماً بيوم"
@@ -665,12 +668,6 @@ export default function TradesPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
-              <span className="opacity-70">Last Updated</span>
-              <span className="font-mono tabular-nums text-zinc-300">
-                {formatRelativeTime(lastPriceUpdate)}
-              </span>
-            </div>
             <button
               type="button"
               onClick={() => void refreshPrices()}
@@ -1399,7 +1396,7 @@ function SummaryCard({
   tone: "emerald" | "rose" | "cyan";
   onClick?: () => void;
   hint?: string;
-  detail?: string;
+  detail?: React.ReactNode;
 }) {
   const accent =
     tone === "emerald"
